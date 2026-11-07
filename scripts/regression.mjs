@@ -34,12 +34,13 @@ const src = readFileSync(join(root, 'script.js'), 'utf8');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
-  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library'
+  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library', 'dictionary'
 ];
 S('script.js 头注释版本为 v6', /心情闯关岛 v6/.test(src.slice(0, 200)));
 S('index.html 进度占位不再写死 13 关', !/13 关/.test(html));
 S('content/*.js 全部被 index.html 引入', contentFiles.every(n => html.includes(`content/${n}.js`)));
 S('script.js 在所有 content 之后加载', html.lastIndexOf('script.js') > html.lastIndexOf('content/library.js'));
+S('心理学词典在 library 之后、script.js 之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < html.indexOf('script.js'));
 
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();

@@ -34,6 +34,32 @@ window.addEventListener('load', function () {
     A(RETREAT.every(r => moods.includes(r.mood) && r.when && r.name && r.intro));
     A(new Set(RETREAT.map(r => r.id)).size === RETREAT.length);
   });
+  test('心理学词典 100 条、9 个分类、字段齐全', () => {
+    A(DICTIONARY.length === 100);
+    A(new Set(DICTIONARY.map(d => d.t)).size === 100);
+    A(DICTIONARY.every(d => d.t && d.e && d.c && d.s && d.d));
+    A(new Set(DICTIONARY.map(d => d.c)).size === 9);
+  });
+  test('心理学词典可搜索、可按分类筛选', () => {
+    bandTo('a6');
+    ACTIONS['open-dictionary']();
+    A(session.view === 'dict');
+    const cards = [...document.querySelectorAll('#dict-grid .dict-card')];
+    A(cards.length === 100);
+    const input = document.getElementById('dict-search');
+    dictQuery = '依恋'; input.value = dictQuery;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const hit = cards.filter(c => !c.hidden);
+    A(hit.length >= 2 && hit.every(c => c.dataset.search.includes('依恋')));
+    dictQuery = ''; input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const catBtn = [...document.querySelectorAll('#dict-cats .dict-cat')].find(b => b.dataset.c === '关系与沟通');
+    A(!!catBtn);
+    catBtn.click();
+    const rel = cards.filter(c => !c.hidden);
+    A(rel.length === 10 && rel.every(c => c.dataset.cat === '关系与沟通'));
+    dictQuery = ''; dictCat = 'all'; renderMap();
+  });
 
   /* ---------- 存档与迁移 ---------- */
   test('v2 旧档迁移到 v3，3-5 改名 finale，旧键保留', () => {
@@ -241,9 +267,16 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('input:not([type="range"]), textarea').length === 0);
   });
   test('390px 视口无横向溢出', () => {
+    bandTo('a6');
     renderMap();
     A(document.documentElement.scrollWidth <= window.innerWidth + 1,
       `scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
+    ACTIONS['open-dictionary']();
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `词典 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
+    const cols = getComputedStyle(document.getElementById('dict-grid')).gridTemplateColumns.split(' ').length;
+    A(cols === 1, `词典在 390px 应为单列，实际 ${cols} 列`);
+    renderMap();
   });
 
   const pre = document.createElement('pre');

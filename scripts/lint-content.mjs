@@ -20,7 +20,8 @@ const FILES = [
   'bank-kid-island4',
   'bank-adult-1-3',
   'bank-adult-island4',
-  'library'
+  'library',
+  'dictionary'
 ];
 
 /* 让 sandbox 自己当 window：content 里写的是 window.MI = ... 之后又用裸 MI，
@@ -41,6 +42,7 @@ for (const name of FILES) {
 const MI = sandbox.window.MI || {};
 const { bands: BANDS = [], kid: KID = {}, adult: ADULT = {}, bankKid = {}, bankAdult = {}, library: LIB = {} } = MI;
 const CODEX = LIB.CODEX || {};
+const DICT = MI.dictionary || [];
 
 const errors = [];
 const warns = [];
@@ -236,6 +238,25 @@ Object.keys(CODEX).forEach((k) => {
   if (!seenCards.has(k)) warn(`CODEX 里的「${k}」没有关卡会发，永远锁着`);
 });
 
+/* ---------- 心理学词典 ---------- */
+const DICT_CATS = [
+  '基础与神经', '学习与记忆', '思维与判断', '情绪与动机', '发展与人格',
+  '社会与群体', '关系与沟通', '心理健康与干预', '方法与科学素养'
+];
+const seenTerms = new Set();
+if (DICT.length !== 100) err(`心理学词典应为 100 条，当前 ${DICT.length} 条`);
+DICT.forEach((d, i) => {
+  const tag = `词典#${i} ${d.t || '(无名词)'}`;
+  ['t', 'e', 'c', 's', 'd'].forEach(k => { if (!d[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (d.t && seenTerms.has(d.t)) err(`${tag}: 名词重复`);
+  seenTerms.add(d.t);
+  if (!DICT_CATS.includes(d.c)) err(`${tag}: 未知分类「${d.c}」`);
+  checkLen(d.s, tag);
+  if (d.d && d.d.length > 160) warn(`${tag}: 展开 ${d.d.length} 字，偏长`);
+  if (d.m && d.m.length > 90) warn(`${tag}: 误解 ${d.m.length} 字，偏长`);
+});
+DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典分类「${c}」没有词条`); });
+
 /* ---------- 静修间 / 漂流瓶 ---------- */
 const MOODS = ['现在很烦', '现在很累', '睡不着', '心里空'];
 const RETREAT_TYPES = ['ground', 'defuse', 'space'];
@@ -296,7 +317,7 @@ const countOf = (bank) => Object.values(bank).reduce((s, a) => s + a.length, 0);
 const perBand = (bank, id) => (bank[id] || []).length;
 console.log(`儿童 / 亲子：${KID.levels.length} 站（含终章）· ${(KID.islands || []).length} 岛 · 变体 ${countOf(bankKid)} 组`);
 console.log(`成年：${ADULT.levels.length} 站（含终章）· ${(ADULT.islands || []).length} 岛 · 变体 ${countOf(bankAdult)} 组`);
-console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length}`);
+console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条`);
 
 if (warns.length) {
   console.log(`\n提示 ${warns.length} 条：`);

@@ -9,7 +9,7 @@ const LEGACY_KEYS = ['mood-island-v2'];
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
-   bank-*.js / library.js。这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
+   bank-*.js / library.js / dictionary.js。这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
 const MI = window.MI || {};
 const AGE_BANDS = MI.bands || [];
 const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
@@ -25,6 +25,7 @@ const DECOR = LIB.DECOR || [];
 const BOTTLES = LIB.BOTTLES || [];
 const RETREAT = LIB.RETREAT || [];
 const RETREAT_SAFETY = LIB.RETREAT_SAFETY || '';
+const DICTIONARY = MI.dictionary || [];
 const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length);
 
 /* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。 */
@@ -54,6 +55,8 @@ let session = {
   mapScroll: 0, lastCleared: '', interrupted: false, retreatStep: -1
 };
 let lastVariant = {};
+let dictCat = 'all';
+let dictQuery = '';
 let breathTimer = null;
 let memoTimer = null;
 let lastFocus = null;
@@ -185,7 +188,7 @@ function updateTopbar() {
     bandEl.hidden = (session.view === 'gate' || !state.band);
     bandEl.textContent = state.band ? `${band().name} · ${band().tag}` : '';
   }
-  document.getElementById('progress-wrap').hidden = (session.view === 'home' || session.view === 'gate' || session.view === 'retreat');
+  document.getElementById('progress-wrap').hidden = (session.view === 'home' || session.view === 'gate' || session.view === 'retreat' || session.view === 'dict');
   const track = document.getElementById('step-track');
   if (track) track.innerHTML = LEVELS.map((l, i) => {
     const done = state.cleared.includes(l.id);
@@ -363,6 +366,7 @@ function renderMap() {
       <button class="btn ${mindful ? 'btn-primary' : 'btn-secondary'}" data-action="${mindful ? 'open-retreat' : 'goto-band'}">${mindful ? '进去坐坐' : '切换到成年档'}</button>
     </div>`;
   html += `<div class="map-tools">
+      <button class="tool-btn" data-action="open-dictionary">心理学词典（${DICTIONARY.length}）</button>
       <button class="tool-btn" data-action="open-codex">词卡图鉴（${gotCards}/${trackCards.length}）</button>
       <button class="tool-btn" data-action="open-skills">本领清单（${gotSkills}/${trackSkills.length}）</button>
       <button class="tool-btn" data-action="open-bottle">今日漂流瓶 · 一题</button>
@@ -417,6 +421,81 @@ function renderRetreatList() {
     <p class="home-note">这些练习参考了正念与认知取向里常见的通用思路，经过简化，只是一般性的放松方式，不是治疗，也不能代替专业帮助。</p>
   </div>`;
   updateTopbar();
+}
+
+/* ---------------------------------------------------------------- 心理学词典
+   纯科普，不计进度、不落盘；搜索只在当前页面内过滤，关掉就没了。 */
+function renderDictionary() {
+  clearAsyncTimers(); stopSpeech();
+  session.view = 'dict'; session.navDir = 'forward';
+  if (!DICTIONARY.length) {
+    stage.innerHTML = `<div class="${viewClass()}">
+      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+      <h2>词典内容没有加载出来</h2>
+      <p class="lead">检查 index.html 是否在 library.js 之后、script.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
+    </div>`;
+    updateTopbar();
+    return;
+  }
+  const cats = [...new Set(DICTIONARY.map(d => d.c))];
+  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
+  const cards = DICTIONARY.map((d) => {
+    const hay = [d.t, d.e, d.c, d.s, d.d, d.m || ''].join(' ').toLowerCase();
+    return `<details class="dict-card" data-cat="${esc(d.c)}" data-search="${esc(hay)}">
+      <summary>
+        <span class="dict-term">${esc(d.t)}</span>
+        <span class="dict-en">${esc(d.e)}</span>
+        <span class="dict-short">${esc(d.s)}</span>
+        <span class="dict-cat-badge">${esc(d.c)}</span>
+      </summary>
+      <div class="dict-detail">
+        <p>${esc(d.d)}</p>
+        ${d.m ? `<p class="dict-mis"><b>常见误解</b>${esc(d.m)}</p>` : ''}
+      </div>
+    </details>`;
+  }).join('');
+  stage.innerHTML = `<div class="${viewClass()}">
+    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+    <span class="eyebrow">心理学词典 · ${DICTIONARY.length} 条</span>
+    <h2 style="margin:12px 0 10px">把常用的心理学词，说清楚一点</h2>
+    <p class="lead">按主题收好 ${DICTIONARY.length} 个名词与概念。每张卡先给一句话，点开再看展开与常见误解。这里只做科普，不提供诊断或个体化建议。</p>
+    <div class="dict-controls">
+      <label class="dict-search" for="dict-search">
+        <span class="visually-hidden">搜索词条</span>
+        <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋" value="${esc(dictQuery)}">
+      </label>
+    </div>
+    <div class="dict-cats" id="dict-cats" role="group" aria-label="按主题筛选">
+      ${catBtns.map(x => `<button class="dict-cat ${dictCat === x.c ? 'on' : ''}" data-action="dict-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
+    </div>
+    <p class="dict-count muted" id="dict-count" aria-live="polite">${DICTIONARY.length} 条 · 点卡片展开释义</p>
+    <div class="dict-grid" id="dict-grid">${cards}</div>
+    <p class="dict-empty" id="dict-empty" hidden>没有匹配的词条。换个关键词，或点「全部」看看。</p>
+    <p class="home-note">词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索只在当前页面内过滤，不会保存，也不会上传。</p>
+  </div>`;
+  updateTopbar();
+  applyDictFilter();
+  stage.focus({ preventScroll: true });
+}
+
+function applyDictFilter() {
+  const q = dictQuery.trim().toLowerCase();
+  let n = 0;
+  document.querySelectorAll('#dict-grid .dict-card').forEach((card) => {
+    const catOk = dictCat === 'all' || card.dataset.cat === dictCat;
+    const qOk = !q || (card.dataset.search || '').includes(q);
+    const show = catOk && qOk;
+    card.hidden = !show;
+    if (show) n += 1;
+  });
+  const count = document.getElementById('dict-count');
+  if (count) {
+    count.textContent = (q || dictCat !== 'all')
+      ? `筛出 ${n} / ${DICTIONARY.length} 条`
+      : `${DICTIONARY.length} 条 · 点卡片展开释义`;
+  }
+  const empty = document.getElementById('dict-empty');
+  if (empty) empty.hidden = n !== 0;
 }
 
 function renderRetreatPractice(i) {
@@ -970,6 +1049,12 @@ const ACTIONS = {
     save(); session.clearedThisRun = 0; closeModal(); renderHome();
   },
   'open-codex': () => openCodex(),
+  'open-dictionary': () => { session.navDir = 'forward'; renderDictionary(); },
+  'dict-cat': (el) => {
+    dictCat = el.dataset.c || 'all';
+    document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
+    applyDictFilter();
+  },
   'open-skills': () => openSkills(),
   'open-bottle': () => openBottle(),
   'bottle-choose': () => {
@@ -1292,10 +1377,16 @@ document.addEventListener('click', (e) => {
   const fn = ACTIONS[el.dataset.action];
   if (fn) fn(el);
 });
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'dict-search') {
+    dictQuery = e.target.value;
+    applyDictFilter();
+  }
+});
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (overlay.classList.contains('open')) { closeModal(); return; }
-    if (session.view === 'level' || session.view === 'retreat') { ACTIONS['go-map'](); return; }
+    if (session.view === 'level' || session.view === 'retreat' || session.view === 'dict') { ACTIONS['go-map'](); return; }
   }
   if (overlay.classList.contains('open')) {
     if (e.key === 'Tab') trapTab(e);
@@ -1324,7 +1415,7 @@ if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>
     <p class="lead">content/ 下的数据文件没有读到。检查 index.html 里 content/*.js 的引入顺序：
-    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library，最后才是 script.js。</p>
+    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library → dictionary，最后才是 script.js。</p>
     <p class="muted">打开浏览器控制台可以看到具体是哪个文件 404。</p>
   </div>`;
 } else if (!state.band) renderAgeGate();
