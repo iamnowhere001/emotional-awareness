@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="按年龄分级的情绪启蒙小游戏：3-6 岁、6-9 岁、9-12 岁、亲子全年龄与成年五档，各 4 座岛 17 站，含焦虑、愤怒分级、失落与告别、边界四类练习。不打分、不排名、不收集心情记录。">
+    <title>心情闯关岛 · 一起认出心里的天气</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <noscript><p style="padding:24px;color:#5d6a66">这个小游戏需要开启 JavaScript 才能玩。它不会联网，也不会上传任何数据。</p></noscript>
+        <header id="topbar">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <div>
+                    <h1>心情闯关岛</h1>
+                    <p class="brand-sub">一起认出心里的天气</p>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <span class="band-chip" id="topbar-band" hidden></span>
+                <div class="shell-count" id="shell-count" aria-live="polite">贝壳 0</div>
+                <button class="icon-btn" data-action="open-settings" aria-label="打开设置">设置</button>
+            </div>
+            <div class="progress-wrap" id="progress-wrap" hidden>
+                <div class="step-track" id="step-track" role="group" aria-label="关卡进度，可直接跳到已解锁的站"></div>
+                <span id="progress-text">已走过 0 站</span>
+            </div>
+        </header>
+
+        <main id="stage" tabindex="-1"></main>
+
+        <div id="overlay" aria-live="polite"></div>
+
+        <footer id="disclaimer">
+            这是一个关于情绪的小游戏，<strong>不是心理测评，也不能代替专业帮助</strong>。它不打分、不排名、不收集你的心情记录，也不宣称任何治疗效果。
+            呼吸与正念相关的练习只是一般的放松方式：可以睁眼、随时停止；若感到不适，请停下来并寻求专业支持。
+            如果有些感受一直让你难受，和信任的人聊聊，或寻求专业人士的帮助。
+        </footer>
+    </div>
+
+    <!-- 内容：纯数据，顺序敏感；新增岛/题库再加一行即可 -->
+    <script src="content/bands.js"></script>
+    <script src="content/levels-kid.js"></script>
+    <script src="content/levels-kid-island4.js"></script>
+    <script src="content/levels-adult.js"></script>
+    <script src="content/bank-kid-1-3.js"></script>
+    <script src="content/bank-kid-island4.js"></script>
+    <script src="content/bank-adult-1-3.js"></script>
+    <script src="content/bank-adult-island4.js"></script>
+    <script src="content/library.js"></script>
+    <!-- 逻辑 -->
+    <script src="script.js"></script>
+</body>
+</html>
