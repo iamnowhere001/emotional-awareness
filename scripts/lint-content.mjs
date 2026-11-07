@@ -242,24 +242,56 @@ Object.keys(CODEX).forEach((k) => {
   if (!seenCards.has(k)) warn(`CODEX 里的「${k}」没有关卡会发，永远锁着`);
 });
 
-/* ---------- 心理学词典 ---------- */
-const DICT_CATS = [
-  '基础与神经', '学习与记忆', '思维与判断', '情绪与动机', '发展与人格',
-  '社会与群体', '关系与沟通', '心理健康与干预', '方法与科学素养'
-];
+/* ---------- 心理学词典 ----------
+   数量不设上限：加词条不必删旧词条，只保留一条防止误删的下限。
+   主题分组与概念类型由 MI.dictionaryMeta 定义，lint 校验两者和实际词条一致。 */
+const DICT_META = MI.dictionaryMeta || {};
+const DICT_GROUPS = DICT_META.groups || [];
+const DICT_KINDS = DICT_META.kinds || [];
+const DICT_CATS = DICT_GROUPS.flatMap(g => g.cats || []);
+const DICT_KIND_IDS = new Set(DICT_KINDS.map(k => k.id));
+if (!DICT.length) err('心理学词典为空');
+else if (DICT.length < 100) err(`心理学词典至少 100 条（当前 ${DICT.length} 条）：这是防止误删的下限，不是数量上限`);
+if (!DICT_GROUPS.length) err('心理学词典缺 dictionaryMeta.groups');
+if (!DICT_KINDS.length) err('心理学词典缺 dictionaryMeta.kinds');
+if (new Set(DICT_CATS).size !== DICT_CATS.length) err('dictionaryMeta 里有重复主题');
+if (DICT_KIND_IDS.size !== DICT_KINDS.length) err('dictionaryMeta 里有重复概念类型');
+DICT_GROUPS.forEach((g, i) => {
+  const tag = `词典分组#${i} ${g.name || ''}`;
+  ['id', 'name', 'desc'].forEach(k => { if (!g[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (!/^[a-z][a-z0-9-]*$/.test(g.id || '')) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
+  if (!Array.isArray(g.cats) || !g.cats.length) err(`${tag}: cats 为空`);
+});
+DICT_KINDS.forEach((k, i) => {
+  const tag = `词典类型#${i} ${k.name || ''}`;
+  ['id', 'name', 'desc'].forEach(x => { if (!k[x]) err(`${tag}: 缺字段 ${x}`); });
+  if (!/^[a-z][a-z0-9-]*$/.test(k.id || '')) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
+});
 const seenTerms = new Set();
-if (DICT.length !== 100) err(`心理学词典应为 100 条，当前 ${DICT.length} 条`);
+const allTerms = new Set(DICT.map(d => d.t));
 DICT.forEach((d, i) => {
   const tag = `词典#${i} ${d.t || '(无名词)'}`;
-  ['t', 'e', 'c', 's', 'd'].forEach(k => { if (!d[k]) err(`${tag}: 缺字段 ${k}`); });
+  ['t', 'e', 'c', 'k', 's', 'd'].forEach(k => { if (!d[k]) err(`${tag}: 缺字段 ${k}`); });
   if (d.t && seenTerms.has(d.t)) err(`${tag}: 名词重复`);
   seenTerms.add(d.t);
-  if (!DICT_CATS.includes(d.c)) err(`${tag}: 未知分类「${d.c}」`);
+  if (!DICT_CATS.includes(d.c)) err(`${tag}: 主题「${d.c}」不在 dictionaryMeta.groups 里`);
+  if (!DICT_KIND_IDS.has(d.k)) err(`${tag}: 概念类型「${d.k}」不在 dictionaryMeta.kinds 里`);
+  if (d.r !== undefined) {
+    if (!Array.isArray(d.r) || !d.r.length) err(`${tag}: r 关联词条应为非空数组`);
+    else {
+      if (new Set(d.r).size !== d.r.length) err(`${tag}: r 关联词条重复`);
+      d.r.forEach((r) => {
+        if (r === d.t) err(`${tag}: r 不能指向自己`);
+        if (!allTerms.has(r)) err(`${tag}: r 关联「${r}」不是真实词条`);
+      });
+    }
+  }
   checkLen(d.s, tag);
   if (d.d && d.d.length > 160) warn(`${tag}: 展开 ${d.d.length} 字，偏长`);
   if (d.m && d.m.length > 90) warn(`${tag}: 误解 ${d.m.length} 字，偏长`);
 });
-DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典分类「${c}」没有词条`); });
+DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典主题「${c}」没有词条`); });
+DICT_KIND_IDS.forEach(k => { if (!DICT.some(d => d.k === k)) err(`词典概念类型「${k}」没有词条`); });
 
 /* ---------- 自助工具箱 ---------- */
 const SH_CATS = ['心力恢复', '认知自助', '行为与身体', '关系与支持', '自助边界'];
@@ -301,7 +333,6 @@ SH_DISTS.forEach((d, i) => {
 });
 
 /* ---------- 慢变量 ---------- */
-const SV_CATS = ['身体底盘', '价值与方向', '关系与复利'];
 const SV_VARS = SLOW.vars || [];
 const SV_PRACTICES = SLOW.practices || [];
 const SV_TRAPS = SLOW.traps || [];
@@ -312,36 +343,52 @@ if (SV_PRACTICES.length !== 12) err(`慢变量：练习卡应为 12 张，当前
 if (SV_TRAPS.length !== 10) err(`慢变量：快变量陷阱应为 10 条，当前 ${SV_TRAPS.length} 条`);
 if (SV_HORIZONS.length !== 3) err(`慢变量：时间尺度应为 3 个，当前 ${SV_HORIZONS.length} 个`);
 const seenSvVar = new Set();
+const seenSvVarName = new Set();
 SV_VARS.forEach((v, i) => {
   const tag = `慢变量#${i} ${v.name || '(无名)'}`;
   ['id', 'name', 'sub', 'lead', 'why', 'misuse', 'check'].forEach(k => { if (!v[k]) err(`${tag}: 缺字段 ${k}`); });
   if (v.id && seenSvVar.has(v.id)) err(`${tag}: id 重复`);
+  if (v.name && seenSvVarName.has(v.name)) err(`${tag}: 名称重复`);
+  if (!/^[a-z][a-z0-9-]*$/.test(v.id || '')) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
   seenSvVar.add(v.id);
+  seenSvVarName.add(v.name);
   if (!v.move || !v.move.t || !v.move.d) err(`${tag}: 缺 move.t / move.d`);
 });
+const SV_VAR_IDS = new Set(seenSvVar);
 const seenSvPractice = new Set();
 SV_PRACTICES.forEach((p, i) => {
   const tag = `慢变量练习#${i} ${p.t || '(无名)'}`;
-  ['t', 'e', 'c', 'when', 'note'].forEach(k => { if (!p[k]) err(`${tag}: 缺字段 ${k}`); });
+  ['t', 'e', 'v', 'when', 'note'].forEach(k => { if (!p[k]) err(`${tag}: 缺字段 ${k}`); });
   if (p.t && seenSvPractice.has(p.t)) err(`${tag}: 名称重复`);
+  if (p.t && seenSvVarName.has(p.t)) err(`${tag}: 与慢变量重名，变量与卡片会混淆`);
+  if ('c' in p) err(`${tag}: 旧字段 c 已废弃，改用 v（慢变量 id）`);
   seenSvPractice.add(p.t);
-  if (!SV_CATS.includes(p.c)) err(`${tag}: 未知分类「${p.c}」`);
+  if (!SV_VAR_IDS.has(p.v)) err(`${tag}: v「${p.v}」不是任何 vars[].id`);
   if (!Array.isArray(p.how) || p.how.length < 2) err(`${tag}: 至少需要 2 个步骤`);
   (p.how || []).forEach((x, xi) => { if (!x) err(`${tag}: 第 ${xi + 1} 步为空`); });
 });
-SV_CATS.forEach(c => { if (!SV_PRACTICES.some(p => p.c === c)) err(`慢变量分类「${c}」没有练习卡`); });
+SV_VAR_IDS.forEach(id => { if (!SV_PRACTICES.some(p => p.v === id)) err(`慢变量「${id}」没有练习卡`); });
 const seenSvTrap = new Set();
 SV_TRAPS.forEach((t, i) => {
   const tag = `快变量陷阱#${i} ${t.t || '(无名)'}`;
   ['t', 'd', 'eg'].forEach(k => { if (!t[k]) err(`${tag}: 缺字段 ${k}`); });
   if (t.t && seenSvTrap.has(t.t)) err(`${tag}: 名称重复`);
+  if (t.t && SH_DISTS.some(d => d.t === t.t)) err(`${tag}: 与自助工具箱认知扭曲同名，内容会重复`);
   seenSvTrap.add(t.t);
 });
+const seenSvHorizon = new Set();
 SV_HORIZONS.forEach((h, i) => {
   const tag = `时间尺度#${i} ${h.t || '(无名)'}`;
   ['t', 'd'].forEach(k => { if (!h[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (h.t && seenSvHorizon.has(h.t)) err(`${tag}: 名称重复`);
+  seenSvHorizon.add(h.t);
   if (!Array.isArray(h.asks) || h.asks.length < 2) err(`${tag}: 至少需要 2 个问题`);
   (h.asks || []).forEach((a, ai) => { if (!a) err(`${tag}: 第 ${ai + 1} 个问题为空`); });
+  if (!Array.isArray(h.cards) || !h.cards.length) err(`${tag}: cards 至少引用 1 张练习卡`);
+  (h.cards || []).forEach((c, ci) => {
+    if (!seenSvPractice.has(c)) err(`${tag}: cards[${ci}]「${c}」不是练习卡标题`);
+  });
+  if (h.cards && new Set(h.cards).size !== h.cards.length) err(`${tag}: cards 引用重复`);
 });
 
 /* ---------- 静修间 / 漂流瓶 ---------- */

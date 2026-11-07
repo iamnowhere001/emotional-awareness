@@ -1,11 +1,11 @@
-/* 心情闯关岛 v6.1.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.8.2 · 纯前端、零依赖、不联网
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
-   本地只保存：关卡进度、词卡、本领、贝壳、岛屿装饰、年龄段与显示设置 */
+   本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
 
-const SCHEMA_VERSION = 3;
-const STORAGE_KEY = 'mood-island-v3';
-const LEGACY_KEYS = ['mood-island-v2'];
+const SCHEMA_VERSION = 4;
+const STORAGE_KEY = 'mood-island-v4';
+const LEGACY_KEYS = ['mood-island-v3', 'mood-island-v2'];
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
@@ -26,6 +26,13 @@ const BOTTLES = LIB.BOTTLES || [];
 const RETREAT = LIB.RETREAT || [];
 const RETREAT_SAFETY = LIB.RETREAT_SAFETY || '';
 const DICTIONARY = MI.dictionary || [];
+/* 词典的组织方式也在数据里：主题分组、顺序与概念类型都不在逻辑里另写一份。 */
+const DICT_META = MI.dictionaryMeta || {};
+const DICT_GROUPS = DICT_META.groups || [];
+const DICT_KINDS = DICT_META.kinds || [];
+const DICT_CATS = DICT_GROUPS.flatMap(g => g.cats || []);
+const dictKindName = k => (DICT_KINDS.find(x => x.id === k) || {}).name || k;
+const dictCountBy = (fn) => DICTIONARY.filter(fn).length;
 const SELFHELP = MI.selfhelp || {};
 const SH_STATES = SELFHELP.states || [];
 const SH_TOOLS = SELFHELP.tools || [];
@@ -39,26 +46,48 @@ const SV_HORIZONS = SLOWVARS.horizons || [];
 const SV_SAFETY = SLOWVARS.safety || '';
 const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length);
 
-/* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。 */
+/* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。
+   轨道身份以 bands.js 的 track 字段为准，不硬编码档位 id；
+   这样以后再加成年向档位，不会静默掉回儿童轨。 */
 let TRACK = KID;
 let LEVELS = KID.levels;
 let TOTAL = LEVELS.length;
+const KID_CARD_LEVELS = new Map(KID.levels.filter(l => l.card).map(l => [l.card, l.id]));
+const ADULT_CARD_LEVELS = new Map(ADULT.levels.filter(l => l.card).map(l => [l.card, l.id]));
+/* 存档校验用的白名单：两轨合法 id / 本领。词卡按各自的 Map 校验。 */
+const ALL_LEVEL_IDS = new Set([...KID.levels, ...ADULT.levels].map(l => l.id));
+const ALL_SKILLS = new Set([...KID.levels, ...ADULT.levels].map(l => l.skill).filter(Boolean));
+/* 字号既可能是用户手选的 3 档，也可能是档位自带的 scale；只有这些值会被接受 */
+const SCALE_VALUES = new Set([1, 1.15, 1.3].concat(AGE_BANDS.map(b => b.scale).filter(Number.isFinite)));
+/* skills 目前不分轨：两轨没有同名本领，回归会断言这一点。
+   若以后要复用名字，必须先把 skills 拆成按轨结构并写迁移，否则会跨轨解锁。 */
+function trackOfBandId(id) {
+  const b = AGE_BANDS.find(x => x.id === id);
+  return b && b.track === 'adult' ? 'adult' : 'kid';
+}
+function bandTrack() { return trackOfBandId(state.band); }
 function syncTrack() {
-  TRACK = state.band === 'adult' ? ADULT : KID;
+  TRACK = bandTrack() === 'adult' ? ADULT : KID;
   LEVELS = (TRACK && TRACK.levels) || [];
   TOTAL = LEVELS.length;
 }
 function islands() { return (TRACK && TRACK.islands) || []; }
-function isAdultTrack() { return state.band === 'adult'; }
+function isAdultTrack() { return bandTrack() === 'adult'; }
+/* 词卡图鉴按轨存取：两轨各有一份，同名卡不会互相解锁 */
+function cardsInTrack() { return state.cards[bandTrack()] || []; }
 
 function band() { return AGE_BANDS.find(b => b.id === state.band) || AGE_BANDS[1] || AGE_BANDS[0] || {}; }
 
 /* ---------------------------------------------------------------- 状态 */
 const DEFAULT_STATE = {
   version: SCHEMA_VERSION,
-  band: null, cleared: [], awarded: [], cards: [], skills: [], shells: 0, decor: [],
+  band: null, cleared: [], awarded: [], cards: { kid: [], adult: [] }, skills: [], shells: 0, decor: [],
   settings: { scale: 1, motion: false, speak: true, speakTouched: false, autoSpeak: false, contrast: false }
 };
+/* 旧版终章 id 是 3-5，现在独立成 finale，老存档需要改一次名。
+   必须在 `let state = load()` 之前定义：migrate() 会用到它，const 晚于调用会落入 TDZ。 */
+const ID_REMAP = { '3-5': 'finale' };
+const remapIds = arr => arr.map(id => ID_REMAP[id] || id);
 let state = load();
 let play = {};
 let session = {
@@ -68,6 +97,7 @@ let session = {
 let lastVariant = {};
 let dictCat = 'all';
 let dictQuery = '';
+let dictKind = 'all';
 let shState = null;
 let shCat = 'all';
 let svVar = null;
@@ -80,14 +110,15 @@ let lastClicked = null;
 /* 存档：带 schema 版本。旧键（v2）读到后自动迁移，之后只写新键。
    加字段时在 migrate() 里补一段，老用户进度不会因为版本变更被清空。 */
 function readRaw() {
-  try {
-    const cur = localStorage.getItem(STORAGE_KEY);
-    if (cur) return cur;
-    for (const k of LEGACY_KEYS) {
-      const old = localStorage.getItem(k);
-      if (old) return old;
-    }
-  } catch (e) { /* 隐私模式下不可读 */ }
+  /* 新键损坏时继续往旧键找，避免一个坏 JSON 把全部进度判死刑 */
+  for (const k of [STORAGE_KEY, ...LEGACY_KEYS]) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      if (data && typeof data === 'object' && !Array.isArray(data)) return raw;
+    } catch (e) { /* 当前键损坏或不可读，试下一个 */ }
+  }
   return null;
 }
 
@@ -99,29 +130,77 @@ function load() {
   } catch (e) { return clone(DEFAULT_STATE); }
 }
 
-/* 旧版终章 id 是 3-5，现在独立成 finale，老存档需要改一次名 */
-const ID_REMAP = { '3-5': 'finale' };
-const remapIds = arr => arr.map(id => ID_REMAP[id] || id);
+/* v3 及更早的词卡是一个不分轨的数组（`cards: ['觉察', ...]`）。
+   v4 拆成 `cards: { kid: [], adult: [] }`，同名卡不再跨轨解锁。
+   旧档没有轨信息，只能按证据推断；推断顺序见下方注释。 */
+function migrateCards(rawCards, s) {
+  const out = { kid: [], adult: [] };
+  const push = (track, name) => { if (!out[track].includes(name)) out[track].push(name); };
+  if (!Array.isArray(rawCards)) {
+    const src = rawCards && typeof rawCards === 'object' ? rawCards : {};
+    /* 按轨校验：成年卡不会留在儿童数组里，反之亦然；两轨同名卡两边都合法 */
+    if (Array.isArray(src.kid)) src.kid.filter(n => typeof n === 'string' && KID_CARD_LEVELS.has(n)).forEach(n => push('kid', n));
+    if (Array.isArray(src.adult)) src.adult.filter(n => typeof n === 'string' && ADULT_CARD_LEVELS.has(n)).forEach(n => push('adult', n));
+    return out;
+  }
+  const cleared = new Set(remapIds(Array.isArray(s.cleared) ? s.cleared : []));
+  const awarded = new Set(remapIds(Array.isArray(s.awarded) ? s.awarded : (Array.isArray(s.cleared) ? s.cleared : [])));
+  const kidEvidence = [...cleared, ...awarded].some(id => !id.startsWith('A'));
+  const adultEvidence = [...cleared].some(id => id.startsWith('A'));
+  const fallback = trackOfBandId(s.band);
+  for (const name of rawCards) {
+    if (typeof name !== 'string') continue;
+    const kidId = KID_CARD_LEVELS.get(name);
+    const adultId = ADULT_CARD_LEVELS.get(name);
+    if (!kidId && !adultId) continue;   /* 内容里已不存在的卡，旧档里也不保留 */
+    const kidEarned = !!kidId && (cleared.has(kidId) || awarded.has(kidId));
+    const adultEarned = !!adultId && cleared.has(adultId);
+    /* 1. 只在一轨出现 → 直接归该轨
+       2. 两轨同名：哪一轨的通关记录能对上就归哪一轨；两轨都对上说明确实各拿过一次
+       3. 对不上时，只玩过一轨就归那一轨
+       4. 两轨都玩过但仍无法判定 → 归儿童档（宁可少给成年档，也不把儿童卡虚增成成年卡） */
+    if (kidId && !adultId) push('kid', name);
+    else if (adultId && !kidId) push('adult', name);
+    else if (kidEarned && adultEarned) { push('kid', name); push('adult', name); }
+    else if (kidEarned) push('kid', name);
+    else if (adultEarned) push('adult', name);
+    else if (kidEvidence && !adultEvidence) push('kid', name);
+    else if (adultEvidence && !kidEvidence) push('adult', name);
+    else if (!kidEvidence && !adultEvidence) push(fallback, name);
+    else push('kid', name);
+  }
+  return out;
+}
 
 function migrate(s) {
   if (!s || typeof s !== 'object') return clone(DEFAULT_STATE);
   const from = Number.isFinite(s.version) ? s.version : 2;
-  /* v2 → v3：补 version 字段；v3 期间把 3-5 改为 finale，其余结构兼容 */
-  if (from < 3) s.version = 3;
+  /* v2 → v3：补 version 字段与 3-5 → finale；v3 → v4：词卡按轨拆分（见 migrateCards）。
+     之后只做字段白名单校验，不再改结构：旧档和现有 v4 档都走同一条路径。 */
+  if (from < 4) s.version = 4;
+  const validIds = arr => [...new Set(arr.filter(id => typeof id === 'string' && ALL_LEVEL_IDS.has(id)))];
+  const rawCleared = Array.isArray(s.cleared) ? remapIds(s.cleared) : [];
+  const rawAwarded = Array.isArray(s.awarded) ? remapIds(s.awarded)
+    : (Array.isArray(s.cleared) ? remapIds(s.cleared) : []);
+  const cleared = validIds(rawCleared);
+  const awarded = validIds(rawAwarded);
+  const settings = s.settings && typeof s.settings === 'object' ? s.settings : {};
+  const scale = Number.isFinite(settings.scale) && SCALE_VALUES.has(settings.scale) ? settings.scale : 1;
   return {
     version: SCHEMA_VERSION,
     band: AGE_BANDS.some(b => b.id === s.band) ? s.band : null,
-    cleared: Array.isArray(s.cleared) ? remapIds(s.cleared) : [],
-    awarded: Array.isArray(s.awarded) ? remapIds(s.awarded)
-      : (Array.isArray(s.cleared) ? remapIds(s.cleared) : []),
-    cards: Array.isArray(s.cards) ? s.cards : [],
-    skills: Array.isArray(s.skills) ? s.skills : [],
-    shells: Number.isFinite(s.shells) ? s.shells : 0,
-    decor: Array.isArray(s.decor) ? s.decor : [],
+    cleared, awarded,
+    cards: migrateCards(s.cards, { ...s, cleared, awarded }),
+    skills: Array.isArray(s.skills) ? [...new Set(s.skills.filter(x => typeof x === 'string' && ALL_SKILLS.has(x)))] : [],
+    shells: Number.isFinite(s.shells) ? Math.max(0, Math.floor(s.shells)) : 0,
+    /* 装饰下标必须落在 DECOR 内，最多 3 个；旧档里的脏数据不会让终章取到空对象 */
+    decor: Array.isArray(s.decor)
+      ? [...new Set(s.decor.filter(i => Number.isInteger(i) && i >= 0 && i < DECOR.length))].slice(0, 3)
+      : [],
     settings: {
-      scale: s.settings?.scale || 1, motion: !!s.settings?.motion,
-      speak: s.settings?.speak !== false, speakTouched: !!s.settings?.speakTouched,
-      autoSpeak: !!s.settings?.autoSpeak, contrast: !!s.settings?.contrast
+      scale, motion: !!settings.motion,
+      speak: settings.speak !== false, speakTouched: !!settings.speakTouched,
+      autoSpeak: !!settings.autoSpeak, contrast: !!settings.contrast
     }
   };
 }
@@ -149,6 +228,13 @@ function save() {
     showStorageWarning();
   }
 }
+/* 用户明确「清空本机进度」时，连 v3 / v2 旧键一起删。
+   否则以后新键损坏，readRaw() 回退旧键会把已经清掉的进度又读回来。 */
+function removeAllSaves() {
+  for (const k of [STORAGE_KEY, ...LEGACY_KEYS]) {
+    try { localStorage.removeItem(k); } catch (e) { /* 隐私模式下不可写，忽略 */ }
+  }
+}
 
 /* ---------------------------------------------------------------- 工具 */
 const stage = document.getElementById('stage');
@@ -172,10 +258,12 @@ function pickVariant(id) {
 function scenarioBox(label, text) {
   return `<div class="scenario"><div class="scenario-label">${esc(label)}</div><p>${esc(text)}</p></div>`;
 }
-/* 选项按钮：i 是渲染位置（键盘数字键用），orig 是数据里的原始下标（判对错用） */
+/* 选项按钮：i 是渲染位置（键盘数字键用），orig 是数据里的原始下标（判对错用）。
+   徽标必须和实际按键一致：显示 1、2、3…，不再用 A/B/C 误导键盘用户。 */
 function optBtn(i, title, desc, action, orig) {
   const o = orig === undefined ? i : orig;
-  return `<button class="opt" data-action="${action}" data-i="${i}" data-orig="${o}"><span class="opt-key">${String.fromCharCode(65 + i)}</span><span><span>${esc(title)}</span>${desc ? `<span class="opt-desc">${esc(desc)}</span>` : ''}</span></button>`;
+  const key = i < 9 ? ` aria-keyshortcuts="${i + 1}"` : '';
+  return `<button class="opt" data-action="${action}" data-i="${i}" data-orig="${o}"${key}><span class="opt-key" aria-hidden="true">${i + 1}</span><span><span>${esc(title)}</span>${desc ? `<span class="opt-desc">${esc(desc)}</span>` : ''}</span></button>`;
 }
 function sliderLabels(v) {
   return v.replies.length === 3 ? ['一点点', '中等', '很大很大'] : ['很轻', '有一点', '中等', '挺明显', '很满'];
@@ -188,31 +276,48 @@ function applySettings() {
   document.documentElement.classList.toggle('high-contrast', !!state.settings.contrast);
   document.documentElement.dataset.band = state.band || 'a6';
 }
+/* 视图配置表：进度条是否显示、Esc 回哪里、顶栏进度文字、档位标签，都在这里一次声明。
+   新增视图只改这张表；scripts/regression.mjs 会校验所有 session.view 都登记过，
+   避免「加了视图却忘了藏进度条 / 忘了 Esc 回地图」。 */
+const VIEW_CONFIG = {
+  gate: { progress: false, esc: null, title: null, band: false },
+  home: { progress: false, esc: null, title: null, band: true },
+  map: { progress: true, esc: null, title: 'progress', band: true },
+  level: { progress: true, esc: 'map', title: 'current', band: true },
+  retreat: { progress: false, esc: 'map', title: null, band: true },
+  dict: { progress: false, esc: 'map', title: null, band: true },
+  selfhelp: { progress: false, esc: 'map', title: null, band: true },
+  slowvars: { progress: false, esc: 'map', title: null, band: true }
+};
+function viewCfg(v) { return VIEW_CONFIG[v] || {}; }
+/* 贝壳是否出现 / 发放由 bands.js 的 shells 字段决定，不在代码里按轨道 id 硬判 */
+function hasShells() { return band().shells !== false; }
 /* 当前轨走过的站数（两轨进度存在同一个数组里，各算各的） */
 function clearedInTrack() {
   return state.cleared.filter(id => LEVELS.some(l => l.id === id)).length;
 }
 function updateTopbar() {
+  const vc = viewCfg(session.view);
   const shells = document.getElementById('shell-count');
   if (shells) {
-    shells.hidden = isAdultTrack();
+    shells.hidden = !hasShells();
     shells.textContent = `贝壳 ${state.shells}`;
   }
   const bandEl = document.getElementById('topbar-band');
   if (bandEl) {
-    bandEl.hidden = (session.view === 'gate' || !state.band);
+    bandEl.hidden = (!vc.band || !state.band);
     bandEl.textContent = state.band ? `${band().name} · ${band().tag}` : '';
   }
-  document.getElementById('progress-wrap').hidden = (session.view === 'home' || session.view === 'gate' || session.view === 'retreat' || session.view === 'dict' || session.view === 'selfhelp' || session.view === 'slowvars');
+  document.getElementById('progress-wrap').hidden = !vc.progress;
   const track = document.getElementById('step-track');
   if (track) track.innerHTML = LEVELS.map((l, i) => {
     const done = state.cleared.includes(l.id);
     const cur = session.view === 'level' && state.levelIndex === i;
     const unlocked = isUnlocked(i);
-    return `<button class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" data-action="open-level" data-i="${i}" ${unlocked ? '' : 'disabled'} title="${esc(l.id + ' · ' + l.name)}" aria-label="第 ${i + 1} 站 ${esc(l.name)}${done ? '，已走过' : ''}"></button>`;
+    return `<button class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" data-action="open-level" data-i="${i}" ${unlocked ? '' : 'disabled'} ${cur ? 'aria-current="step"' : ''} title="${esc(l.id + ' · ' + l.name)}" aria-label="第 ${i + 1} 站 ${esc(l.name)}${done ? '，已走过' : ''}"></button>`;
   }).join('');
   const pt = document.getElementById('progress-text');
-  if (pt) pt.textContent = (session.view === 'level' && LEVELS[state.levelIndex])
+  if (pt) pt.textContent = (vc.title === 'current' && LEVELS[state.levelIndex])
     ? `第 ${state.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[state.levelIndex].name}`
     : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
 }
@@ -284,9 +389,17 @@ function bandChip(extra) {
 }
 
 /* ---------------------------------------------------------------- 视图：选年龄段 */
+/* 一次性提示：渲染当前页面时取走并清空，避免换档 / 重开的提示串到下一屏 */
+function takeTip() {
+  if (!session.tip) return '';
+  const html = `<div class="notice">${esc(session.tip)}</div>`;
+  session.tip = '';
+  return html;
+}
 function renderAgeGate() {
   clearAsyncTimers();
   session.view = 'gate';
+  session.tip = '';
   stage.innerHTML = `<div class="view">
     <span class="eyebrow">第一步 · 只选一次，之后随时能改</span>
     <h2 style="margin:12px 0 10px">先选一下，谁来玩</h2>
@@ -313,7 +426,13 @@ function renderHome() {
     <span class="eyebrow">${islCount} 座岛 · ${TOTAL} 站 · 随时可以离开</span>
     <h2>不赶走情绪，先认出它</h2>
     <p class="lead">这是一座关于情绪的小岛。你要做的不是答对，而是把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。</p>
-    ${session.tip ? `<div class="notice">${esc(session.tip)}</div>` : ''}
+    ${takeTip()}
+    <div class="home-horizon" aria-hidden="true">
+      <span class="hh-sun"></span>
+      <span class="hh-islet i1"></span><span class="hh-islet i2"></span><span class="hh-islet i3"></span>
+      <span class="hh-land"></span>
+      <span class="hh-wave"></span><span class="hh-wave w2"></span>
+    </div>
     <div class="home-points">
       <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>情绪不分好坏，这一趟不打分、不排名、不比谁快。</span></div>
       <div class="home-point"><span class="dot"></span><span><b>每一站换一种玩法。</b>拼线索、调刻度、排顺序、翻记忆，动脑也动手。</span></div>
@@ -323,72 +442,194 @@ function renderHome() {
       <button class="btn btn-primary" data-action="start">${hasProgress ? '继续上岛' : '开始上岛'}</button>
       ${hasProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
     </div>
+    <div class="home-shortcuts">
+      <span class="muted">还没准备好上岛？</span>
+      <button class="btn-read" data-action="open-dictionary">心理学词典</button>
+      <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
+      <button class="btn-read" data-action="open-slowvars">慢变量</button>
+    </div>
     <p class="home-note">全程不联网、不填写心情文字；天气选择不会被保存。${isAdultTrack() ? '成年档有自己的一套站，和儿童档的进度分开记。' : '适合一个人玩，也适合大人和孩子一起聊。'}</p>
   </div>`;
-  session.tip = '';
   updateTopbar();
 }
 
-/* ---------------------------------------------------------------- 视图：地图 */
+/* ---------------------------------------------------------------- 视图：地图
+   地图是一条「手绘航线」：四座岛画在同一张海图上，岛内站点用虚线航迹连起来。
+   所有装饰层（海岸线、等高线、罗盘、水纹）都是 aria-hidden 的 SVG，信息仍然只在
+   节点按钮上：站名、玩法、锁定原因、下一站，一个都不少。 */
+/* 海岸线形状：viewBox 0 0 100 100，随岛块拉伸；只作为氛围，不参与交互 */
+const ISLAND_TRACES = [
+  'M5,46 C4,26 18,12 38,9 C60,5 82,14 91,32 C99,50 92,70 74,82 C54,95 24,90 10,72 C5,64 5,54 5,46 Z',
+  'M7,50 C6,30 20,14 40,11 C62,7 84,18 92,36 C99,54 88,74 70,86 C50,98 22,92 11,74 C7,67 7,57 7,50 Z',
+  'M6,42 C8,24 26,11 47,9 C70,7 88,19 93,38 C97,54 87,60 90,72 C84,86 66,92 48,88 C26,84 12,74 6,62 C4,54 5,48 6,42 Z',
+  'M6,48 C7,28 22,13 43,10 C66,7 86,17 92,34 C98,51 91,69 78,82 C63,96 34,95 15,79 C8,71 5,58 6,48 Z'
+];
+/* 岛内的一道等高线，让「地图」不只是四个色块 */
+const ISLAND_CONTOURS = [
+  'M16,52 C22,32 44,20 64,28 C78,34 82,50 72,64 C58,78 30,76 20,62',
+  'M18,50 C24,30 46,20 66,30 C80,40 80,58 66,70 C50,84 26,76 18,62',
+  'M17,44 C24,26 48,18 68,26 C82,34 84,52 72,66 C58,80 30,80 18,66',
+  'M18,52 C22,34 42,24 62,30 C78,36 80,54 68,66 C54,80 28,76 18,62'
+];
+/* 岛内的高地轮廓，补一点「地形图」的密度 */
+const ISLAND_HIGHLANDS = [
+  'M36,32 C48,28 62,32 64,42 C65,51 52,56 42,50 C34,45 32,37 36,32 Z',
+  'M38,34 C50,30 64,34 65,44 C66,53 52,57 43,51 C36,46 34,38 38,34 Z',
+  'M37,33 C49,29 63,33 65,43 C66,52 53,57 43,51 C35,46 33,38 37,33 Z',
+  'M36,34 C48,30 62,34 64,44 C65,53 51,57 42,51 C34,46 32,38 36,34 Z'
+];
+const MAP_COMPASS = `<svg class="map-compass" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+  <circle cx="32" cy="32" r="21" fill="none" stroke="currentColor" stroke-width="1" opacity=".55"/>
+  <path d="M32 8 L38 32 L32 40 L26 32 Z" fill="currentColor" opacity=".55"/>
+  <path d="M32 40 L38 32 L32 56 L26 32 Z" fill="currentColor" opacity=".2"/>
+  <text x="32" y="5" text-anchor="middle" font-size="7" fill="currentColor" opacity=".8">N</text>
+</svg>`;
 function renderMap() {
   clearAsyncTimers();
   session.view = 'map';
   const list = islands();
   const trackCards = LEVELS.map(l => l.card).filter(Boolean);
   const trackSkills = LEVELS.map(l => l.skill).filter(Boolean);
-  const gotCards = trackCards.filter(c => state.cards.includes(c)).length;
+  const gotCards = trackCards.filter(c => cardsInTrack().includes(c)).length;
   const gotSkills = trackSkills.filter(s => state.skills.includes(s)).length;
+  /* 唯一一个「现在就能继续」的站：已解锁且没走过。终章也算，全部走完时它会被点亮。 */
+  const nextIdx = LEVELS.findIndex((l, i) => isUnlocked(i) && !state.cleared.includes(l.id));
   const interrupted = session.interrupted;
   session.interrupted = false;
   let html = `<div class="${viewClass()}">
     ${interrupted ? '<div class="notice">刚才的呼吸练习被打断了，不用补上。想做的时候随时可以重新开始。</div>' : ''}
+    ${takeTip()}
     <div class="map-head"><div><span class="eyebrow">岛屿地图 · ${esc(band().name)}</span>
       <h2 style="margin-top:10px">想去哪站，就去哪站</h2>
-      <p class="lead">同一座岛里的站可以随便进出，走过的还能再走，每次题目会换一批。</p></div>
-      <span class="muted">词卡 ${gotCards} / ${trackCards.length}</span></div>
+      <p class="lead">四座岛连成一条航线。同一座岛里的站可以随便进出，走过的还能再走，每次题目会换一批。</p></div>
+      <span class="map-count">已走过 <b>${clearedInTrack()}</b> / ${TOTAL} 站</span></div>
     <div class="toolbar">${bandChip()}<span class="muted">${esc(band().len)}</span>
-      <button class="btn-read" data-action="goto-band">换年龄段</button></div>`;
-  list.forEach(isl => {
+      <button class="btn-read" data-action="goto-band">换年龄段</button></div>
+    <div class="map-legend-row" aria-hidden="true">
+      <div class="map-legend">
+        <span class="map-lg"><i class="lg-dot"></i>还没走</span>
+        <span class="map-lg"><i class="lg-dot done"></i>走过</span>
+        <span class="map-lg"><i class="lg-dot locked"></i>未解锁</span>
+      </div>
+      ${MAP_COMPASS}
+    </div>
+    <div class="map-board">`;
+  list.forEach((isl, islIdx) => {
     const items = LEVELS.filter(l => l.island === isl.n && l.type !== 'finale');
+    const doneCount = items.filter(l => state.cleared.includes(l.id)).length;
+    const shape = ISLAND_TRACES[(isl.n - 1) % ISLAND_TRACES.length];
+    const contour = ISLAND_CONTOURS[(isl.n - 1) % ISLAND_CONTOURS.length];
+    const highland = ISLAND_HIGHLANDS[(isl.n - 1) % ISLAND_HIGHLANDS.length];
     html += `<section class="island" data-island="${isl.n}">
-      <div class="island-head"><span class="island-name">岛 ${isl.n} · ${esc(isl.name)}</span><span class="island-theme">${esc(isl.theme)}</span></div>
+      <div class="island-art" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+        <path class="isle-water" d="${shape}"/>
+        <path class="isle-land" d="${shape}"/>
+        <path class="isle-edge" d="${shape}"/>
+        <path class="isle-contour" d="${contour}"/>
+        <path class="isle-contour alt" d="${highland}"/>
+      </svg></div>
+      <div class="island-head">
+        <div class="island-label">
+          <span class="island-kicker">岛 ${isl.n}</span>
+          <span class="island-name">${esc(isl.name)}</span>
+          <span class="island-theme">${esc(isl.theme)}</span>
+        </div>
+        <span class="island-count">${doneCount} / ${items.length} 站</span>
+      </div>
       <div class="node-grid">`;
     items.forEach(l => {
       const idx = LEVELS.indexOf(l);
       const done = state.cleared.includes(l.id);
       const unlocked = isUnlocked(idx);
-      html += `<button class="node ${done ? 'done' : ''} ${session.lastCleared === l.id ? 'just-done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-level" data-i="${idx}" ${unlocked ? '' : 'disabled'} aria-label="${esc(l.name)}${unlocked ? '' : '，尚未解锁'}">
-        ${done ? '<span class="node-check">✓</span>' : ''}
-        <span class="node-id">${esc(l.id)}</span>
+      const isNext = idx === nextIdx;
+      const extra = l.card ? `，会留下「${esc(l.card)}」词卡` : '';
+      html += `<button class="node ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${session.lastCleared === l.id ? 'just-done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-level" data-i="${idx}" ${unlocked ? '' : 'disabled'} aria-label="${esc(l.name)}${done ? '，已走过' : ''}${isNext ? '，可以从这里继续' : ''}${unlocked ? '，' + esc(l.kind) + extra : '，尚未解锁'}"${unlocked ? '' : ' title="先把上一座岛走到头"'}>
+        ${isNext ? '<span class="node-next">下一站</span>' : ''}
+        <span class="node-pin" aria-hidden="true">${done ? '✓' : esc(String(l.num || '·'))}</span>
         <span class="node-name">${esc(l.name)}</span>
         <span class="node-type">${unlocked ? esc(l.kind) : '先把上一座岛走到头'}</span>
       </button>`;
     });
     html += `</div></section>`;
+    if (islIdx < list.length - 1) html += `<div class="route-gap" aria-hidden="true"></div>`;
   });
   const fin = LEVELS[TOTAL - 1] || {};
   const finaleOpen = isUnlocked(TOTAL - 1);
   const finDesc = finaleOpen
     ? (isAdultTrack() ? '挑一句带走，看看这一程练过的，也可以什么都不挑。' : '布置小岛、看看这一轮练过的本领，带走一句话和一张可以一起聊的卡片。')
     : `走完前 ${TOTAL - 1} 站后开放。不用着急，一站一站来。`;
-  html += `<div class="finale-entry"><div><h3>终章 · ${esc(fin.name || '小结')}</h3>
-    <p>${finDesc}</p></div>
-    <button class="btn ${finaleOpen ? 'btn-primary' : 'btn-secondary'}" data-action="open-level" data-i="${TOTAL - 1}" ${finaleOpen ? '' : 'disabled'}>${finaleOpen ? '去终章' : '还没开放'}</button></div>`;
-  const mindful = !!band().mindful;
-  html += `<div class="retreat-entry">
-      <div><span class="eyebrow">另一条路 · 不计进度</span><h3 style="margin-top:8px">静修间</h3>
-        <p>五感锚定、给想法松绑、三分钟呼吸空间。不计时、不打卡、不记录你做了几次，随时可以停。</p></div>
-      <button class="btn ${mindful ? 'btn-primary' : 'btn-secondary'}" data-action="${mindful ? 'open-retreat' : 'goto-band'}">${mindful ? '进去坐坐' : '切换到成年档'}</button>
-    </div>`;
-  html += `<div class="map-tools">
-      <button class="tool-btn" data-action="open-dictionary">心理学词典（${DICTIONARY.length}）</button>
-      <button class="tool-btn" data-action="open-selfhelp">自助工具箱（心力 · 认知）</button>
-      <button class="tool-btn" data-action="open-slowvars">慢变量（健康 · 三观 · 目的）</button>
-      <button class="tool-btn" data-action="open-codex">词卡图鉴（${gotCards}/${trackCards.length}）</button>
-      <button class="tool-btn" data-action="open-skills">本领清单（${gotSkills}/${trackSkills.length}）</button>
-      <button class="tool-btn" data-action="open-bottle">今日漂流瓶 · 一题</button>
-      <button class="tool-btn" data-action="open-settings">显示与数据</button>
+  html += `<div class="route-gap finale-gap" aria-hidden="true"></div>
+    <div class="finale-entry ${finaleOpen ? 'open' : 'locked'}">
+      <span class="finale-flag" aria-hidden="true"><svg viewBox="0 0 32 44" focusable="false">
+        <path d="M12 41 V5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+        <path d="M13 7 L27 13 L13 19 Z" fill="currentColor" opacity=".85"/>
+        <path d="M6 41 H20" stroke="currentColor" stroke-width="1.6" fill="none" opacity=".5"/>
+      </svg></span>
+      <div class="finale-body"><h3>终章 · ${esc(fin.name || '小结')}</h3>
+        <p>${finDesc}</p></div>
+      <button class="btn ${finaleOpen ? 'btn-primary' : 'btn-secondary'}" data-action="open-level" data-i="${TOTAL - 1}" ${finaleOpen ? '' : 'disabled'}>${finaleOpen ? '去终章' : '还没开放'}</button>
     </div>
+    <p class="map-caption" aria-hidden="true">手绘航线 · 不按比例</p>
+    <svg class="map-wave" viewBox="0 0 240 40" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path d="M0,20 C20,10 40,30 60,20 S100,10 120,20 S160,30 180,20 S220,10 240,20"/>
+    </svg>
+  </div>`;
+  const mindful = !!band().mindful;
+  /* 入口按「什么时候会用到」分组：先随身工具，再知识，最后收集。
+     原来的 7 个按钮平铺，主次全靠阅读顺序；分组后主线和支线的权重一眼能分开。 */
+  html += `<div class="map-hub">
+    <section class="hub-block">
+      <div class="hub-head"><h3>随时可用</h3><span class="muted">不计进度 · 随时可停</span></div>
+      <div class="hub-grid two">
+        <button class="hub-card" data-action="open-bottle">
+          <span class="hub-name">今日漂流瓶</span>
+          <span class="hub-desc">从 ${BOTTLES.length} 个问题里抽一个，和自己聊一句；答案不保存。</span>
+          <span class="hub-meta">一题就够 · 不记录</span>
+        </button>
+        <button class="hub-card" data-action="${mindful ? 'open-retreat' : 'goto-band'}">
+          <span class="hub-name">静修间</span>
+          <span class="hub-desc">五感锚定、给想法松绑、三分钟呼吸空间。</span>
+          <span class="hub-meta">${mindful ? `${RETREAT.length} 个练习 · 随时可停` : '成年档开放 · 现在可切换'}</span>
+        </button>
+      </div>
+    </section>
+    <section class="hub-block">
+      <div class="hub-head"><h3>知识与工具</h3><span class="muted">想查就查，不占进度</span></div>
+      <div class="hub-grid">
+        <button class="hub-card" data-action="open-dictionary">
+          <span class="hub-name">心理学词典</span>
+          <span class="hub-desc">${DICTIONARY.length} 条概念，按主题找、按类型挑，或直接搜。</span>
+          <span class="hub-meta">${DICT_GROUPS.length} 组 · ${DICT_CATS.length} 个主题 · 本地搜索</span>
+        </button>
+        <button class="hub-card" data-action="open-selfhelp">
+          <span class="hub-name">自助工具箱</span>
+          <span class="hub-desc">按此刻的状态，挑一张能马上用的小工具卡。</span>
+          <span class="hub-meta">${SH_TOOLS.length} 张卡 · ${SH_STATES.length} 种状态</span>
+        </button>
+        <button class="hub-card" data-action="open-slowvars">
+          <span class="hub-name">慢变量</span>
+          <span class="hub-desc">健康、关系、三观这些长期底盘，慢一点看。</span>
+          <span class="hub-meta">${SV_VARS.length} 个变量 · ${SV_PRACTICES.length} 张练习</span>
+        </button>
+      </div>
+    </section>
+    <section class="hub-block">
+      <div class="hub-head"><h3>这一趟的收集</h3><span class="muted">走过才会留下</span></div>
+      <div class="hub-grid two">
+        <button class="hub-card" data-action="open-codex">
+          <span class="hub-name">词卡图鉴</span>
+          <span class="hub-desc">每走过一站，会留下一张可以回看的词卡。</span>
+          <span class="hub-meta">${gotCards} / ${trackCards.length} 张</span>
+        </button>
+        <button class="hub-card" data-action="open-skills">
+          <span class="hub-name">本领清单</span>
+          <span class="hub-desc">这一程练过的小本领，都收在这里。</span>
+          <span class="hub-meta">${gotSkills} / ${trackSkills.length} 个</span>
+        </button>
+      </div>
+    </section>
+  </div>
+  <div class="map-foot"><button class="btn btn-ghost" data-action="open-settings">显示、朗读与数据</button></div>
     <p class="home-note">没有每日签到，也没有连续登录奖励。想来就来，进度不会掉。${band().adult ? '每一站底下都留了一句给大人的话。' : ''}${mindful ? '呼吸与正念练习可以随时停止，不算中断。' : ''}${isAdultTrack() ? '成年档与儿童档的进度分开记，互不影响。' : ''}</p>
   </div>`;
   stage.innerHTML = html;
@@ -440,80 +681,228 @@ function renderRetreatList() {
   updateTopbar();
 }
 
-/* ---------------------------------------------------------------- 心理学词典
-   纯科普，不计进度、不落盘；搜索只在当前页面内过滤，关掉就没了。 */
-function renderDictionary() {
+/* ---------------------------------------------------------------- 知识库公共视图
+   心理学词典 / 自助工具箱 / 慢变量共用一副骨架：返回地图、标题、可选搜索、
+   可选说明面板、分类筛选、计数、卡片网格、空态、页脚说明。
+   差异（文案、分类来源、计数单位、空态、section 包裹）全部走 config；
+   三个模块的 DOM 结构、id、类名与筛选结果保持不变。 */
+/* 空态文案与「怎么做 / 提醒」卡片是自助与慢变量共用的，收在这里避免改一处漏一处。 */
+const SH_HINT = '选一个状态，这里会出现三件可以先做的小事。';
+const SV_HINT = '选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。';
+function howCard(item, cls, cat, catLabel) {
+  return `<details class="dict-card ${cls}" data-cat="${esc(cat)}">
+    <summary>
+      <span class="dict-term">${esc(item.t)}</span>
+      <span class="dict-en" lang="en">${esc(item.e)}</span>
+      <span class="dict-short">${esc(item.when)}</span>
+      <span class="dict-cat-badge">${esc(catLabel || cat)}</span>
+    </summary>
+    <div class="dict-detail">
+      <div class="sh-how"><b>怎么做</b><ol>${item.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
+      <p class="dict-mis"><b>提醒</b>${esc(item.note)}</p>
+    </div>
+  </details>`;
+}
+function renderLibraryView(cfg) {
   clearAsyncTimers(); stopSpeech();
-  session.view = 'dict'; session.navDir = 'forward';
-  if (!DICTIONARY.length) {
+  session.view = cfg.view; session.navDir = 'forward';
+  if (!cfg.ready()) {
     stage.innerHTML = `<div class="${viewClass()}">
       <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-      <h2>词典内容没有加载出来</h2>
-      <p class="lead">检查 index.html 是否在 library.js 之后、script.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
+      <h2>${esc(cfg.missingTitle)}</h2>
+      <p class="lead">${esc(cfg.missingLead)}</p>
     </div>`;
     updateTopbar();
     return;
   }
-  const cats = [...new Set(DICTIONARY.map(d => d.c))];
-  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
-  const cards = DICTIONARY.map((d) => {
-    const hay = [d.t, d.e, d.c, d.s, d.d, d.m || ''].join(' ').toLowerCase();
-    return `<details class="dict-card" data-cat="${esc(d.c)}" data-search="${esc(hay)}">
-      <summary>
-        <span class="dict-term">${esc(d.t)}</span>
-        <span class="dict-en">${esc(d.e)}</span>
-        <span class="dict-short">${esc(d.s)}</span>
-        <span class="dict-cat-badge">${esc(d.c)}</span>
-      </summary>
-      <div class="dict-detail">
-        <p>${esc(d.d)}</p>
-        ${d.m ? `<p class="dict-mis"><b>常见误解</b>${esc(d.m)}</p>` : ''}
-      </div>
-    </details>`;
+  const cats = [...new Set(cfg.items.map(cfg.catOf))];
+  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: cfg.catName ? cfg.catName(c) : c })));
+  /* 可选钩子：只有词典传，自助工具箱与慢变量的 DOM 结构完全不变。
+     groupTitle 让同一主题的卡片前插一个跨整行的分区标题，筛选时一起收起。 */
+  let lastCat = null;
+  const cards = cfg.items.map((item) => {
+    const c = cfg.catOf(item);
+    const head = cfg.groupTitle && c !== lastCat ? cfg.groupTitle(c) : '';
+    lastCat = c;
+    return head + cfg.card(item);
   }).join('');
+  const catalog = `
+    <div class="${cfg.catsClass}" id="${cfg.catsId}" role="group" aria-label="${esc(cfg.catsLabel)}">
+      ${catBtns.map(x => `<button class="dict-cat ${cfg.currentCat() === x.c ? 'on' : ''}" data-action="${cfg.catsAction}" data-c="${esc(x.c)}">${cfg.catNameHtml ? cfg.catNameHtml(x.c) : esc(x.name)}</button>`).join('')}
+    </div>
+    <p class="dict-count muted" id="${cfg.countId}" aria-live="polite">${cfg.items.length} ${cfg.unit}${cfg.idleHint}</p>
+    <div class="${['dict-grid', cfg.gridClass].filter(Boolean).join(' ')}" id="${cfg.gridId}">${cards}</div>
+    <p class="dict-empty" id="${cfg.emptyId}" hidden>${esc(cfg.emptyText)}</p>`;
+  const catalogBlock = cfg.sectionClass
+    ? `<section class="${cfg.sectionClass}"${cfg.sectionId ? ` id="${cfg.sectionId}"` : ''}>
+      ${cfg.sectionTitle ? `<h3 class="${cfg.sectionTitleClass}">${esc(cfg.sectionTitle)}</h3>` : ''}
+      ${cfg.sectionSub ? `<p class="muted ${cfg.sectionSubClass}">${esc(cfg.sectionSub)}</p>` : ''}
+      ${catalog}
+    </section>`
+    : catalog;
   stage.innerHTML = `<div class="${viewClass()}">
     <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-    <span class="eyebrow">心理学词典 · ${DICTIONARY.length} 条</span>
-    <h2 style="margin:12px 0 10px">把常用的心理学词，说清楚一点</h2>
-    <p class="lead">按主题收好 ${DICTIONARY.length} 个名词与概念。每张卡先给一句话，点开再看展开与常见误解。这里只做科普，不提供诊断或个体化建议。</p>
-    <div class="dict-controls">
-      <label class="dict-search" for="dict-search">
-        <span class="visually-hidden">搜索词条</span>
-        <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋" value="${esc(dictQuery)}">
-      </label>
-    </div>
-    <div class="dict-cats" id="dict-cats" role="group" aria-label="按主题筛选">
-      ${catBtns.map(x => `<button class="dict-cat ${dictCat === x.c ? 'on' : ''}" data-action="dict-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
-    </div>
-    <p class="dict-count muted" id="dict-count" aria-live="polite">${DICTIONARY.length} 条 · 点卡片展开释义</p>
-    <div class="dict-grid" id="dict-grid">${cards}</div>
-    <p class="dict-empty" id="dict-empty" hidden>没有匹配的词条。换个关键词，或点「全部」看看。</p>
-    <p class="home-note">词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索只在当前页面内过滤，不会保存，也不会上传。</p>
+    <span class="eyebrow">${esc(cfg.eyebrow)}</span>
+    <h2 style="margin:12px 0 10px">${esc(cfg.title)}</h2>
+    <p class="lead">${esc(cfg.lead)}</p>
+    ${cfg.nav || ''}
+    ${cfg.safety ? `<div class="retreat-safety">${esc(cfg.safety)}</div>` : ''}
+    ${cfg.search || ''}
+    ${cfg.prelude || ''}
+    ${catalogBlock}
+    ${cfg.epilogue || ''}
+    <p class="home-note">${esc(cfg.note)}</p>
+    <div class="module-foot"><button class="btn btn-secondary" data-action="go-map">回到地图</button></div>
   </div>`;
   updateTopbar();
-  applyDictFilter();
+  applyLibraryFilter(cfg);
   stage.focus({ preventScroll: true });
 }
 
-function applyDictFilter() {
-  const q = dictQuery.trim().toLowerCase();
+function applyLibraryFilter(cfg) {
+  const q = cfg.query ? cfg.query().trim().toLowerCase() : '';
+  const cat = cfg.currentCat();
+  /* 第三维筛选只有词典传；其余两个知识库保持「分类 + 搜索」两维，行为不变。 */
+  const kind = cfg.queryKind ? cfg.queryKind() : 'all';
+  const visibleByCat = new Map();
   let n = 0;
-  document.querySelectorAll('#dict-grid .dict-card').forEach((card) => {
-    const catOk = dictCat === 'all' || card.dataset.cat === dictCat;
+  document.querySelectorAll(`#${cfg.gridId} .${cfg.cardClass}`).forEach((card) => {
+    const catOk = cat === 'all' || card.dataset.cat === cat;
     const qOk = !q || (card.dataset.search || '').includes(q);
-    const show = catOk && qOk;
+    const kindOk = kind === 'all' || !card.dataset.kind || card.dataset.kind === kind;
+    const show = catOk && qOk && kindOk;
     card.hidden = !show;
-    if (show) n += 1;
+    if (show) {
+      n += 1;
+      visibleByCat.set(card.dataset.cat, (visibleByCat.get(card.dataset.cat) || 0) + 1);
+    }
   });
-  const count = document.getElementById('dict-count');
+  /* 词典的分区标题跟着可见卡片走：某主题被筛空，标题也一起收起。 */
+  document.querySelectorAll(`#${cfg.gridId} .dict-group-title`).forEach((h) => {
+    const shown = visibleByCat.get(h.dataset.group) || 0;
+    h.hidden = shown === 0;
+    const badge = h.querySelector('.dict-group-count');
+    if (badge) badge.textContent = `${shown} 条`;
+  });
+  const active = cfg.active ? cfg.active() : (q || cat !== 'all');
+  const count = document.getElementById(cfg.countId);
   if (count) {
-    count.textContent = (q || dictCat !== 'all')
-      ? `筛出 ${n} / ${DICTIONARY.length} 条`
-      : `${DICTIONARY.length} 条 · 点卡片展开释义`;
+    count.textContent = cfg.countText
+      ? cfg.countText(n)
+      : (active ? `筛出 ${n} / ${cfg.items.length} ${cfg.unit}` : `${cfg.items.length} ${cfg.unit}${cfg.idleHint}`);
   }
-  const empty = document.getElementById('dict-empty');
+  const empty = document.getElementById(cfg.emptyId);
   if (empty) empty.hidden = n !== 0;
+  if (cfg.syncSelection) cfg.syncSelection();
 }
+
+/* ---------------------------------------------------------------- 心理学词典
+   纯科普，不计进度、不落盘；主题 / 类型 / 搜索三个维度只在内存里，重新进入会清空。
+   主题分组与概念类型定义在 content/dictionary.js 的 MI.dictionaryMeta，逻辑不另存一份。 */
+function dictFiltersActive() {
+  return !!(dictQuery.trim() || dictCat !== 'all' || dictKind !== 'all');
+}
+function syncDictSelection() {
+  document.querySelectorAll('#dict-kinds .dict-kind-btn').forEach((b) => {
+    const on = b.dataset.k === dictKind;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
+  const desc = document.getElementById('dict-kind-desc');
+  if (desc) desc.textContent = dictKind === 'all'
+    ? '先按主题翻，或按类型挑一类；两种筛选可以叠在一起。'
+    : (DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '';
+  const reset = document.getElementById('dict-reset');
+  if (reset) reset.hidden = !dictFiltersActive();
+}
+function dictCountText(n) {
+  const parts = [];
+  if (dictCat !== 'all') parts.push(dictCat);
+  if (dictKind !== 'all') parts.push(dictKindName(dictKind));
+  if (dictQuery.trim()) parts.push(`「${dictQuery.trim()}」`);
+  return parts.length
+    ? `筛出 ${n} / ${DICTIONARY.length} 条 · ${parts.join(' + ')}`
+    : `${DICTIONARY.length} 条 · 点卡片展开释义，底部可以接着看相关词条`;
+}
+function dictView() {
+  const kindDesc = dictKind === 'all'
+    ? '先按主题翻，或按类型挑一类；两种筛选可以叠在一起。'
+    : ((DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '');
+  return {
+    view: 'dict',
+    ready: () => DICTIONARY.length > 0 && DICT_CATS.length > 0 && DICT_KINDS.length > 0,
+    missingTitle: '词典内容没有加载出来',
+    missingLead: '检查 index.html 是否在 library.js 之后、script.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。',
+    eyebrow: `心理学词典 · ${DICTIONARY.length} 条 · ${DICT_GROUPS.length} 组`,
+    title: '把常用的心理学词，说清楚一点',
+    lead: `${DICT_CATS.length} 个主题收进 ${DICT_GROUPS.length} 组，另有 ${DICT_KINDS.length} 种概念类型可以先挑一类。每张卡先给一句话，点开看展开、常见误解与「接着看」的相关词条。这里只做科普，不提供诊断或个体化建议。`,
+    nav: `<nav class="dict-nav" aria-label="本页目录">
+      ${DICT_GROUPS.map(g => `<a href="#dict-group-${esc(g.id)}">${esc(g.name)}<span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
+    </nav>`,
+    search: `<div class="dict-controls">
+      <label class="dict-search" for="dict-search">
+        <span class="visually-hidden">搜索词条</span>
+        <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
+      </label>
+    </div>`,
+    prelude: `<section class="dict-start" aria-labelledby="dict-start-title">
+      <h3 class="dict-start-title" id="dict-start-title">从哪里开始</h3>
+      <p class="muted dict-start-sub">${DICTIONARY.length} 条不必从头翻。先挑一类，或直接搜名词与英文；主题和类型可以叠着筛。</p>
+      <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按概念类型筛选">
+        <button class="dict-kind-btn ${dictKind === 'all' ? 'on' : ''}" data-action="dict-kind" data-k="all" aria-pressed="${dictKind === 'all'}">全部<span>${DICTIONARY.length}</span></button>
+        ${DICT_KINDS.map(k => `<button class="dict-kind-btn ${dictKind === k.id ? 'on' : ''}" data-action="dict-kind" data-k="${esc(k.id)}" aria-pressed="${dictKind === k.id}" title="${esc(k.desc)}"><b>${esc(k.name)}</b><span>${dictCountBy(d => d.k === k.id)}</span></button>`).join('')}
+      </div>
+      <p class="dict-kind-desc" id="dict-kind-desc">${esc(kindDesc)}</p>
+      <button class="btn-read dict-reset" id="dict-reset" data-action="dict-reset"${dictFiltersActive() ? '' : ' hidden'}>清空筛选</button>
+    </section>`,
+    items: DICTIONARY,
+    catOf: d => d.c,
+    catNameHtml(c) {
+      return c === 'all'
+        ? `全部<span class="dict-cat-num">${DICTIONARY.length}</span>`
+        : `${esc(c)}<span class="dict-cat-num">${dictCountBy(d => d.c === c)}</span>`;
+    },
+    groupTitle(c) {
+      const g = DICT_GROUPS.find(x => (x.cats || []).includes(c)) || {};
+      const first = g.cats && g.cats[0] === c;
+      const id = first ? `dict-group-${g.id}` : `dict-cat-${DICT_CATS.indexOf(c)}`;
+      return `<h3 class="dict-group-title" id="${esc(id)}" data-group="${esc(c)}">
+        <span class="dict-group-name">${esc(c)}</span>
+        <span class="dict-group-meta">${esc(g.name || '')}</span>
+        <span class="dict-group-count">${dictCountBy(d => d.c === c)} 条</span>
+      </h3>`;
+    },
+    card(d) {
+      const hay = [d.t, d.e, d.c, dictKindName(d.k), d.s, d.d, d.m || ''].join(' ').toLowerCase();
+      return `<details class="dict-card" data-term="${esc(d.t)}" data-cat="${esc(d.c)}" data-kind="${esc(d.k)}" data-search="${esc(hay)}">
+        <summary>
+          <span class="dict-term">${esc(d.t)}</span>
+          <span class="dict-en" lang="en">${esc(d.e)}</span>
+          <span class="dict-short">${esc(d.s)}</span>
+          <div class="dict-badges">
+            <span class="dict-cat-badge">${esc(d.c)}</span>
+            <span class="dict-kind-badge k-${esc(d.k)}">${esc(dictKindName(d.k))}</span>
+          </div>
+        </summary>
+        <div class="dict-detail">
+          <p>${esc(d.d)}</p>
+          ${d.m ? `<p class="dict-mis"><b>常见误解</b>${esc(d.m)}</p>` : ''}
+          ${(d.r || []).length ? `<div class="dict-related"><b>接着看</b><div class="dict-related-links">${d.r.map(t => `<button class="dict-link" data-action="dict-jump" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>` : ''}
+        </div>
+      </details>`;
+    },
+    gridId: 'dict-grid', gridClass: '', cardClass: 'dict-card',
+    catsId: 'dict-cats', catsClass: 'dict-cats', catsLabel: '按主题筛选', catsAction: 'dict-cat',
+    currentCat: () => dictCat, query: () => dictQuery, queryKind: () => dictKind,
+    active: dictFiltersActive, countText: dictCountText, syncSelection: syncDictSelection,
+    countId: 'dict-count', unit: '条', idleHint: ' · 点卡片展开释义',
+    emptyId: 'dict-empty', emptyText: '没有匹配的词条。换个关键词，或点「清空筛选」看看。',
+    note: '词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
+  };
+}
+function renderDictionary() { renderLibraryView(dictView()); }
+function applyDictFilter() { applyLibraryFilter(dictView()); }
 
 /* ---------------------------------------------------------------- 自助工具箱
    心力恢复与认知取向自助；只做科普和一般性练习，不诊断、不追踪、不落盘。 */
@@ -530,86 +919,48 @@ function shStatePanel(id) {
   </div>`;
 }
 
-function renderSelfHelp() {
-  clearAsyncTimers(); stopSpeech();
-  session.view = 'selfhelp'; session.navDir = 'forward';
-  if (!SH_TOOLS.length) {
-    stage.innerHTML = `<div class="${viewClass()}">
-      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-      <h2>自助内容没有加载出来</h2>
-      <p class="lead">检查 index.html 是否在 dictionary.js 之后、script.js 之前引入 content/selfhelp.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
-    </div>`;
-    updateTopbar();
-    return;
-  }
-  const cats = [...new Set(SH_TOOLS.map(t => t.c))];
-  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
-  const cards = SH_TOOLS.map((t) => `<details class="dict-card sh-card" data-cat="${esc(t.c)}">
-    <summary>
-      <span class="dict-term">${esc(t.t)}</span>
-      <span class="dict-en">${esc(t.e)}</span>
-      <span class="dict-short">${esc(t.when)}</span>
-      <span class="dict-cat-badge">${esc(t.c)}</span>
-    </summary>
-    <div class="dict-detail">
-      <div class="sh-how"><b>怎么做</b><ol>${t.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
-      <p class="dict-mis"><b>提醒</b>${esc(t.note)}</p>
-    </div>
-  </details>`).join('');
-  stage.innerHTML = `<div class="${viewClass()}">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-    <span class="eyebrow">自助工具箱 · 心力与认知</span>
-    <h2 style="margin:12px 0 10px">先恢复一点力气，再换一个看法</h2>
-    <p class="lead">${SH_STATES.length} 种“现在最像”的状态、${SH_TOOLS.length} 张工具卡、${SH_DISTORTIONS.length} 条认知扭曲速查。全部是选择式或阅读式，不填心情文字，也不记录你选了什么。</p>
-    <div class="retreat-safety">${esc(SH_SAFETY)}</div>
-    <section class="sh-section">
+function selfHelpView() {
+  const states = `<div class="sh-states" id="sh-states">
+    ${SH_STATES.map(s => `<button class="sh-state ${shState === s.id ? 'on' : ''}" data-action="sh-state" data-id="${esc(s.id)}">
+      <b>${esc(s.name)}</b><span>${esc(s.sub)}</span></button>`).join('')}
+  </div>`;
+  return {
+    view: 'selfhelp',
+    ready: () => SH_TOOLS.length > 0,
+    missingTitle: '自助内容没有加载出来',
+    missingLead: '检查 index.html 是否在 dictionary.js 之后、script.js 之前引入 content/selfhelp.js。打开浏览器控制台可以看到具体是哪个文件 404。',
+    eyebrow: '自助工具箱 · 心力与认知',
+    title: '先恢复一点力气，再换一个看法',
+    lead: `${SH_STATES.length} 种“现在最像”的状态、${SH_TOOLS.length} 张工具卡、${SH_DISTORTIONS.length} 条认知扭曲速查。全部是选择式或阅读式，不填心情文字，也不记录你选了什么。`,
+    safety: SH_SAFETY,
+    prelude: `<section class="sh-section">
       <h3 class="sh-section-title">现在最像哪一种？</h3>
       <p class="muted sh-section-sub">不用选得很准，挑一个最接近的就好。选完只看这一组建议，不做测试，也不打分。</p>
-      <div class="sh-states" id="sh-states">
-        ${SH_STATES.map(s => `<button class="sh-state ${shState === s.id ? 'on' : ''}" data-action="sh-state" data-id="${esc(s.id)}">
-          <b>${esc(s.name)}</b><span>${esc(s.sub)}</span></button>`).join('')}
-      </div>
-      <div id="sh-state-panel">${shState ? shStatePanel(shState) : '<p class="sh-hint">选一个状态，这里会出现三件可以先做的小事。</p>'}</div>
-    </section>
-    <section class="sh-section">
-      <h3 class="sh-section-title">工具卡</h3>
-      <p class="muted sh-section-sub">按主题筛，点开看“怎么做”和“提醒”。</p>
-      <div class="sh-cats" id="sh-cats" role="group" aria-label="按主题筛选自助工具">
-        ${catBtns.map(x => `<button class="dict-cat ${shCat === x.c ? 'on' : ''}" data-action="sh-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
-      </div>
-      <p class="dict-count muted" id="sh-count" aria-live="polite">${SH_TOOLS.length} 张 · 点卡片展开</p>
-      <div class="dict-grid sh-grid" id="sh-grid">${cards}</div>
-      <p class="dict-empty" id="sh-empty" hidden>这一类暂时没有卡片。点「全部」看看。</p>
-    </section>
-    <section class="sh-section">
+      ${states}
+      <div id="sh-state-panel" aria-live="polite">${shState ? shStatePanel(shState) : `<p class="sh-hint">${esc(SH_HINT)}</p>`}</div>
+    </section>`,
+    items: SH_TOOLS,
+    catOf: t => t.c,
+    card(t) { return howCard(t, 'sh-card', t.c); },
+    sectionClass: 'sh-section', sectionTitle: '工具卡',
+    sectionTitleClass: 'sh-section-title', sectionSub: '按主题筛，点开看“怎么做”和“提醒”。',
+    sectionSubClass: 'sh-section-sub',
+    gridId: 'sh-grid', gridClass: 'sh-grid', cardClass: 'sh-card',
+    catsId: 'sh-cats', catsClass: 'sh-cats', catsLabel: '按主题筛选自助工具', catsAction: 'sh-cat',
+    currentCat: () => shCat,
+    countId: 'sh-count', unit: '张', idleHint: ' · 点卡片展开',
+    emptyId: 'sh-empty', emptyText: '这一类暂时没有卡片。点「全部」看看。',
+    epilogue: `<section class="sh-section">
       <h3 class="sh-section-title">认知扭曲速查</h3>
       <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。</p>
       <div class="sh-dist-grid">${SH_DISTORTIONS.map(d => `<div class="sh-dist">
         <b>${esc(d.t)}</b><span>${esc(d.d)}</span><em>${esc(d.eg)}</em></div>`).join('')}</div>
-    </section>
-    <p class="home-note">自助适合日常调节，不替代专业帮助。如果困扰持续数周、明显影响生活，或出现伤害自己的念头，请尽快联系专业人士或当地急救。选择和搜索都不会被保存。</p>
-  </div>`;
-  updateTopbar();
-  applyShFilter();
-  stage.focus({ preventScroll: true });
+    </section>`,
+    note: '自助适合日常调节，不替代专业帮助。如果困扰持续数周、明显影响生活，或出现伤害自己的念头，请尽快联系专业人士或当地急救。选择和搜索都不会被保存。'
+  };
 }
-
-function applyShFilter() {
-  let n = 0;
-  document.querySelectorAll('#sh-grid .sh-card').forEach((card) => {
-    const show = shCat === 'all' || card.dataset.cat === shCat;
-    card.hidden = !show;
-    if (show) n += 1;
-  });
-  const count = document.getElementById('sh-count');
-  if (count) {
-    count.textContent = shCat !== 'all'
-      ? `筛出 ${n} / ${SH_TOOLS.length} 张`
-      : `${SH_TOOLS.length} 张 · 点卡片展开`;
-  }
-  const empty = document.getElementById('sh-empty');
-  if (empty) empty.hidden = n !== 0;
-}
+function renderSelfHelp() { renderLibraryView(selfHelpView()); }
+function applyShFilter() { applyLibraryFilter(selfHelpView()); }
 
 /* ---------------------------------------------------------------- 慢变量
    健康、三观、目的与目标等长期底盘；只做阅读与选择，不打卡、不打分、不落盘。 */
@@ -625,95 +976,86 @@ function svPanel(id) {
       <div class="sv-row"><b>不用什么衡量</b><p>${esc(v.check)}</p></div>
     </div>
     <button class="btn-read" data-action="sv-var-clear">换一个慢变量</button>
+    <p class="sv-jump">选好了就往下看相关的练习 · <a href="#sv-practices">去练习卡</a></p>
   </div>`;
 }
 
-function renderSlowVars() {
-  clearAsyncTimers(); stopSpeech();
-  session.view = 'slowvars'; session.navDir = 'forward';
-  if (!SV_VARS.length || !SV_PRACTICES.length) {
-    stage.innerHTML = `<div class="${viewClass()}">
-      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-      <h2>慢变量内容没有加载出来</h2>
-      <p class="lead">检查 index.html 是否在 selfhelp.js 之后、script.js 之前引入 content/slowvars.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
-    </div>`;
-    updateTopbar();
-    return;
-  }
-  const cats = [...new Set(SV_PRACTICES.map(p => p.c))];
-  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
-  const cards = SV_PRACTICES.map((p) => `<details class="dict-card sv-card" data-cat="${esc(p.c)}">
-    <summary>
-      <span class="dict-term">${esc(p.t)}</span>
-      <span class="dict-en">${esc(p.e)}</span>
-      <span class="dict-short">${esc(p.when)}</span>
-      <span class="dict-cat-badge">${esc(p.c)}</span>
-    </summary>
-    <div class="dict-detail">
-      <div class="sh-how"><b>怎么做</b><ol>${p.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
-      <p class="dict-mis"><b>提醒</b>${esc(p.note)}</p>
-    </div>
-  </details>`).join('');
-  stage.innerHTML = `<div class="${viewClass()}">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
-    <span class="eyebrow">慢变量 · 在快时代里养底盘</span>
-    <h2 style="margin:12px 0 10px">有些东西，值得慢慢养</h2>
-    <p class="lead">${SV_VARS.length} 个慢变量、${SV_PRACTICES.length} 张练习卡、${SV_TRAPS.length} 个快变量陷阱、${SV_HORIZONS.length} 个时间尺度。没有打卡，也不问你做到了多少。</p>
-    <div class="retreat-safety">${esc(SV_SAFETY)}</div>
-    <section class="sv-section">
+function svVarName(id) {
+  const v = SV_VARS.find(x => x.id === id);
+  return v ? v.name : id;
+}
+
+function slowVarsView() {
+  const vars = `<div class="sv-vars" id="sv-vars">
+    ${SV_VARS.map(v => `<button class="sv-var ${svVar === v.id ? 'on' : ''}" data-action="sv-var" data-id="${esc(v.id)}">
+      <b>${esc(v.name)}</b><span>${esc(v.sub)}</span></button>`).join('')}
+  </div>`;
+  return {
+    view: 'slowvars',
+    ready: () => SV_VARS.length > 0 && SV_PRACTICES.length > 0,
+    missingTitle: '慢变量内容没有加载出来',
+    missingLead: '检查 index.html 是否在 selfhelp.js 之后、script.js 之前引入 content/slowvars.js。打开浏览器控制台可以看到具体是哪个文件 404。',
+    eyebrow: '慢变量 · 在快时代里养底盘',
+    title: '有些东西，值得慢慢养',
+    lead: `${SV_VARS.length} 个慢变量、${SV_PRACTICES.length} 张练习卡、${SV_TRAPS.length} 个快变量陷阱、${SV_HORIZONS.length} 个时间尺度。选一个慢变量，下面会只留相关的练习。没有打卡，也不问你做到了多少。`,
+    nav: `<nav class="sv-nav" aria-label="本页目录">
+      <a href="#sv-var-section">选一个慢变量</a>
+      <a href="#sv-practices">练习卡</a>
+      <a href="#sv-horizons">三个时间尺度</a>
+      <a href="#sv-traps">快变量陷阱</a>
+    </nav>`,
+    safety: SV_SAFETY,
+    prelude: `<section class="sv-section" id="sv-var-section">
       <h3 class="sv-section-title">你现在最想稳住哪一块？</h3>
       <p class="muted sv-section-sub">不用选得很准；选一个最接近的，看看它为什么慢、可以先做什么。</p>
-      <div class="sv-vars" id="sv-vars">
-        ${SV_VARS.map(v => `<button class="sv-var ${svVar === v.id ? 'on' : ''}" data-action="sv-var" data-id="${esc(v.id)}">
-          <b>${esc(v.name)}</b><span>${esc(v.sub)}</span></button>`).join('')}
-      </div>
-      <div id="sv-panel">${svVar ? svPanel(svVar) : '<p class="sv-hint">选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。</p>'}</div>
-    </section>
-    <section class="sv-section">
-      <h3 class="sv-section-title">慢变量练习卡</h3>
-      <p class="muted sv-section-sub">按主题筛，点开看“怎么做”和“提醒”。不用全做，挑一张顺眼的就好。</p>
-      <div class="sv-cats" id="sv-cats" role="group" aria-label="按主题筛选慢变量练习">
-        ${catBtns.map(x => `<button class="dict-cat ${svCat === x.c ? 'on' : ''}" data-action="sv-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
-      </div>
-      <p class="dict-count muted" id="sv-count" aria-live="polite">${SV_PRACTICES.length} 张 · 点卡片展开</p>
-      <div class="dict-grid sv-grid" id="sv-grid">${cards}</div>
-      <p class="dict-empty" id="sv-empty" hidden>这一类暂时没有卡片。点「全部」看看。</p>
-    </section>
-    <section class="sv-section">
+      ${vars}
+      <div id="sv-panel" aria-live="polite" data-var="${esc(svVar || '')}">${svVar ? svPanel(svVar) : `<p class="sv-hint">${esc(SV_HINT)}</p>`}</div>
+    </section>`,
+    items: SV_PRACTICES,
+    catOf: p => p.v,
+    catName: id => svVarName(id),
+    card(p) { return howCard(p, 'sv-card', p.v, svVarName(p.v)); },
+    sectionClass: 'sv-section', sectionId: 'sv-practices', sectionTitle: '慢变量练习卡',
+    sectionTitleClass: 'sv-section-title', sectionSub: '选上面的慢变量，会自动筛到相关练习；也可以自己按变量挑。每个变量下的卡数本来就不同，不用凑齐，点开看“怎么做”和“提醒”。',
+    sectionSubClass: 'sv-section-sub',
+    gridId: 'sv-grid', gridClass: 'sv-grid', cardClass: 'sv-card',
+    catsId: 'sv-cats', catsClass: 'sv-cats', catsLabel: '按慢变量筛选练习', catsAction: 'sv-cat',
+    currentCat: () => svCat,
+    countId: 'sv-count', unit: '张', idleHint: ' · 点卡片展开',
+    emptyId: 'sv-empty', emptyText: '这个慢变量暂时没有练习卡。点「全部」看看。',
+    epilogue: `<section class="sv-section" id="sv-horizons">
       <h3 class="sv-section-title">三个时间尺度</h3>
-      <p class="muted sv-section-sub">同一个问题，放在不同长度里看，答案会不一样。</p>
+      <p class="muted sv-section-sub">同一个问题，放在不同长度里看，答案会不一样。每个尺度都指回一张能动手的练习卡。</p>
       <div class="sv-horizons">${SV_HORIZONS.map(h => `<div class="sv-horizon">
         <b>${esc(h.t)}</b><p>${esc(h.d)}</p>
-        <ul>${h.asks.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`).join('')}</div>
+        <ul>${h.asks.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        ${h.cards && h.cards.length ? `<p class="sv-horizon-link">可以先看：${h.cards.map(c => esc(c)).join(' · ')}</p>` : ''}</div>`).join('')}</div>
     </section>
-    <section class="sv-section">
+    <section class="sv-section" id="sv-traps">
       <h3 class="sv-section-title">快变量陷阱速查</h3>
       <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。</p>
       <div class="sv-traps">${SV_TRAPS.map(t => `<div class="sv-trap">
         <b>${esc(t.t)}</b><span>${esc(t.d)}</span><em>${esc(t.eg)}</em></div>`).join('')}</div>
-    </section>
-    <p class="home-note">慢变量不是另一套 KPI，也不是要求你立刻改变生活。选中的慢变量和分类只留在当前页面，不会被保存。身体或情绪上的持续不适，请找医生或专业支持。</p>
-  </div>`;
-  updateTopbar();
-  applySvFilter();
-  stage.focus({ preventScroll: true });
+    </section>`,
+    note: '选中的慢变量和分类只在本次打开期间有效，返回地图就会清掉，也不会被保存。身体或情绪上的持续不适，请找医生或专业支持。'
+  };
 }
-
-function applySvFilter() {
-  let n = 0;
-  document.querySelectorAll('#sv-grid .sv-card').forEach((card) => {
-    const show = svCat === 'all' || card.dataset.cat === svCat;
-    card.hidden = !show;
-    if (show) n += 1;
-  });
-  const count = document.getElementById('sv-count');
-  if (count) {
-    count.textContent = svCat !== 'all'
-      ? `筛出 ${n} / ${SV_PRACTICES.length} 张`
-      : `${SV_PRACTICES.length} 张 · 点卡片展开`;
+function renderSlowVars() { renderLibraryView(slowVarsView()); }
+function applySvFilter() { applyLibraryFilter(slowVarsView()); }
+/* 变量选择与练习筛选共用一个同步点：面板、两处按钮高亮、卡片可见性、计数一起更新。 */
+function syncSvSelection() {
+  document.querySelectorAll('#sv-vars .sv-var').forEach(b => b.classList.toggle('on', b.dataset.id === svVar));
+  document.querySelectorAll('#sv-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === svCat));
+  const panel = document.getElementById('sv-panel');
+  if (panel) {
+    /* 只切分类时不重建面板：避免 aria-live 把同一段说明重复播报 */
+    const key = svVar || '';
+    if (panel.dataset.var !== key) {
+      panel.innerHTML = svVar ? svPanel(svVar) : `<p class="sv-hint">${esc(SV_HINT)}</p>`;
+      panel.dataset.var = key;
+    }
   }
-  const empty = document.getElementById('sv-empty');
-  if (empty) empty.hidden = n !== 0;
+  applySvFilter();
 }
 
 function renderRetreatPractice(i) {
@@ -875,7 +1217,7 @@ const RENDERERS = {
   },
   memory(v) {
     return `<p class="prompt">翻开两张牌，把「情绪词」和它常见的「身体信号」配成对。</p>
-      <div class="memo-progress" id="memo-progress">已找到 0 / ${v.pairs.length} 对</div>
+      <div class="memo-progress" id="memo-progress" aria-live="polite">已找到 0 / ${v.pairs.length} 对</div>
       <div class="memory-grid" id="memo-grid"></div>
       <p class="muted" style="margin-top:14px">翻错了就盖回去，不记次数。每个人的身体反应不一样，这里只是常见的一种。</p>`;
   },
@@ -899,7 +1241,7 @@ const RENDERERS = {
     const quoteBlock = `<h3 style="margin-top:22px">${adult ? '2' : '3'} · 带走一句话</h3>
       <p class="muted" style="margin:6px 0 10px">挑一句今天最用得上的，截图留住就好，不用上传。</p>
       <div id="quote-picks" class="quote-picks">${play.quotes.map((q, i) =>
-        `<button class="opt" data-action="quote-pick" data-i="${i}"><span class="opt-key">${String.fromCharCode(65 + i)}</span><span>${esc(q)}</span></button>`).join('')}</div>
+        `<button class="opt" data-action="quote-pick" data-i="${i}" aria-keyshortcuts="${i + 1}"><span class="opt-key" aria-hidden="true">${i + 1}</span><span>${esc(q)}</span></button>`).join('')}</div>
       <button class="btn-read" data-action="quote-reroll">换一组句子</button>
       <div id="finale-quote"></div>`;
     const microBlock = `<h3 style="margin-top:22px">${adult ? '3' : '4'} · 生活里可以试试</h3>
@@ -1053,12 +1395,16 @@ function paintMemory() {
   document.getElementById('memo-grid').innerHTML = play.deck.map((c, i) => {
     const matched = play.matched.has(i);
     const open = play.open.has(i) || matched;
-    return `<button class="memo-card ${matched ? 'matched' : open ? 'open' : ''}" data-action="memo-flip" data-i="${i}" ${matched ? 'disabled' : ''}>${open ? esc(c.text) : '背面'}</button>`;
+    const label = matched ? `已配对：${c.text}` : open ? `已翻开：${c.text}` : '未翻开的记忆牌';
+    return `<button class="memo-card ${matched ? 'matched' : open ? 'open' : ''}" data-action="memo-flip" data-i="${i}" ${matched ? 'disabled' : ''} aria-label="${esc(label)}">${open ? esc(c.text) : '背面'}</button>`;
   }).join('');
 }
 
 /* ---------------------------------------------------------------- 通关 */
-function completeLevel(msg) {
+/* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
+   这样以后新增题型时，即使直接把内容变量传进来，也不会执行成 HTML。 */
+function completeLevel(text) { completeLevelHtml(esc(text)); }
+function completeLevelHtml(html) {
   if (play.done) return;
   play.done = true;
   stopSpeech();
@@ -1076,13 +1422,16 @@ function completeLevel(msg) {
   if (!state.cleared.includes(lv.id)) state.cleared.push(lv.id);
   if (!state.awarded.includes(lv.id)) {
     state.awarded.push(lv.id);
-    if (!isAdultTrack()) state.shells += 2;   /* 贝壳是儿童档的货币，成年档不发 */
+    if (hasShells()) state.shells += 2;   /* 贝壳是否发放由 bands.shells 决定 */
   }
-  if (lv.card && !state.cards.includes(lv.card)) state.cards.push(lv.card);
+  if (lv.card) {
+    const bag = state.cards[bandTrack()];
+    if (bag && !bag.includes(lv.card)) bag.push(lv.card);
+  }
   if (lv.skill && !state.skills.includes(lv.skill)) state.skills.push(lv.skill);
   save();
   updateTopbar();
-  const micro = ['1-4', '2-4', '3-4'].includes(lv.id)
+  const micro = lv.type !== 'finale' && lv.num === 4
     ? `<div class="micro-card" style="margin-top:12px">今日微行动：${esc(rand(MICRO_ACTIONS))}</div>` : '';
   const next = state.levelIndex + 1;
   const canNext = next < TOTAL && isUnlocked(next);
@@ -1092,8 +1441,8 @@ function completeLevel(msg) {
   const slot = document.getElementById('feedback-slot');
   if (slot) {
     slot.innerHTML = `<div class="feedback good result-card">
-      <div class="result-kicker">这一站，带走了什么</div>
-      <p class="result-main">${msg}</p>
+      <div class="result-kicker"><span class="result-check" aria-hidden="true">✓</span>这一站完成了 · 带走了什么</div>
+      <p class="result-main">${html}</p>
       <div class="result-rows">
         <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
@@ -1114,8 +1463,19 @@ function completeLevel(msg) {
 /* ---------------------------------------------------------------- 弹窗 */
 function openModal(html) {
   lastFocus = document.activeElement;
-  const title = (html.match(/class="modal-title"[^>]*>([^<]+)</) || [])[1] || '对话框';
-  overlay.innerHTML = `<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">${html}</div></div>`;
+  overlay.innerHTML = `<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true">${html}<button class="modal-close" data-action="close-modal" aria-label="关闭弹窗">×</button></div></div>`;
+  /* 弹窗打开时锁住背后的页面滚动：小屏上滑到弹窗底部不会把地图也带着滚。 */
+  document.body.classList.add('modal-open');
+  /* 用 DOM 取标题，避免正则漏掉带属性的标题；有标题就走 aria-labelledby，
+     没有才退回通用 aria-label。overlay 不再挂 aria-live，避免整个弹窗被重复播报。 */
+  const modal = overlay.querySelector('.modal');
+  const titleEl = modal && modal.querySelector('.modal-title');
+  if (titleEl) {
+    if (!titleEl.id) titleEl.id = 'modal-title';
+    modal.setAttribute('aria-labelledby', titleEl.id);
+  } else if (modal) {
+    modal.setAttribute('aria-label', '对话框');
+  }
   overlay.classList.add('open');
   const first = overlay.querySelector('button, [tabindex]');
   if (first) { try { first.focus(); } catch (e) { /* noop */ } }
@@ -1132,6 +1492,7 @@ function trapTab(e) {
 }
 function closeModal() {
   overlay.classList.remove('open'); overlay.innerHTML = '';
+  document.body.classList.remove('modal-open');
   if (lastFocus && document.contains(lastFocus)) { try { lastFocus.focus(); } catch (e) { /* noop */ } }
   lastFocus = null;
 }
@@ -1174,11 +1535,12 @@ function openSettings() {
 function openCodex() {
   /* 图鉴按当前轨展示：成年档有自己的一套卡片，不和儿童档混在一起 */
   const keys = LEVELS.map(l => l.card).filter(Boolean);
-  const got = keys.filter(k => state.cards.includes(k)).length;
+  const bag = cardsInTrack();
+  const got = keys.filter(k => bag.includes(k)).length;
   openModal(`<div class="modal-title">词卡图鉴 · ${got} / ${keys.length}</div>
     <div class="modal-body">每张卡都是从一站里带回来的小工具。没有集齐压力，也没有隐藏奖励。</div>
     <div class="codex-grid">${keys.map(k => {
-      const has = state.cards.includes(k);
+      const has = bag.includes(k);
       const def = CODEX[k] || { t: '', e: '' };
       return `<div class="codex-card ${has ? '' : 'locked'}"><b>${has ? esc(k) : '???'}</b>
         <span>${has ? esc(def.t) : '走到那一站就能遇见'}</span>
@@ -1263,51 +1625,82 @@ const ACTIONS = {
     <button class="btn btn-primary" data-action="clear-progress-confirm">确认清空</button></div>`),
   'clear-progress-confirm': () => {
     const keep = { band: state.band, settings: state.settings };
+    removeAllSaves();
     state = clone(DEFAULT_STATE); state.band = keep.band; state.settings = keep.settings;
     save(); session.clearedThisRun = 0; closeModal(); renderHome();
   },
   'open-codex': () => openCodex(),
-  'open-dictionary': () => { session.navDir = 'forward'; renderDictionary(); },
+  'open-dictionary': () => {
+    /* 与慢变量一致：每次进入都是干净状态，筛选与搜索词不跨视图保留，也不落盘 */
+    dictCat = 'all'; dictQuery = ''; dictKind = 'all';
+    session.navDir = 'forward'; renderDictionary();
+  },
   'dict-cat': (el) => {
     dictCat = el.dataset.c || 'all';
-    document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
+    if (dictCat !== 'all' && !DICT_CATS.includes(dictCat)) dictCat = 'all';
     applyDictFilter();
+  },
+  'dict-kind': (el) => {
+    const k = el.dataset.k || 'all';
+    if (k !== 'all' && !DICT_KINDS.some(x => x.id === k)) return;
+    dictKind = k;
+    applyDictFilter();
+  },
+  'dict-reset': () => {
+    dictCat = 'all'; dictQuery = ''; dictKind = 'all';
+    renderDictionary();
+  },
+  'dict-jump': (el) => {
+    const t = el.dataset.t;
+    if (!DICTIONARY.some(d => d.t === t)) return;
+    /* 关联词条可能被当前筛选挡住：先清干净再跳，避免「点了没反应」 */
+    dictCat = 'all'; dictQuery = ''; dictKind = 'all';
+    renderDictionary();
+    const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === t);
+    if (!card) return;
+    card.open = true;
+    card.scrollIntoView({ block: 'center' });
+    const summary = card.querySelector('summary');
+    if (summary) summary.focus({ preventScroll: true });
   },
   'open-selfhelp': () => { session.navDir = 'forward'; renderSelfHelp(); },
   'sh-state': (el) => {
     shState = el.dataset.id || null;
     document.querySelectorAll('#sh-states .sh-state').forEach(b => b.classList.toggle('on', b.dataset.id === shState));
     const panel = document.getElementById('sh-state-panel');
-    if (panel) panel.innerHTML = shStatePanel(shState);
+    if (panel) panel.innerHTML = shState ? shStatePanel(shState) : `<p class="sh-hint">${esc(SH_HINT)}</p>`;
   },
   'sh-state-clear': () => {
     shState = null;
     document.querySelectorAll('#sh-states .sh-state').forEach(b => b.classList.remove('on'));
     const panel = document.getElementById('sh-state-panel');
-    if (panel) panel.innerHTML = '<p class="sh-hint">选一个状态，这里会出现三件可以先做的小事。</p>';
+    if (panel) panel.innerHTML = `<p class="sh-hint">${esc(SH_HINT)}</p>`;
   },
   'sh-cat': (el) => {
     shCat = el.dataset.c || 'all';
     document.querySelectorAll('#sh-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === shCat));
     applyShFilter();
   },
-  'open-slowvars': () => { session.navDir = 'forward'; renderSlowVars(); },
+  'open-slowvars': () => {
+    /* 每次进入都是干净状态：选择与筛选不跨视图保留，也不落盘 */
+    svVar = null; svCat = 'all';
+    session.navDir = 'forward'; renderSlowVars();
+  },
   'sv-var': (el) => {
-    svVar = el.dataset.id || null;
-    document.querySelectorAll('#sv-vars .sv-var').forEach(b => b.classList.toggle('on', b.dataset.id === svVar));
-    const panel = document.getElementById('sv-panel');
-    if (panel) panel.innerHTML = svPanel(svVar);
+    const id = el.dataset.id;
+    if (!SV_VARS.some(v => v.id === id)) return;
+    svVar = id; svCat = id;
+    syncSvSelection();
   },
   'sv-var-clear': () => {
-    svVar = null;
-    document.querySelectorAll('#sv-vars .sv-var').forEach(b => b.classList.remove('on'));
-    const panel = document.getElementById('sv-panel');
-    if (panel) panel.innerHTML = '<p class="sv-hint">选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。</p>';
+    svVar = null; svCat = 'all';
+    syncSvSelection();
   },
   'sv-cat': (el) => {
-    svCat = el.dataset.c || 'all';
-    document.querySelectorAll('#sv-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === svCat));
-    applySvFilter();
+    const c = el.dataset.c || 'all';
+    if (c !== 'all' && !SV_VARS.some(v => v.id === c)) return;
+    svCat = c;
+    syncSvSelection();
   },
   'open-skills': () => openSkills(),
   'open-bottle': () => openBottle(),
@@ -1376,7 +1769,7 @@ const ACTIONS = {
     if (i === play.v.answer) {
       document.querySelectorAll('#stage .opt').forEach(b => { b.disabled = true; });
       el.classList.add('selected');
-      completeLevel(`${esc(play.v.why)}<span class="tip">你翻开了 ${play.flipped.size} / ${play.v.clues.length} 张线索。</span>`);
+      completeLevelHtml(`${esc(play.v.why)}<span class="tip">你翻开了 ${play.flipped.size} / ${play.v.clues.length} 张线索。</span>`);
     } else {
       nudge(`「${play.v.options[i]}」也是一种可能。再把几张线索合起来看看？`);
     }
@@ -1388,7 +1781,7 @@ const ACTIONS = {
     const msg = `你选了「${labels[play.value - 1]}」。${esc(play.v.replies[play.value - 1])}<span class="tip">同一件事，别人可能停在另一格，那也一样成立。</span>`;
     const input = document.getElementById('thermo'); if (input) input.disabled = true;
     document.querySelectorAll('[data-action="slider-submit"]').forEach(b => b.disabled = true);
-    completeLevel(msg);
+    completeLevelHtml(msg);
   },
 
   /* 1-4 近义词配对 */
@@ -1446,7 +1839,7 @@ const ACTIONS = {
     if (i === play.v.answer) {
       document.querySelectorAll('#stage .opt').forEach(b => { b.disabled = true; });
       el.classList.add('selected');
-      completeLevel(esc(play.v.why));
+      completeLevel(play.v.why);
     } else {
       nudge(`「${play.v.options[i].d}」这个方向，可能会让那句话更紧一点。换个镜头试试？`);
     }
@@ -1511,7 +1904,7 @@ const ACTIONS = {
     const slot = play.placed.length;
     if (i === slot) {
       play.placed.push(i); paintOrder();
-      if (play.placed.length === play.v.steps.length) completeLevel(play.v.why ? esc(play.v.why) : '顺序排好了。回头看，中间少的往往不是善意，只是一条还没送到的信息。');
+      if (play.placed.length === play.v.steps.length) completeLevel(play.v.why || '顺序排好了。回头看，中间少的往往不是善意，只是一条还没送到的信息。');
       else showFeedback('gentle', '这一步放好了，接着找下一步。');
     } else {
       nudge('这张卡发生得好像更早或更晚一点。试试先找时间上最靠前的那张。');
@@ -1582,7 +1975,7 @@ const ACTIONS = {
       <p><b>${esc(r.label)}</b>这一档，通常可以先做一件事：</p>
       <p class="result-main" style="margin:8px 0 0">${esc(r.move)}</p>
       <p class="muted" style="margin-top:8px">哪一档都不丢人。认出来，就比被它推着走多了一点余地。</p></div>`;
-    completeLevel(`火在这一档，出口还在：${esc(r.move)}`);
+    completeLevel(`火在这一档，出口还在：${r.move}`);
   },
 
   /* 终章 */
@@ -1609,7 +2002,7 @@ const ACTIONS = {
   'quote-reroll': () => {
     play.quotes = shuffled(QUOTES).slice(0, 3);
     document.getElementById('quote-picks').innerHTML = play.quotes.map((q, i) =>
-      `<button class="opt" data-action="quote-pick" data-i="${i}"><span class="opt-key">${String.fromCharCode(65 + i)}</span><span>${esc(q)}</span></button>`).join('');
+      `<button class="opt" data-action="quote-pick" data-i="${i}" aria-keyshortcuts="${i + 1}"><span class="opt-key" aria-hidden="true">${i + 1}</span><span>${esc(q)}</span></button>`).join('');
     document.getElementById('finale-quote').innerHTML = '';
   },
   'micro-reroll': () => {
@@ -1640,16 +2033,23 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (overlay.classList.contains('open')) { closeModal(); return; }
-    if (session.view === 'level' || session.view === 'retreat' || session.view === 'dict' || session.view === 'selfhelp' || session.view === 'slowvars') { ACTIONS['go-map'](); return; }
+    if (viewCfg(session.view).esc === 'map') { ACTIONS['go-map'](); return; }
   }
   if (overlay.classList.contains('open')) {
-    if (e.key === 'Tab') trapTab(e);
+    if (e.key === 'Tab') { trapTab(e); return; }
+    /* 漂流瓶弹窗里的选项也有数字徽标，同样让 1–9 可用 */
+    if (/^[1-9]$/.test(e.key)) {
+      const target = document.querySelectorAll('#overlay .opt:not(:disabled)')[Number(e.key) - 1];
+      if (target) { target.click(); e.preventDefault(); }
+    }
     return;
   }
-  if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-  if (session.view === 'level' && /^[1-9]$/.test(e.key)) {
+  if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
+  /* 数字键和徽标一致：.opt 的 1/2/3… 与梯子的档位号都能按 */
+  if (/^[1-9]$/.test(e.key)) {
     const opts = document.querySelectorAll('#stage .opt:not(:disabled)');
-    const target = opts[Number(e.key) - 1];
+    const rungs = document.querySelectorAll('#stage .rung:not(:disabled)');
+    const target = opts[Number(e.key) - 1] || (opts.length ? null : rungs[Number(e.key) - 1]);
     if (target) { target.click(); e.preventDefault(); }
     return;
   }

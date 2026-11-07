@@ -32,17 +32,77 @@ const staticChecks = [];
 const S = (name, cond) => staticChecks.push({ name, ok: !!cond });
 const src = readFileSync(join(root, 'script.js'), 'utf8');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const readme = readFileSync(join(root, 'README.md'), 'utf8');
+const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+const roadmap = readFileSync(join(root, 'ROADMAP.md'), 'utf8');
+const css = readFileSync(join(root, 'style.css'), 'utf8');
+const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
   'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library', 'dictionary', 'selfhelp', 'slowvars'
 ];
-S('script.js 头注释版本为 v6', /心情闯关岛 v6/.test(src.slice(0, 200)));
+const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
+/* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
+S('script.js 头注释 / package.json 一致且采用 0.x 台阶制',
+  headerVersion === pkg.version && /^0\.\d+\.\d+$/.test(pkg.version) &&
+  /const SCHEMA_VERSION = \d+;/.test(src) && /const STORAGE_KEY = 'mood-island-v4';/.test(src));
+const clVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map(m => m[1]);
+S('README / CHANGELOG / ROADMAP 版本口径一致且历史编号已重排',
+  readme.includes(`当前版本 **${pkg.version}**`) &&
+  roadmap.includes(`当前版本 **${pkg.version}**`) &&
+  changelog.includes(`## [${pkg.version}]`) &&
+  clVersions.length >= 10 && clVersions.every(v => /^0\.\d+\.\d+$/.test(v)) &&
+  !/不占用 ROADMAP|留给.{0,12}编号|不记 \d+\.\d+\.0/.test(changelog));
+/* 对比度：正文/提示色必须在浅色底上达到 WCAG AA 4.5:1 */
+const tokenOf = name => {
+  const m = css.match(new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{6})'));
+  return m && m[1];
+};
+const channel = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+const lum = hex => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+};
+const contrast = (a, b) => {
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const ink3 = tokenOf('ink-3'), warm = tokenOf('warm');
+S('ink-3 / warm 在 bg / surface / surface-2 上 ≥ 4.5:1',
+  ['bg', 'surface', 'surface-2'].every(n => contrast(ink3, tokenOf(n)) >= 4.5 && contrast(warm, tokenOf(n)) >= 4.5));
 S('index.html 进度占位不再写死 13 关', !/13 关/.test(html));
+S('#overlay 不再挂 aria-live，避免整个弹窗重复播报', !/<div id="overlay"[^>]*aria-live/.test(html));
 S('content/*.js 全部被 index.html 引入', contentFiles.every(n => html.includes(`content/${n}.js`)));
 S('script.js 在所有 content 之后加载', html.lastIndexOf('script.js') > html.lastIndexOf('content/library.js'));
 S('心理学词典在 library 之后、script.js 之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < html.indexOf('script.js'));
 S('自助工具箱在 dictionary 之后、script.js 之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < html.indexOf('script.js'));
 S('慢变量在 selfhelp 之后、script.js 之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < html.indexOf('script.js'));
+/* 视图配置表：所有 session.view 取值都必须登记，避免新增视图漏藏进度条 / 漏配 Esc */
+const viewAssigns = [...new Set([...src.matchAll(/session\.view\s*=\s*'([a-z]+)'/g)].map(m => m[1]))];
+const viewBlock = src.slice(src.indexOf('const VIEW_CONFIG'), src.indexOf('function viewCfg'));
+S('VIEW_CONFIG 覆盖所有 session.view 取值',
+  viewAssigns.length > 0 && viewAssigns.every(v => new RegExp(`\\b${v}:\\s*\\{`).test(viewBlock)));
+/* 三个知识库视图走同一入口，避免以后只改其中一份 */
+S('词典 / 自助 / 慢变量共用 renderLibraryView',
+  ['renderDictionary', 'renderSelfHelp', 'renderSlowVars'].every((fn) => {
+    const at = src.indexOf(`function ${fn}`);
+    return at !== -1 && src.slice(at, src.indexOf('}', at) + 1).includes('renderLibraryView(');
+  }));
+S('style.css 不再残留无引用的样式',
+  !/\.progress-(track|fill)|\.cols-3|\.feedback \.tryit|\.map-tools|\.tool-btn|\.retreat-entry/.test(css));
+S('style.css 的进度注释不再写死 13 站', !/13 站/.test(css));
+/* 词典扩容后，数量不应再被 lint 钉死；主题与类型只认数据文件里的元数据。 */
+S('词典数量不再写死 100 条上限', !/DICT\.length\s*!==\s*100/.test(lint));
+S('词典主题与概念类型由 dictionaryMeta 驱动', lint.includes('MI.dictionaryMeta') && src.includes('MI.dictionaryMeta'));
+S('词典有分区标题、类型筛选与关联跳转入口',
+  /groupTitle\(/.test(src) && /'dict-kind'/.test(src) && /'dict-jump'/.test(src));
+/* 初始化顺序：load() 调用的 migrate() 会用到 remapIds。
+   若 const 声明晚于 `let state = load()`，启动时会落进 TDZ、异常被 catch 吞掉，
+   表现就是「刷新后进度全丢」，而后续单测因为已经初始化过，反而测不出来。 */
+const stateInitAt = src.indexOf('let state = load();');
+const remapAt = src.indexOf('const remapIds');
+S('存档迁移常量在 let state = load() 之前初始化', remapAt !== -1 && stateInitAt !== -1 && remapAt < stateInitAt);
 
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();
