@@ -157,6 +157,32 @@ S('restart-all 不清 seen，也不清 sideCleared',
     const block = at !== -1 && end > at ? src.slice(at, end) : '';
     return block.length > 0 && !/seen\s*=\s*\{\}/.test(block) && !/sideCleared\s*=/.test(block);
   })());
+/* 0.11.1：支线上下文 / 急救返回 / 已完成幕可重玩 */
+S('支线换题保留 side 上下文，不回落主线',
+  (() => {
+    const at = src.indexOf("'reroll'");
+    const end = src.indexOf("'goto-band'", at);
+    const block = at !== -1 && end > at ? src.slice(at, end) : '';
+    return block.length > 0 && /play\.side/.test(block) &&
+      /renderLevel\(null,\s*WORK\[play\.sideIndex\],\s*play\.sideIndex\)/.test(block);
+  })());
+S('急救返回覆盖 backLabels 的每个来源，包括工作间',
+  (() => {
+    const at = src.indexOf("'help-close'");
+    const end = src.indexOf("'help-ground'", at);
+    const block = at !== -1 && end > at ? src.slice(at, end) : '';
+    if (!block) return false;
+    const labelsAt = src.indexOf('const backLabels');
+    if (labelsAt === -1) return false;
+    const labels = src.slice(labelsAt, src.indexOf('};', labelsAt));
+    const keys = [...labels.matchAll(/(\w+):\s*'/g)].map(m => m[1]);
+    return keys.length > 0 && keys.every(k => new RegExp(`from === '${k}'`).test(block));
+  })());
+S('已完成的幕可重玩 / 直达（workReachable）',
+  /function workReachable\(i\)[\s\S]{0,220}state\.sideCleared\.includes/.test(src) &&
+  /const unlocked = workReachable\(i\)/.test(src) &&
+  /if \(!workReachable\(i\)\) return;/.test(src) &&
+  /if \(!workReachable\(wi\)\)/.test(src));
 S('文档不显示拼装组合计数 / 打卡压力',
   !/本轮已换过几组题|已换过.{0,4}组/.test(roadmap) && !/本轮已换过几组题/.test(readme));
 

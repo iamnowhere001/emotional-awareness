@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.11.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.11.1 · 纯前端、零依赖、不联网
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
    本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
@@ -13,7 +13,9 @@ const EXPORT_APP = 'mood-island';
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
-   bank-*.js / library.js / dictionary.js / selfhelp.js / slowvars.js。这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
+   bank-*.js / bank-compose.js / levels-adult-work.js / library.js /
+   dictionary.js / selfhelp.js / slowvars.js / help.js。
+   这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
 const MI = window.MI || {};
 const AGE_BANDS = MI.bands || [];
 const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
@@ -157,7 +159,7 @@ let memoTimer = null;
 let lastFocus = null;
 let lastClicked = null;
 
-/* 存档：带 schema 版本。旧键（v2）读到后自动迁移，之后只写新键。
+/* 存档：带 schema 版本。旧键（v4 / v3 / v2）读到后自动迁移，之后只写新键。
    加字段时在 migrate() 里补一段，老用户进度不会因为版本变更被清空。 */
 function readRaw() {
   /* 新键损坏时继续往旧键找，避免一个坏 JSON 把全部进度判死刑 */
@@ -298,7 +300,7 @@ function save() {
     showStorageWarning();
   }
 }
-/* 用户明确「清空本机进度」时，连 v3 / v2 旧键一起删。
+/* 用户明确「清空本机进度」时，连 v4 / v3 / v2 旧键一起删。
    否则以后新键损坏，readRaw() 回退旧键会把已经清掉的进度又读回来。 */
 function removeAllSaves() {
   for (const k of [STORAGE_KEY, ...LEGACY_KEYS]) {
@@ -376,12 +378,11 @@ function materializeComposed(id, key) {
     options, answer, why: th.why, key, compose: id
   };
 }
-/* 选道顺序：未见过的「想法」优先，其次未见过的「问法」；每关 12 组，
-   记录只保留最近 8 条，所以连续 8 轮内一定不重复，12 组轮完一遍后才会回收最早那组。
+/* 选道顺序：未见过的「想法」优先，其次未见过的「问法」；记录只保留最近 8 条，
+   所以最近 8 轮一定不重复；第 9 轮起，掉出这 8 条的旧组合才可能被重新抽到。
    若某关组合数少于上限、真的全部见过，则从第一组重新开始。
    seed 缺省由「关 id + 已见组合」派生，因此历史不变 → 结果不变。 */
 function pickComposed(id, seen, seed, opts) {
-  const cfg = BANK_COMPOSE[id];
   const combos = [...(COMPOSE_KEYS[id] || [])];
   const o = opts || {};
   if (o.forceKey && COMPOSE_KEYS[id] && COMPOSE_KEYS[id].has(o.forceKey)) {
@@ -391,17 +392,13 @@ function pickComposed(id, seen, seed, opts) {
   const seenSet = new Set(Array.isArray(seen) ? seen : []);
   const baseSeed = Number.isFinite(seed) ? seed : hash32(id + '|' + [...seenSet].sort().join(','));
   let pool = combos.filter(k => !seenSet.has(k));
-  const reset = pool.length === 0;
-  if (reset) pool = combos;   /* 12 组全见过才重置，重置后仍按确定性顺序开始 */
+  if (pool.length === 0) pool = combos;   /* 组合数小于上限且全部见过时才重置 */
   const seenThoughts = new Set([...seenSet].map(k => k.split(':').slice(0, 2).join(':')));
   const fresh = pool.filter(k => !seenThoughts.has(k.split(':').slice(0, 2).join(':')));
   const source = fresh.length ? fresh : pool;
   const ordered = source.slice().sort((a, b) =>
     hash32(baseSeed + '|' + a) - hash32(baseSeed + '|' + b) || (a < b ? -1 : 1));
-  const key = ordered[0];
-  const out = materializeComposed(id, key) || {};
-  if (out && typeof out === 'object') out.resetSeen = reset;
-  return out;
+  return materializeComposed(id, ordered[0]) || {};
 }
 function pickVariant(id, opts) {
   if (BANK_COMPOSE[id]) {
@@ -485,7 +482,7 @@ function updateTopbar() {
     helpBtn.setAttribute('aria-label', kid ? '打开 1 分钟安抚：现在有点难受' : '打开 1 分钟安抚与求助：现在很难受');
   }
   document.getElementById('progress-wrap').hidden = !vc.progress;
-  /* 支线关卡里不画主线站点：18 个圆点会把「工作间只走一幕」误读成主线进度。
+  /* 支线关卡里不画主线站点：17 个圆点会把「工作间只走一幕」误读成主线进度。
      只保留一句支线说明，主线的 cleared / TOTAL 一个都不动。 */
   const sideNow = session.view === 'level' && !!play.side;
   const track = document.getElementById('step-track');
@@ -578,7 +575,7 @@ function routeTo(r) {
           renderMap();
           return;
         }
-        if (!sideUnlocked(wi)) {
+        if (!workReachable(wi)) {
           session.tip = '这一幕还没解锁，先回到工作间。';
           renderWork();
           return;
@@ -620,6 +617,7 @@ function routeTo(r) {
   if (r.view === 'help') {
     session.helpFrom = session.view === 'gate' && state.band ? 'home' : (session.view || 'home');
     if (session.view === 'level') helpResume = play;
+    else helpResume = null;   /* 非关卡来源不留旧进行态 */
     renderHelp();
     return;
   }
@@ -676,6 +674,12 @@ function sideUnlocked(i) {
   if (!isAdultTrack() || i < 0 || i >= WORK.length) return false;
   if (i === 0) return state.cleared.includes('A1-4');
   return state.sideCleared.includes(WORK[i - 1].id);
+}
+/* 某一幕能不能进：正常解锁链，或这一幕本身已经走过。
+   后者用于主线「从头再来一轮」后仍允许回看 / 重玩已完成的幕。 */
+function workReachable(i) {
+  if (sideUnlocked(i)) return true;
+  return !!(WORK[i] && state.sideCleared.includes(WORK[i].id));
 }
 function clearAsyncTimers() {
   if (breathTimer) {
@@ -741,7 +745,7 @@ function renderHome() {
   clearAsyncTimers();
   session.view = 'home';
   const b = band();
-  const hasProgress = clearedInTrack() > 0;
+  const hasAnyProgress = clearedInTrack() > 0;
   const islCount = islands().length;
   stage.innerHTML = `<div class="view home-hero">
     <div class="toolbar">${bandChip()}<button class="btn-read" data-action="goto-band">换年龄段</button></div>
@@ -757,8 +761,8 @@ function renderHome() {
       <span class="hh-wave"></span><span class="hh-wave w2"></span>
     </div>
     <div class="actions">
-      <button class="btn btn-primary" data-action="start">${hasProgress ? '继续上岛' : '开始上岛'}</button>
-      ${hasProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
+      <button class="btn btn-primary" data-action="start">${hasAnyProgress ? '继续上岛' : '开始上岛'}</button>
+      ${hasAnyProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
     </div>
     <div class="home-points">
       <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>情绪不分好坏，这一趟不打分、不排名、不比谁快。</span></div>
@@ -1069,9 +1073,9 @@ function renderWork() {
   clearAsyncTimers(); stopSpeech();
   session.view = 'work'; session.navDir = '';
   const done = new Set(state.sideCleared);
-  const open0 = sideUnlocked(0);
+  const open0 = workReachable(0);
   const stops = WORK.map((l, i) => {
-    const unlocked = sideUnlocked(i);
+    const unlocked = workReachable(i);
     const finished = done.has(l.id);
     const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? '走完 A1-4 开放' : '先走上一幕');
     return `<button class="work-stop ${finished ? 'done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-work-level" data-i="${i}" ${unlocked ? '' : 'disabled'}>
@@ -1776,7 +1780,6 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
   if (sideIndex !== undefined) {
     play.side = true;
     play.sideIndex = sideIndex;
-    play.sideId = lv.id;
   }
   const v = play.v;
   if (play.type === 'breath') play.running = false;
@@ -1784,7 +1787,7 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
   const side = !!play.side;
   const speakBtns = (state.settings.speak && lv.type !== 'finale')
     ? `<button class="btn-read" data-action="speak-question" aria-label="朗读题目">🔊 读题目</button><button class="btn-read" data-action="speak-options" aria-label="朗读选项">🔊 读选项</button>` : '';
-  stage.innerHTML = `<div class="${viewClass()}${side ? ' side-view' : ''}" data-variant="${v && v.key ? esc(v.key) : ''}"${side ? ' data-side="1"' : ''}>
+  stage.innerHTML = `<div class="${viewClass()}" data-variant="${v && v.key ? esc(v.key) : ''}">
     <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : side ? `工作间 · ${esc(lv.time || '')} · 支线` : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
       ${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}
       ${speakBtns}
@@ -1866,6 +1869,23 @@ function paintMemory() {
 /* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
    这样以后新增题型时，即使直接把内容变量传进来，也不会执行成 HTML。 */
 function completeLevel(text) { completeLevelHtml(esc(text)); }
+/* 主线与支线共用的结果卡外壳：只负责渲染反馈槽、滚动到可见、清空底部动作。
+   奖励 / 存档 / 文案的差异仍留在两个完成分支里，不在这里合流。 */
+function paintResultCard({ kicker, html, rows, extra, buttons }) {
+  const slot = document.getElementById('feedback-slot');
+  if (slot) {
+    slot.innerHTML = `<div class="feedback good result-card">
+      <div class="result-kicker"><span class="result-check" aria-hidden="true">✓</span>${kicker}</div>
+      <p class="result-main">${html}</p>
+      <div class="result-rows">${rows}</div>
+      ${extra || ''}
+      <div class="result-actions">${buttons}</div>
+    </div>`;
+    try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
+  }
+  const actions = document.getElementById('level-actions');
+  if (actions) actions.innerHTML = '';
+}
 function completeLevelHtml(html) {
   if (play.done) return;
   play.done = true;
@@ -1892,22 +1912,10 @@ function completeLevelHtml(html) {
     const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一幕 · ${esc(WORK[nextI].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-work">回到工作间</button>
       <button class="btn btn-ghost" data-action="reroll">这一幕再玩一次</button>`;
-    const slot = document.getElementById('feedback-slot');
-    if (slot) {
-      slot.innerHTML = `<div class="feedback good result-card">
-        <div class="result-kicker"><span class="result-check" aria-hidden="true">✓</span>这一幕走过了 · 支线</div>
-        <p class="result-main">${html}</p>
-        <div class="result-rows">
-          <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+    const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
           ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
-          <div class="result-row"><b>说明</b><span>工作间是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领。</span></div>
-        </div>
-        <div class="result-actions">${buttons}</div>
-      </div>`;
-      try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
-    }
-    const actions = document.getElementById('level-actions');
-    if (actions) actions.innerHTML = '';
+          <div class="result-row"><b>说明</b><span>工作间是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领。</span></div>`;
+    paintResultCard({ kicker: '这一幕走过了 · 支线', html, rows, buttons });
     return;
   }
   if (!state.cleared.includes(lv.id)) state.cleared.push(lv.id);
@@ -1929,23 +1937,10 @@ function completeLevelHtml(html) {
   const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一站 · ${esc(LEVELS[next].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-map">回到地图</button>
       <button class="btn btn-ghost" data-action="reroll">这站再玩一次</button>`;
-  const slot = document.getElementById('feedback-slot');
-  if (slot) {
-    slot.innerHTML = `<div class="feedback good result-card">
-      <div class="result-kicker"><span class="result-check" aria-hidden="true">✓</span>这一站完成了 · 带走了什么</div>
-      <p class="result-main">${html}</p>
-      <div class="result-rows">
-        <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+  const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
-        <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>
-      </div>
-      ${micro}
-      <div class="result-actions">${buttons}</div>
-    </div>`;
-    try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
-  }
-  const actions = document.getElementById('level-actions');
-  if (actions) actions.innerHTML = '';
+        <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;
+  paintResultCard({ kicker: '这一站完成了 · 带走了什么', html, rows, extra: micro, buttons });
   session.lastCleared = lv.id;
   session.clearedThisRun += 1;
   if (session.clearedThisRun % band().rest === 0) setTimeout(openRest, 900);
@@ -2261,7 +2256,7 @@ const ACTIONS = {
   },
   'open-work-level': (el) => {
     const i = Number(el.dataset.i);
-    if (!sideUnlocked(i)) return;
+    if (!workReachable(i)) return;
     session.navDir = 'forward'; closeModal();
     renderLevel(null, WORK[i], i);
   },
@@ -2277,16 +2272,22 @@ const ACTIONS = {
     }
     state.levelIndex += 1; session.navDir = 'forward'; renderLevel();
   },
-  'reroll': () => { session.navDir = 'forward'; renderLevel(); showFeedback('gentle', '换了一道题，进度还留着。慢慢来。'); },
+  'reroll': () => {
+    session.navDir = 'forward';
+    /* 支线重抽要带回来源幕次：否则新 play 会丢掉 side 标记，通关时写进主线进度。 */
+    if (play.side) renderLevel(null, WORK[play.sideIndex], play.sideIndex);
+    else renderLevel();
+    showFeedback('gentle', '换了一道题，进度还留着。慢慢来。');
+  },
   'goto-band': () => { stopSpeech(); session.navDir = ''; renderAgeGate(); },
   /* 急救入口：记下进入前那一屏，Esc 与「回到…」都回到那里。
      入口本身不改 session.view 之外的状态，也不写存档。 */
   'open-help': () => {
     if (session.view !== 'help') {
-      session.helpFrom = session.view || 'home';
+      /* 与 routeTo 的回落规则保持一致：已有年龄段时，选档页只是换档过渡屏。 */
+      session.helpFrom = session.view === 'gate' && state.band ? 'home' : (session.view || 'home');
       helpResume = session.view === 'level' ? play : null;
     }
-    session.navDir = 'forward';
     renderHelp();
   },
   'help-close': () => {
@@ -2300,6 +2301,7 @@ const ACTIONS = {
     else if (from === 'dict') renderDictionary();
     else if (from === 'selfhelp') renderSelfHelp();
     else if (from === 'slowvars') renderSlowVars();
+    else if (from === 'work') renderWork();
     else if (from === 'gate' && !state.band) renderAgeGate();
     else renderHome();
   },
@@ -2899,7 +2901,7 @@ if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>
     <p class="lead">content/ 下的数据文件没有读到。检查 index.html 里 content/*.js 的引入顺序：
-    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library → dictionary → selfhelp → slowvars，最后才是 script.js。</p>
+    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → bank-compose → levels-adult-work → library → dictionary → selfhelp → slowvars → help，最后才是 script.js。</p>
     <p class="muted">打开浏览器控制台可以看到具体是哪个文件 404。</p>
   </div>`;
 } else {

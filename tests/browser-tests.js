@@ -766,6 +766,73 @@ window.addEventListener('load', function () {
     A(location.hash === '#/map');
   });
 
+  test('支线换题保留 side 上下文，通关不写主线', () => {
+    bandTo('adult');
+    state.cleared = ['A1-4']; state.awarded = ['A1-4'];
+    state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
+    state.sideCleared = [];
+    const idx = LEVELS.findIndex(l => l.id === 'A2-1');
+    A(idx > 0, '应能定位到未通关的 A2-1');
+    state.levelIndex = idx;
+    save(); applySettings();
+    renderLevel(null, WORK[0], 0);
+    ACTIONS['reroll']();
+    A(play.side === true && play.sideIndex === 0, '换题后仍是支线');
+    A(currentLevel().id === 'W-1', '换题后仍读支线关卡');
+    A(document.getElementById('stage').textContent.includes('工作间 · 09:00 · 支线'));
+    completeLevel('这一幕走过了');
+    A(state.cleared.join(',') === 'A1-4', '支线换题后通关不得写主线 cleared');
+    A(state.sideCleared.join(',') === 'W-1');
+    A(state.shells === 0 && state.skills.length === 0 && state.cards.adult.length === 0, '支线不得发奖励');
+  });
+
+  test('工作间进急救，返回与 Esc 都回到工作间', () => {
+    bandTo('adult'); state.cleared = ['A1-4']; state.sideCleared = []; save(); applySettings();
+    renderWork();
+    ACTIONS['open-help']();
+    A(session.view === 'help' && session.helpFrom === 'work');
+    const back = document.querySelector('#stage [data-action="help-close"]');
+    A(!!back && back.textContent.includes('回到工作间'), '返回按钮应写回到工作间');
+    back.click();
+    A(session.view === 'work' && location.hash === '#/work');
+    ACTIONS['open-help']();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    A(session.view === 'work', 'Esc 也应回工作间');
+  });
+
+  test('选档页进急救：已有档回首页，无档回选档页', () => {
+    bandTo('adult');
+    renderAgeGate();
+    ACTIONS['open-help']();
+    A(session.helpFrom === 'home', '已有档时选档页只是过渡屏');
+    let back = document.querySelector('#stage [data-action="help-close"]');
+    A(back.textContent.includes('回到首页'));
+    back.click();
+    A(session.view === 'home' && location.hash === '#/home');
+    state.band = null; applySettings(); renderAgeGate();
+    ACTIONS['open-help']();
+    A(session.helpFrom === 'gate');
+    back = document.querySelector('#stage [data-action="help-close"]');
+    A(back.textContent.includes('回到选年龄段'));
+    back.click();
+    A(session.view === 'gate' && location.hash === '#/gate');
+  });
+
+  test('从头再来后已完成的幕仍可回看与直达', () => {
+    bandTo('adult');
+    state.cleared = []; state.sideCleared = ['W-1', 'W-2']; state.levelIndex = 0;
+    save(); applySettings();
+    renderWork();
+    const stop = document.querySelector('#stage [data-action="open-work-level"][data-i="0"]');
+    A(!!stop && !stop.disabled, '已完成的幕不应被锁');
+    stop.click();
+    A(session.view === 'level' && currentLevel().id === 'W-1' && !!play.side);
+    renderWork();
+    routeTo(parseHash('#/level/W-2'));
+    A(session.view === 'level' && currentLevel().id === 'W-2', '直达已完成的幕也应放行');
+    bandTo('a6');
+  });
+
   /* ---------- 玩法与洗牌 ---------- */
   test('clue 选项渲染时会洗牌', () => {
     bandTo('a6');
