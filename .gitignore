@@ -4,6 +4,9 @@
 # 本机项目数据与会话记忆，不入库
 .workbuddy/
 
+# Trae 分享包等本地构建产物，不入库
+.trae-html-share-packages/
+
 # Node（本项目零依赖，仅预防误装）
 node_modules/
 
