@@ -1100,6 +1100,78 @@ html[data-band="a3"] .step { height: 40px; }
 .age-card.adult-card { grid-column: 1 / -1; min-height: 0; background: var(--blue-soft); border-color: #cfe4ee; }
 .age-card.adult-card:hover { background: var(--accent-soft); }
 
+/* ---------- 急救入口：现在很难受 ---------- */
+/* 入口用暖色而不是红色：急救需要被看见，但不需要再增加一层警报感。 */
+.help-btn { background: var(--warm-soft); border-color: #efd9b9; color: var(--warm); font-weight: 600; }
+.help-btn:hover { background: #f6e6cf; border-color: var(--warm); }
+.help-entry {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin: 18px 0 0; padding: 16px 18px; border-radius: var(--radius);
+    background: var(--warm-soft); border: 1px solid #efd9b9; text-align: left;
+}
+.help-entry-copy { display: grid; gap: 4px; flex: 1 1 220px; }
+.help-entry-kicker { font-size: calc(.74rem * var(--scale)); letter-spacing: .1em; color: var(--warm); }
+.help-entry-copy b { font-size: calc(1.08rem * var(--scale)); }
+.help-entry-copy span:last-child { font-size: calc(.86rem * var(--scale)); color: #7c5222; line-height: 1.65; }
+.help-entry-btn { flex: none; background: var(--surface); border-color: var(--warm); color: var(--warm); }
+.help-entry-btn:hover { background: var(--warm); color: #fff; }
+.hub-help { border-color: #efd9b9; background: var(--warm-soft); }
+
+.help-view { max-width: 760px; }
+.help-title { margin: 12px 0 8px; }
+.help-actions { display: grid; gap: 14px; margin-top: 20px; }
+.help-action {
+    padding: 18px 20px; border-radius: 14px; background: var(--surface);
+    border: 1px solid var(--line); text-align: left;
+}
+.help-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.help-head h3 { font-size: calc(1.08rem * var(--scale)); }
+.help-num {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    display: inline-grid; place-items: center;
+    background: var(--warm-soft); color: var(--warm);
+    font-size: calc(.82rem * var(--scale)); font-weight: 700;
+}
+.help-len { margin-left: auto; font-size: calc(.76rem * var(--scale)); color: var(--ink-3); }
+.help-lead { margin-top: 8px; font-size: calc(.9rem * var(--scale)); color: var(--ink-2); line-height: 1.7; }
+.help-steps { margin: 12px 0 14px; padding-left: 1.2em; display: grid; gap: 8px; }
+.help-steps li { font-size: calc(.92rem * var(--scale)); line-height: 1.7; }
+.help-do { min-height: 40px; }
+.help-done { margin-top: 10px; font-size: calc(.88rem * var(--scale)); color: var(--accent); line-height: 1.7; }
+.help-words { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.help-word {
+    min-width: 52px; min-height: 44px; padding: 8px 14px; border-radius: 99px;
+    background: var(--surface-2); border: 1.5px solid var(--line); color: var(--ink);
+    font-size: calc(.96rem * var(--scale));
+}
+.help-word:hover { border-color: var(--accent); }
+.help-word.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.help-picked { margin-top: 10px; font-size: calc(.92rem * var(--scale)); color: var(--ink); line-height: 1.7; }
+.help-say {
+    margin: 12px 0 10px; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-2); border-left: 3px solid var(--accent);
+    font-size: calc(.96rem * var(--scale)); line-height: 1.75;
+}
+.help-hint { margin-top: 8px; font-size: calc(.82rem * var(--scale)); color: var(--ink-3); }
+.help-lines {
+    margin-top: 22px; padding: 18px 20px; border-radius: 14px;
+    background: var(--surface-2); border: 1px solid var(--line-strong); text-align: left;
+}
+.help-lines h3 { font-size: calc(1.02rem * var(--scale)); }
+.help-lines ul { margin: 10px 0 0; padding-left: 1.1em; display: grid; gap: 8px; }
+.help-lines li { font-size: calc(.9rem * var(--scale)); line-height: 1.7; }
+.help-lines li b { display: inline-block; min-width: 5.2em; color: var(--warm); }
+.help-note { margin-top: 12px; font-size: calc(.82rem * var(--scale)); color: var(--ink-3); line-height: 1.7; }
+.help-kid { background: var(--accent-soft); border-color: #c7e2da; }
+.help-foot { margin-top: 20px; text-align: center; }
+
+@media (max-width: 640px) {
+    .help-entry { align-items: stretch; }
+    .help-entry-btn { width: 100%; }
+    .help-action, .help-lines { padding: 16px; }
+    .help-len { margin-left: 0; }
+}
+
 @media (max-width: 640px) {
     .retreat-grid { grid-template-columns: 1fr; }
     .progress-wrap { flex-wrap: wrap; }

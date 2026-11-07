@@ -23,7 +23,8 @@ const FILES = [
   'library',
   'dictionary',
   'selfhelp',
-  'slowvars'
+  'slowvars',
+  'help'
 ];
 
 /* 让 sandbox 自己当 window：content 里写的是 window.MI = ... 之后又用裸 MI，
@@ -391,6 +392,31 @@ SV_HORIZONS.forEach((h, i) => {
   if (h.cards && new Set(h.cards).size !== h.cards.length) err(`${tag}: cards 引用重复`);
 });
 
+/* ---------- 急救入口 ---------- */
+const HELP = MI.help || {};
+const H_ACTS = HELP.actions || [];
+if (!HELP.title || !HELP.lead) err('急救入口：缺 title / lead');
+if (H_ACTS.length !== 3) err(`急救入口：动作应为 3 个，当前 ${H_ACTS.length} 个`);
+['ground', 'name', 'reach'].forEach(id => { if (!H_ACTS.some(a => a.id === id)) err(`急救入口：缺动作 ${id}`); });
+H_ACTS.forEach((a, i) => {
+  const tag = `急救动作#${i} ${a.id || ''}`;
+  if (!a.name || !a.len) err(`${tag}: 缺 name / len`);
+  if (a.id === 'ground' && (!Array.isArray(a.steps) || a.steps.length < 3)) err(`${tag}: 至少 3 步`);
+  if (a.id === 'name') {
+    if (!Array.isArray(a.words) || a.words.length < 6 || a.words.length > 8) err(`${tag}: 词应在 6–8 个，当前 ${(a.words || []).length} 个`);
+    if (!a.after || !a.after.includes('{word}')) err(`${tag}: after 缺 {word} 占位符`);
+  }
+  if (a.id === 'reach' && (!a.say || !a.sayKid || !a.kidLead)) err(`${tag}: 缺 say / sayKid / kidLead`);
+});
+const H_NUM = HELP.numbers || {};
+const H_ITEMS = H_NUM.items || [];
+if (!H_NUM.title || !H_NUM.note) err('急救求助：缺 title / note');
+['12356', '12355'].forEach(k => { if (!H_ITEMS.some(x => x.k === k)) err(`急救求助：缺号码 ${k}`); });
+if (!/不承诺效果/.test(H_NUM.note) || !/不能代替专业帮助/.test(H_NUM.note)) err('急救求助：note 必须写清「不承诺效果 / 不能代替专业帮助」');
+const H_KID = HELP.kid || {};
+if (!H_KID.title || !H_KID.body) err('急救入口：缺儿童档说明');
+if (JSON.stringify(H_NUM).includes('http')) err('急救入口：求助信息里不得出现链接');
+
 /* ---------- 静修间 / 漂流瓶 ---------- */
 const MOODS = ['现在很烦', '现在很累', '睡不着', '心里空'];
 const RETREAT_TYPES = ['ground', 'defuse', 'space'];
@@ -451,7 +477,7 @@ const countOf = (bank) => Object.values(bank).reduce((s, a) => s + a.length, 0);
 const perBand = (bank, id) => (bank[id] || []).length;
 console.log(`儿童 / 亲子：${KID.levels.length} 站（含终章）· ${(KID.islands || []).length} 岛 · 变体 ${countOf(bankKid)} 组`);
 console.log(`成年：${ADULT.levels.length} 站（含终章）· ${(ADULT.islands || []).length} 岛 · 变体 ${countOf(bankAdult)} 组`);
-console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱`);
+console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱 · 急救入口 ${H_ACTS.length} 个动作 + ${H_ITEMS.length} 条求助`);
 
 if (warns.length) {
   console.log(`\n提示 ${warns.length} 条：`);

@@ -40,7 +40,7 @@ const css = readFileSync(join(root, 'style.css'), 'utf8');
 const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
-  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library', 'dictionary', 'selfhelp', 'slowvars'
+  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library', 'dictionary', 'selfhelp', 'slowvars', 'help'
 ];
 const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
 /* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
@@ -78,6 +78,15 @@ S('script.js 在所有 content 之后加载', html.lastIndexOf('script.js') > ht
 S('心理学词典在 library 之后、script.js 之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < html.indexOf('script.js'));
 S('自助工具箱在 dictionary 之后、script.js 之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < html.indexOf('script.js'));
 S('慢变量在 selfhelp 之后、script.js 之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < html.indexOf('script.js'));
+S('急救入口文案在 slowvars 之后、script.js 之前', html.indexOf('content/help.js') > html.indexOf('content/slowvars.js') && html.indexOf('content/help.js') < html.indexOf('script.js'));
+/* 急救入口的红线：文案是本地常量，不联网、不拨号；视图本身不写存档。 */
+const helpSrc = readFileSync(join(root, 'content/help.js'), 'utf8');
+S('急救入口文案不含网络调用或链接', !/fetch\s*\(|XMLHttpRequest|https?:\/\//.test(helpSrc));
+const helpFn = src.slice(src.indexOf('function renderHelp'), src.indexOf('function renderMap'));
+S('急救入口视图不写存档', helpFn.length > 0 && !/save\s*\(|localStorage/.test(helpFn));
+S('急救入口已接线：动作 + 视图 + 返回前一屏',
+  /'open-help'\s*:/.test(src) && /'help-close'\s*:/.test(src) && /'help-ground'\s*:/.test(src) && /'help-word'\s*:/.test(src) && /help:\s*\{\s*progress:\s*false,\s*esc:\s*'back'/.test(src));
+S('顶栏入口常驻且共用同一动作', /id="help-entry"[^>]*data-action="open-help"/.test(html));
 /* 视图配置表：所有 session.view 取值都必须登记，避免新增视图漏藏进度条 / 漏配 Esc */
 const viewAssigns = [...new Set([...src.matchAll(/session\.view\s*=\s*'([a-z]+)'/g)].map(m => m[1]))];
 const viewBlock = src.slice(src.indexOf('const VIEW_CONFIG'), src.indexOf('function viewCfg'));
@@ -110,16 +119,25 @@ if (!chrome) {
   console.error('✗ 找不到 Chrome / Chromium。设置 CHROME_PATH 指向可执行文件后重试。');
   process.exit(1);
 }
-const harness = html.replace(
+const appHtml = html.replace(
   '<script src="script.js"></script>',
   '<script src="script.js"></script>\n<script src="/tests/browser-tests.js"></script>'
 );
-if (!harness.includes('browser-tests.js')) {
+if (!appHtml.includes('browser-tests.js')) {
   console.error('✗ 测试脚本注入失败：index.html 里没找到 script.js 的引用。');
   process.exit(1);
 }
+/* Chrome 无头在 macOS 上会把窗口宽度钳到 500px，`--window-size=390,900` 不生效。
+   把应用放进一个固定 390×900 的 iframe：CSS 媒体查询与 window.innerWidth 都以 iframe
+   的视口为准，这样「390px 用例」才真的跑在 390px，而不是名不副实。
+   结果由 iframe 内的测试脚本写回父页面，供 --dump-dom 读取。 */
+const harness = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>e2e</title></head>
+<body style="margin:0">
+<pre id="__e2e_result__" style="display:none">pending</pre>
+<iframe id="app" src="/__app.html" title="app" style="display:block;width:390px;height:900px;border:0"></iframe>
+</body></html>`;
 
-const server = createStaticServer({ '/__harness.html': harness });
+const server = createStaticServer({ '/__app.html': appHtml, '/__harness.html': harness });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 const profile = join(tmpdir(), `mood-island-e2e-${process.pid}`);
@@ -135,7 +153,7 @@ const errFd = openSync(errPath, 'w');
 const proc = spawn(chrome, [
   '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
   `--user-data-dir=${profile}`,
-  '--window-size=390,900',
+  '--window-size=500,900',
   '--virtual-time-budget=5000',
   '--dump-dom',
   `http://127.0.0.1:${port}/__harness.html`

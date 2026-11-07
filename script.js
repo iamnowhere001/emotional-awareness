@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.8.2 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.9.0 · 纯前端、零依赖、不联网
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
    本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
@@ -44,7 +44,13 @@ const SV_PRACTICES = SLOWVARS.practices || [];
 const SV_TRAPS = SLOWVARS.traps || [];
 const SV_HORIZONS = SLOWVARS.horizons || [];
 const SV_SAFETY = SLOWVARS.safety || '';
-const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length);
+/* 急救入口：3 个 1 分钟动作与本地求助信息，全部是 content/help.js 里的固定数据。
+   不联网、不拨号、不做风险判断，也不保存用户在这里的选择。 */
+const HELP = MI.help || {};
+const HELP_ACTIONS = HELP.actions || [];
+const HELP_NUMBERS = HELP.numbers || {};
+const HELP_KID = HELP.kid || {};
+const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length && HELP_ACTIONS.length);
 
 /* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。
    轨道身份以 bands.js 的 track 字段为准，不硬编码档位 id；
@@ -77,6 +83,12 @@ function isAdultTrack() { return bandTrack() === 'adult'; }
 function cardsInTrack() { return state.cards[bandTrack()] || []; }
 
 function band() { return AGE_BANDS.find(b => b.id === state.band) || AGE_BANDS[1] || AGE_BANDS[0] || {}; }
+/* 急救入口的语气分层：3-6 / 6-9 / 9-12 走「找一个大人」，亲子档与成年档走成人口径。
+   尚未选档时按成人口径处理——不能假设拿着设备的是一个孩子。 */
+function isKidTone() {
+  const b = band();
+  return !!state.band && b.track === 'kid' && b.id !== 'all';
+}
 
 /* ---------------------------------------------------------------- 状态 */
 const DEFAULT_STATE = {
@@ -92,9 +104,15 @@ let state = load();
 let play = {};
 let session = {
   clearedThisRun: 0, view: 'home', tip: '', navDir: '',
-  mapScroll: 0, lastCleared: '', interrupted: false, retreatStep: -1
+  mapScroll: 0, lastCleared: '', interrupted: false, retreatStep: -1,
+  helpFrom: 'home'
 };
 let lastVariant = {};
+let helpWord = null;
+let helpGroundDone = false;
+/* 从关卡里打开急救时，暂存当前的进行态（题目、已选、试过几次）。
+   返回时恢复同一道题；只在内存里，不写存档。 */
+let helpResume = null;
 let dictCat = 'all';
 let dictQuery = '';
 let dictKind = 'all';
@@ -284,6 +302,8 @@ const VIEW_CONFIG = {
   home: { progress: false, esc: null, title: null, band: true },
   map: { progress: true, esc: null, title: 'progress', band: true },
   level: { progress: true, esc: 'map', title: 'current', band: true },
+  /* 急救入口：Esc 回到进入前的那一屏，而不是固定回地图（可能从首页 / 选档页进来） */
+  help: { progress: false, esc: 'back', title: null, band: true },
   retreat: { progress: false, esc: 'map', title: null, band: true },
   dict: { progress: false, esc: 'map', title: null, band: true },
   selfhelp: { progress: false, esc: 'map', title: null, band: true },
@@ -307,6 +327,14 @@ function updateTopbar() {
   if (bandEl) {
     bandEl.hidden = (!vc.band || !state.band);
     bandEl.textContent = state.band ? `${band().name} · ${band().tag}` : '';
+  }
+  /* 顶栏入口在两轨用不同措辞：孩子看到「有点难受」，成年 / 亲子看到「很难受」。
+     未选档时按成人口径，避免把「找一个大人」直接推给一个成年人。 */
+  const helpBtn = document.getElementById('help-entry');
+  if (helpBtn) {
+    const kid = isKidTone();
+    helpBtn.textContent = kid ? '现在有点难受' : '现在很难受';
+    helpBtn.setAttribute('aria-label', kid ? '打开 1 分钟安抚：现在有点难受' : '打开 1 分钟安抚与求助：现在很难受');
   }
   document.getElementById('progress-wrap').hidden = !vc.progress;
   const track = document.getElementById('step-track');
@@ -438,6 +466,14 @@ function renderHome() {
       <div class="home-point"><span class="dot"></span><span><b>每一站换一种玩法。</b>拼线索、调刻度、排顺序、翻记忆，动脑也动手。</span></div>
       <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.desc)} ${esc(b.len)}。</span></div>
     </div>
+    <div class="help-entry">
+      <div class="help-entry-copy">
+        <span class="help-entry-kicker">不用上岛 · 1 分钟</span>
+        <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
+        <span>先落地、给感受一个词、找一个人。不计进度，也不保存你选了什么。</span>
+      </div>
+      <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
+    </div>
     <div class="actions">
       <button class="btn btn-primary" data-action="start">${hasProgress ? '继续上岛' : '开始上岛'}</button>
       ${hasProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
@@ -449,6 +485,72 @@ function renderHome() {
       <button class="btn-read" data-action="open-slowvars">慢变量</button>
     </div>
     <p class="home-note">全程不联网、不填写心情文字；天气选择不会被保存。${isAdultTrack() ? '成年档有自己的一套站，和儿童档的进度分开记。' : '适合一个人玩，也适合大人和孩子一起聊。'}</p>
+  </div>`;
+  updateTopbar();
+}
+
+/* ---------------------------------------------------------------- 视图：急救入口
+   三个判断：
+   1. 做成独立视图而不是弹窗——要放下三个动作和求助信息，弹窗在 390px 上会变成
+      一个内部滚动的小盒子；急救时最不该出现的就是「内容藏在滚动条里」。
+   2. 三步全部在本页内完成，不跳去静修间或关卡——否则「现在很难受」就变成
+      「先去别处」，1 分钟也守不住。
+   3. 完成状态与选中的词只存在内存里，不进 localStorage、不进存档。 */
+function renderHelp() {
+  clearAsyncTimers(); stopSpeech();
+  session.view = 'help'; session.navDir = '';
+  helpWord = null; helpGroundDone = false;
+  const kid = isKidTone();
+  const ground = HELP_ACTIONS.find(a => a.id === 'ground') || {};
+  const nameAct = HELP_ACTIONS.find(a => a.id === 'name') || {};
+  const reach = HELP_ACTIONS.find(a => a.id === 'reach') || {};
+  const say = kid ? reach.sayKid : reach.say;
+  const backLabels = {
+    map: '回到地图', gate: '回到选年龄段', level: '回到刚才那一站',
+    retreat: '回到静修间', dict: '回到词典', selfhelp: '回到工具箱', slowvars: '回到慢变量'
+  };
+  const backLabel = backLabels[session.helpFrom] || '回到首页';
+  stage.innerHTML = `<div class="view help-view">
+    <div class="toolbar">${state.band ? bandChip() : ''}<button class="btn-read" data-action="help-close">${backLabel}</button></div>
+    <span class="eyebrow">${esc(HELP.eyebrow)}</span>
+    <h2 class="help-title">${esc(HELP.title)}</h2>
+    <p class="lead">${esc(HELP.lead)}</p>
+    <div class="help-actions">
+      <section class="help-action" aria-labelledby="help-h-ground">
+        <div class="help-head"><span class="help-num" aria-hidden="true">1</span><h3 id="help-h-ground">${esc(ground.name)}</h3><span class="help-len">${esc(ground.len)}</span></div>
+        <p class="help-lead">${esc(ground.lead)}</p>
+        <ol class="help-steps">${(ground.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+        <button class="btn btn-secondary help-do" data-action="help-ground">我跟着做完了</button>
+        <p class="help-done" id="help-ground-done" role="status" hidden>${esc(ground.done)}</p>
+      </section>
+      <section class="help-action" aria-labelledby="help-h-name">
+        <div class="help-head"><span class="help-num" aria-hidden="true">2</span><h3 id="help-h-name">${esc(nameAct.name)}</h3><span class="help-len">${esc(nameAct.len)}</span></div>
+        <p class="help-lead">${esc(nameAct.lead)}</p>
+        <div class="help-words" role="group" aria-label="挑一个最接近的词">
+          ${(nameAct.words || []).map(w => `<button class="help-word" data-action="help-word" data-w="${esc(w)}">${esc(w)}</button>`).join('')}
+        </div>
+        <p class="help-picked" id="help-picked" role="status" hidden></p>
+      </section>
+      <section class="help-action" aria-labelledby="help-h-reach">
+        <div class="help-head"><span class="help-num" aria-hidden="true">3</span><h3 id="help-h-reach">${esc(reach.name)}</h3><span class="help-len">${esc(reach.len)}</span></div>
+        <p class="help-lead">${esc(kid ? reach.kidLead : reach.lead)}</p>
+        <p class="help-say">「${esc(say)}」</p>
+        <button class="btn btn-secondary help-do" data-action="help-speak" data-say="${esc(say)}">读给我听</button>
+        <p class="help-hint">${esc(reach.hint)}</p>
+      </section>
+    </div>
+    ${kid
+      ? `<section class="help-lines help-kid">
+          <h3>${esc(HELP_KID.title)}</h3>
+          <p>${esc(HELP_KID.body)}</p>
+          <p class="help-note">${esc(HELP_KID.note)}</p>
+        </section>`
+      : `<section class="help-lines">
+          <h3>${esc(HELP_NUMBERS.title)}</h3>
+          <ul>${(HELP_NUMBERS.items || []).map(it => `<li><b>${esc(it.k)}</b>${esc(it.t)}</li>`).join('')}</ul>
+          <p class="help-note">${esc(HELP_NUMBERS.note)}</p>
+        </section>`}
+    <p class="home-note help-foot">不用做完，也不用变好。随时可以离开，什么都不用留下。</p>
   </div>`;
   updateTopbar();
 }
@@ -580,7 +682,12 @@ function renderMap() {
   html += `<div class="map-hub">
     <section class="hub-block">
       <div class="hub-head"><h3>随时可用</h3><span class="muted">不计进度 · 随时可停</span></div>
-      <div class="hub-grid two">
+      <div class="hub-grid">
+        <button class="hub-card hub-help" data-action="open-help">
+          <span class="hub-name">${isKidTone() ? '现在有点难受' : '现在很难受'}</span>
+          <span class="hub-desc">三个 1 分钟动作：先落地、给感受一个词、找一个人。</span>
+          <span class="hub-meta">不计进度 · 不保存 · 随时可停</span>
+        </button>
         <button class="hub-card" data-action="open-bottle">
           <span class="hub-name">今日漂流瓶</span>
           <span class="hub-desc">从 ${BOTTLES.length} 个问题里抽一个，和自己聊一句；答案不保存。</span>
@@ -1313,12 +1420,15 @@ function makePlay(lv, v) {
   }
 }
 
-function renderLevel() {
+function renderLevel(resumePlay) {
   clearAsyncTimers(); stopSpeech();
   session.view = 'level';
   const lv = LEVELS[state.levelIndex];
-  const v = lv.type === 'finale' ? {} : pickVariant(lv.id);
-  play = makePlay(lv, v);
+  /* 从急救页返回时沿用同一份进行态：不重新抽题、不清已选；
+     呼吸计时器已被 clearAsyncTimers 停掉，把 running 归位即可。 */
+  play = resumePlay || makePlay(lv, lv.type === 'finale' ? {} : pickVariant(lv.id));
+  const v = play.v;
+  if (play.type === 'breath') play.running = false;
   const b = band();
   const speakBtns = (state.settings.speak && lv.type !== 'finale')
     ? `<button class="btn-read" data-action="speak-question" aria-label="朗读题目">🔊 读题目</button><button class="btn-read" data-action="speak-options" aria-label="朗读选项">🔊 读选项</button>` : '';
@@ -1518,7 +1628,7 @@ function openSettings() {
         <button class="${s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="1">开启朗读</button>
         <button class="${!s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="0">关闭</button>
         <button class="${s.autoSpeak ? 'on' : ''}" data-action="toggle-flag" data-k="autoSpeak" data-v="${s.autoSpeak ? 0 : 1}">进站自动读题目</button>
-      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。部分浏览器要求先点一下页面才允许自动朗读，点「读题目」总是有效的。</p></div>
+      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时点关卡里的「读题目」总是有效。</p></div>
       <div class="setting-row"><strong>动效与对比</strong><div class="seg">
         <button class="${!s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="0">保留轻微动效</button>
         <button class="${s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="1">尽量减少动画</button>
@@ -1587,6 +1697,64 @@ const ACTIONS = {
   'next-level': () => { state.levelIndex += 1; session.navDir = 'forward'; renderLevel(); },
   'reroll': () => { session.navDir = 'forward'; renderLevel(); showFeedback('gentle', '换了一道题，进度还留着。慢慢来。'); },
   'goto-band': () => { stopSpeech(); session.navDir = ''; renderAgeGate(); },
+  /* 急救入口：记下进入前那一屏，Esc 与「回到…」都回到那里。
+     入口本身不改 session.view 之外的状态，也不写存档。 */
+  'open-help': () => {
+    if (session.view !== 'help') {
+      session.helpFrom = session.view || 'home';
+      helpResume = session.view === 'level' ? play : null;
+    }
+    session.navDir = 'forward';
+    renderHelp();
+  },
+  'help-close': () => {
+    stopSpeech(); closeModal(); session.navDir = 'back';
+    const from = session.helpFrom;
+    const resume = helpResume;
+    helpResume = null;
+    if (from === 'map') renderMap();
+    else if (from === 'level') renderLevel(resume);
+    else if (from === 'retreat') (session.retreatStep >= 0 ? renderRetreatPractice(session.retreatStep) : renderRetreatList());
+    else if (from === 'dict') renderDictionary();
+    else if (from === 'selfhelp') renderSelfHelp();
+    else if (from === 'slowvars') renderSlowVars();
+    else if (from === 'gate' && !state.band) renderAgeGate();
+    else renderHome();
+  },
+  'help-ground': () => {
+    if (helpGroundDone) return;
+    helpGroundDone = true;
+    const done = document.getElementById('help-ground-done');
+    if (done) done.hidden = false;
+  },
+  'help-word': (el) => {
+    const w = el.dataset.w;
+    const act = HELP_ACTIONS.find(a => a.id === 'name') || {};
+    if (!w || !(act.words || []).includes(w)) return;
+    helpWord = w;
+    document.querySelectorAll('#stage .help-word').forEach(b => {
+      const on = b.dataset.w === w;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const out = document.getElementById('help-picked');
+    if (out) {
+      out.hidden = false;
+      out.textContent = String(act.after || '').replace('{word}', w);
+    }
+  },
+  'help-speak': (el) => {
+    /* 「读给我听」是显式请求：即使设置里关了自动朗读，也读这一次 */
+    const t = el.dataset.say || '';
+    try {
+      if (t && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(t);
+        u.lang = 'zh-CN'; u.rate = 0.85; u.pitch = 1.05;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (err) { /* 不支持朗读时静默：文字仍然在页面上 */ }
+  },
   'set-band': (el) => {
     const b = AGE_BANDS.find(x => x.id === el.dataset.b) || AGE_BANDS[1];
     const firstPick = !state.band;
@@ -2034,6 +2202,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (overlay.classList.contains('open')) { closeModal(); return; }
     if (viewCfg(session.view).esc === 'map') { ACTIONS['go-map'](); return; }
+    if (viewCfg(session.view).esc === 'back') { ACTIONS['help-close'](); return; }
   }
   if (overlay.classList.contains('open')) {
     if (e.key === 'Tab') { trapTab(e); return; }
@@ -2045,11 +2214,19 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
-  /* 数字键和徽标一致：.opt 的 1/2/3… 与梯子的档位号都能按 */
+  /* 数字键和徽标一致：.opt / 梯子档位的 1/2/3… 都能按；
+     关卡里其余「一排按钮」题型（配对、拼词、天气、翻线索、分筐）也走同一套序号；
+     急救页的 8 个词同样支持数字键。 */
   if (/^[1-9]$/.test(e.key)) {
+    const n = Number(e.key) - 1;
     const opts = document.querySelectorAll('#stage .opt:not(:disabled)');
     const rungs = document.querySelectorAll('#stage .rung:not(:disabled)');
-    const target = opts[Number(e.key) - 1] || (opts.length ? null : rungs[Number(e.key) - 1]);
+    const others = session.view === 'level'
+      ? document.querySelectorAll('#stage .pair-item:not(:disabled), #stage .word-chip:not(:disabled), #stage .weather-btn:not(:disabled), #stage .chip:not(:disabled), #stage .clue-card:not(:disabled)')
+      : session.view === 'help'
+        ? document.querySelectorAll('#stage .help-word:not(:disabled)')
+        : [];
+    const target = [opts, rungs, others].find(g => g.length)?.[n];
     if (target) { target.click(); e.preventDefault(); }
     return;
   }

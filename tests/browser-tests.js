@@ -416,8 +416,10 @@ window.addEventListener('load', function () {
   });
   test('地图入口按用途分组，不再是一排等权重按钮', () => {
     state.cleared = [];
+    bandTo('adult');
     renderMap();
-    A(document.querySelectorAll('#stage .map-hub .hub-card').length === 7);
+    A(document.querySelectorAll('#stage .map-hub .hub-card').length === 8);
+    A(!!document.querySelector('#stage .map-hub .hub-help'), '急救入口应在地图「随时可用」组里');
     A(document.querySelectorAll('#stage .map-tools').length === 0);
     const heads = [...document.querySelectorAll('#stage .hub-head h3')].map(e => e.textContent.trim());
     A(heads.includes('随时可用') && heads.includes('知识与工具') && heads.includes('这一趟的收集'));
@@ -436,6 +438,94 @@ window.addEventListener('load', function () {
     renderHome();
     A(document.querySelectorAll('#stage .actions .btn-primary').length === 1);
     A(document.querySelectorAll('#stage .home-shortcuts .btn-read').length === 3);
+  });
+
+  /* ---------- 急救入口 ---------- */
+  test('急救入口常驻顶栏，两轨措辞不同', () => {
+    const btn = document.getElementById('help-entry');
+    A(!!btn && btn.dataset.action === 'open-help', '顶栏需要有常驻入口');
+    bandTo('a6'); renderHome();
+    A(btn.textContent === '现在有点难受', `6-9 档应显示「现在有点难受」，实际「${btn.textContent}」`);
+    ['a3', 'a9'].forEach(id => {
+      bandTo(id); renderHome();
+      A(btn.textContent === '现在有点难受');
+    });
+    bandTo('adult'); renderHome();
+    A(btn.textContent === '现在很难受');
+    bandTo('all'); renderHome();
+    A(btn.textContent === '现在很难受', '亲子档走成人口径');
+  });
+  test('首页首屏有急救卡片，点击进入急救视图', () => {
+    bandTo('adult'); renderHome();
+    A(!!document.querySelector('#stage .help-entry'), '首页应有急救卡片');
+    /* 真的点顶栏按钮：走 document 级事件代理，验证 data-action 真的接上了 */
+    document.getElementById('help-entry').click();
+    A(session.view === 'help' && session.helpFrom === 'home');
+    A(document.getElementById('progress-wrap').hidden === true, '急救页不显示关卡进度');
+    A(document.querySelectorAll('#stage .help-action').length === 3);
+    A(document.querySelectorAll('#stage .help-word').length === 8);
+    A(document.querySelectorAll('#stage .help-num').length === 3);
+  });
+  test('急救入口返回进入前那一屏（按钮与 Esc）', () => {
+    bandTo('adult'); renderHome();
+    ACTIONS['open-help'](); ACTIONS['help-close']();
+    A(session.view === 'home');
+    renderMap();
+    ACTIONS['open-help']();
+    A(session.helpFrom === 'map');
+    ACTIONS['help-close']();
+    A(session.view === 'map', '从地图进入应回到地图');
+    ACTIONS['open-help']();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    A(session.view === 'map', 'Esc 应回到地图');
+    /* 关卡里也能开急救：返回必须回到同一站、同一道题，不能重新抽题或跳回首页 */
+    goLevel(0);
+    const vBefore = play.v;
+    ACTIONS['open-help']();
+    A(session.helpFrom === 'level', '应记下来源是关卡');
+    A(document.querySelector('#stage [data-action="help-close"]').textContent === '回到刚才那一站');
+    ACTIONS['help-close']();
+    A(session.view === 'level' && play.v === vBefore, '返回关卡应沿用同一道题');
+    ACTIONS['open-help']();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    A(session.view === 'level' && play.v === vBefore, 'Esc 也应回到同一道题');
+    /* 只读模块里同样回到原页，筛选不丢 */
+    ACTIONS['open-dictionary']();
+    ACTIONS['open-help']();
+    A(session.helpFrom === 'dict');
+    ACTIONS['help-close']();
+    A(session.view === 'dict', '从词典进入应回到词典');
+    renderHome();
+  });
+  test('儿童档只给「找一个大人」，成人口径给出本地求助信息', () => {
+    bandTo('a6'); ACTIONS['open-help']();
+    const kidText = document.getElementById('stage').textContent;
+    A(kidText.includes('找一个大人') && !kidText.includes('12356'), '儿童档不应出现热线号码');
+    bandTo('adult'); ACTIONS['open-help']();
+    const adultText = document.getElementById('stage').textContent;
+    A(adultText.includes('12356') && adultText.includes('12355'));
+    A(adultText.includes('不是心理咨询') && adultText.includes('不承诺效果') && adultText.includes('不能代替专业帮助'));
+    A(!/诊断|治疗方案/.test(adultText), '求助信息不做诊断或疗效承诺');
+  });
+  test('三个动作都能在本页走完，且不写入存档', () => {
+    localStorage.removeItem(STORAGE_KEY);
+    bandTo('adult'); renderHome();
+    const before = localStorage.getItem(STORAGE_KEY);
+    ACTIONS['open-help']();
+    ACTIONS['help-ground']();
+    A(document.getElementById('help-ground-done').hidden === false);
+    document.querySelectorAll('#stage .help-word')[0].click();
+    A(helpWord === '紧' && document.getElementById('help-picked').textContent.includes('「紧」'));
+    document.querySelectorAll('#stage .help-word')[1].click();
+    A(helpWord === '闷' && document.querySelectorAll('#stage .help-word')[1].classList.contains('on'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    A(helpWord === '紧', '数字键应能选第 1 个词');
+    A(!!document.querySelector('#stage [data-action="help-speak"]'), '「读给我听」应可用');
+    A(localStorage.getItem(STORAGE_KEY) === before, '急救页不应写入存档');
+    ACTIONS['help-close']();
+    ACTIONS['open-help']();
+    A(helpWord === null && document.getElementById('help-ground-done').hidden === true, '重新进入应回到干净状态');
+    ACTIONS['help-close']();
   });
 
   /* ---------- 玩法与洗牌 ---------- */
@@ -670,6 +760,10 @@ window.addEventListener('load', function () {
     goLevel(byType('slider'));
     A(document.querySelectorAll('textarea, input:not([type="range"])').length === 0);
   });
+  test('回归视口为真 390×900（iframe，不受无头窗口钳制）', () => {
+    A(window.innerWidth === 390, `innerWidth=${window.innerWidth}`);
+    A(window.innerHeight >= 800, `innerHeight=${window.innerHeight}`);
+  });
   test('390px 视口无横向溢出', () => {
     bandTo('a6');
     renderMap();
@@ -701,6 +795,11 @@ window.addEventListener('load', function () {
     A(svHorizonCols === 1, `时间尺度在 390px 应为单列，实际 ${svHorizonCols} 列`);
     const svTrapCols = getComputedStyle(document.querySelector('.sv-traps')).gridTemplateColumns.split(' ').length;
     A(svTrapCols === 1, `快变量陷阱在 390px 应为单列，实际 ${svTrapCols} 列`);
+    bandTo('adult');
+    ACTIONS['open-help']();
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `急救页 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
+    A([...document.querySelectorAll('.help-word')].every(b => b.getBoundingClientRect().height >= 44));
     renderMap();
   });
 
@@ -708,5 +807,10 @@ window.addEventListener('load', function () {
   pre.id = '__e2e_result__';
   pre.style.display = 'none';
   pre.textContent = JSON.stringify({ total: lines.length, failed, lines });
-  document.body.appendChild(pre);
+  /* 用例跑在固定 390×900 的 iframe 里（绕开 Chrome 无头的 500px 钳制），
+     结果写回父页面，--dump-dom 才能读到。 */
+  const host = (window.parent && window.parent !== window) ? window.parent.document : document;
+  let out = host.getElementById('__e2e_result__');
+  if (!out) { out = pre; host.body.appendChild(out); }
+  out.textContent = pre.textContent;
 });
