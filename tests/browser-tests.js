@@ -1,5 +1,5 @@
 /* 浏览器回归用例：由 scripts/regression.mjs 注入到 index.html 之后执行。
-   两个 <script> 同为经典脚本，共享全局词法环境，可以直接读写 script.js 的顶层变量。
+   同为经典脚本，与 js/*.js 共享全局词法环境，可以直接读写 js/core.js 的顶层变量。
    全部逻辑放在 load 回调里，避免顶层声明和主脚本撞名。 */
 
 window.addEventListener('load', function () {

@@ -1,11 +1,11 @@
 {
   "name": "mood-island",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "private": true,
   "description": "心情闯关岛 · 按年龄分级的情绪启蒙小游戏（纯前端、零依赖、不联网）",
   "type": "module",
   "scripts": {
-    "check": "node --check script.js",
+    "check": "node scripts/check-syntax.mjs",
     "lint": "node scripts/lint-content.mjs",
     "serve": "node scripts/serve.mjs",
     "test:e2e": "node scripts/regression.mjs",

@@ -10,6 +10,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createStaticServer } from './serve.mjs';
+import { JS_FILES } from './js-files.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
@@ -30,7 +31,9 @@ function findChrome() {
 /* ---------- 源码级检查（不需要浏览器） ---------- */
 const staticChecks = [];
 const S = (name, cond) => staticChecks.push({ name, ok: !!cond });
-const src = readFileSync(join(root, 'script.js'), 'utf8');
+/* 逻辑已按职责拆成 js/*.js，仍是经典脚本顺序加载、共用一个全局词法作用域；
+   源码断言按清单拼接后再搜片段，等价于当年的单个 script.js。 */
+const src = JS_FILES.map(f => readFileSync(join(root, f), 'utf8')).join('\n');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
@@ -45,7 +48,7 @@ const contentFiles = [
 ];
 const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
 /* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
-S('script.js 头注释 / package.json 一致且采用 0.x 台阶制',
+S('js/core.js 头注释 / package.json 一致且采用 0.x 台阶制',
   headerVersion === pkg.version && /^0\.\d+\.\d+$/.test(pkg.version) &&
   /const SCHEMA_VERSION = \d+;/.test(src) && /const STORAGE_KEY = 'mood-island-v5';/.test(src));
 const clVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map(m => m[1]);
@@ -75,13 +78,34 @@ S('ink-3 / warm 在 bg / surface / surface-2 上 ≥ 4.5:1',
 S('index.html 进度占位不再写死 13 关', !/13 关/.test(html));
 S('#overlay 不再挂 aria-live，避免整个弹窗重复播报', !/<div id="overlay"[^>]*aria-live/.test(html));
 S('content/*.js 全部被 index.html 引入', contentFiles.every(n => html.includes(`content/${n}.js`)));
-S('script.js 在所有 content 之后加载', html.lastIndexOf('script.js') > html.lastIndexOf('content/library.js'));
-S('心理学词典在 library 之后、script.js 之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < html.indexOf('script.js'));
-S('自助工具箱在 dictionary 之后、script.js 之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < html.indexOf('script.js'));
-S('慢变量在 selfhelp 之后、script.js 之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < html.indexOf('script.js'));
-S('急救入口文案在 slowvars 之后、script.js 之前', html.indexOf('content/help.js') > html.indexOf('content/slowvars.js') && html.indexOf('content/help.js') < html.indexOf('script.js'));
-S('拼装数据在题库之后、script.js 之前', html.indexOf('content/bank-compose.js') > html.indexOf('content/bank-adult-island4.js') && html.indexOf('content/bank-compose.js') < html.indexOf('script.js'));
-S('工作间数据在拼装数据之后、script.js 之前', html.indexOf('content/levels-adult-work.js') > html.indexOf('content/bank-compose.js') && html.indexOf('content/levels-adult-work.js') < html.indexOf('script.js'));
+/* 0.12.0 起逻辑拆成 js/*.js；content 全部排在第一个逻辑脚本之前。 */
+const firstJs = html.indexOf(`src="${JS_FILES[0]}"`);
+S('逻辑脚本全部在 content 之后加载', firstJs > html.lastIndexOf('content/library.js'));
+S('心理学词典在 library 之后、逻辑脚本之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < firstJs);
+S('自助工具箱在 dictionary 之后、逻辑脚本之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < firstJs);
+S('慢变量在 selfhelp 之后、逻辑脚本之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < firstJs);
+S('急救入口文案在 slowvars 之后、逻辑脚本之前', html.indexOf('content/help.js') > html.indexOf('content/slowvars.js') && html.indexOf('content/help.js') < firstJs);
+S('拼装数据在题库之后、逻辑脚本之前', html.indexOf('content/bank-compose.js') > html.indexOf('content/bank-adult-island4.js') && html.indexOf('content/bank-compose.js') < firstJs);
+S('工作间数据在拼装数据之后、逻辑脚本之前', html.indexOf('content/levels-adult-work.js') > html.indexOf('content/bank-compose.js') && html.indexOf('content/levels-adult-work.js') < firstJs);
+/* 拆分的结构契约：清单一致性比单个文件的内容更容易腐化，所以逐条锁住。 */
+S('index.html 按清单顺序引入全部逻辑脚本', (() => {
+  const at = JS_FILES.map(f => html.indexOf(`src="${f}"`));
+  return at.every((v, i) => v > 0 && (i === 0 || v > at[i - 1])) && !html.includes('src="script.js"');
+})());
+S('逻辑脚本文件都在磁盘上', JS_FILES.every(f => existsSync(join(root, f))));
+S('逻辑脚本之间没有重复的顶层声明', (() => {
+  const decls = JS_FILES.flatMap(f => [...readFileSync(join(root, f), 'utf8')
+    .matchAll(/^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]));
+  return decls.length > 100 && new Set(decls).size === decls.length;
+})());
+const swManifest = readFileSync(join(root, 'sw.js'), 'utf8');
+S('sw.js 预缓存清单与逻辑脚本清单一致', (() => {
+  const block = (swManifest.match(/const ASSETS = \[([\s\S]*?)\]/) || [])[1] || '';
+  const cached = [...block.matchAll(/'\.\/([^']+)'/g)].map(m => m[1]);
+  return JS_FILES.every(f => cached.includes(f)) && !cached.includes('script.js');
+})());
+const syntaxChecker = readFileSync(join(root, 'scripts/check-syntax.mjs'), 'utf8');
+S('package.json 的 check 走清单化的语法检查', pkg.scripts.check === 'node scripts/check-syntax.mjs' && /JS_FILES/.test(syntaxChecker));
 /* 急救入口的红线：文案是本地常量，不联网、不拨号；视图本身不写存档。 */
 const helpSrc = readFileSync(join(root, 'content/help.js'), 'utf8');
 S('急救入口文案不含网络调用或链接', !/fetch\s*\(|XMLHttpRequest|https?:\/\//.test(helpSrc));
@@ -218,11 +242,11 @@ if (!chrome) {
   process.exit(1);
 }
 const appHtml = html.replace(
-  '<script src="script.js"></script>',
-  '<script src="script.js"></script>\n<script src="/tests/browser-tests.js"></script>'
+  '<script src="js/boot.js"></script>',
+  '<script src="js/boot.js"></script>\n<script src="/tests/browser-tests.js"></script>'
 );
 if (!appHtml.includes('browser-tests.js')) {
-  console.error('✗ 测试脚本注入失败：index.html 里没找到 script.js 的引用。');
+  console.error('✗ 测试脚本注入失败：index.html 里没找到 js/boot.js 的引用。');
   process.exit(1);
 }
 /* Chrome 无头在 macOS 上会把窗口宽度钳到 500px，`--window-size=390,900` 不生效。
