@@ -60,6 +60,63 @@ window.addEventListener('load', function () {
     A(rel.length === 10 && rel.every(c => c.dataset.cat === '关系与沟通'));
     dictQuery = ''; dictCat = 'all'; renderMap();
   });
+  test('自助工具箱 5 状态 / 32 工具 / 10 条认知扭曲', () => {
+    A(SH_STATES.length === 5);
+    A(SH_TOOLS.length === 32);
+    A(SH_DISTORTIONS.length === 10);
+    A(SH_TOOLS.every(t => t.t && t.e && t.c && t.when && t.note && Array.isArray(t.how) && t.how.length >= 2));
+    A(new Set(SH_TOOLS.map(t => t.t)).size === 32);
+    A(SH_STATES.every(s => s.moves.length >= 3 && s.lead && s.avoid));
+  });
+  test('自助工具箱：状态面板与分类筛选', () => {
+    bandTo('a6');
+    ACTIONS['open-selfhelp']();
+    A(session.view === 'selfhelp');
+    const stateBtn = document.querySelector('#sh-states .sh-state[data-id="drained"]');
+    A(!!stateBtn);
+    stateBtn.click();
+    const panel = document.getElementById('sh-state-panel');
+    A(panel.querySelectorAll('.sh-move').length === 3);
+    A(panel.textContent.includes('先把消耗降下来'));
+    const cards = [...document.querySelectorAll('#sh-grid .sh-card')];
+    A(cards.length === 32);
+    const cat = [...document.querySelectorAll('#sh-cats .dict-cat')].find(b => b.dataset.c === '心力恢复');
+    A(!!cat);
+    cat.click();
+    const shown = cards.filter(c => !c.hidden);
+    A(shown.length === 8 && shown.every(c => c.dataset.cat === '心力恢复'));
+    shCat = 'all'; shState = null; renderMap();
+  });
+
+  test('慢变量 6 个变量 / 12 张练习 / 10 个陷阱 / 3 个尺度', () => {
+    A(SV_VARS.length === 6);
+    A(SV_PRACTICES.length === 12);
+    A(SV_TRAPS.length === 10);
+    A(SV_HORIZONS.length === 3);
+    A(SV_VARS.every(v => v.id && v.name && v.sub && v.lead && v.why && v.misuse && v.check && v.move && v.move.t && v.move.d));
+    A(SV_PRACTICES.every(p => p.t && p.e && p.c && p.when && p.note && Array.isArray(p.how) && p.how.length >= 2));
+    A(new Set(SV_PRACTICES.map(p => p.t)).size === 12);
+    A(SV_HORIZONS.every(h => h.t && h.d && Array.isArray(h.asks) && h.asks.length >= 2));
+  });
+  test('慢变量：变量面板与分类筛选', () => {
+    bandTo('a6');
+    ACTIONS['open-slowvars']();
+    A(session.view === 'slowvars');
+    const varBtn = document.querySelector('#sv-vars .sv-var[data-id="health"]');
+    A(!!varBtn);
+    varBtn.click();
+    const panel = document.getElementById('sv-panel');
+    A(panel.querySelectorAll('.sv-row').length === 4);
+    A(panel.textContent.includes('先固定一个起床时间'));
+    const cards = [...document.querySelectorAll('#sv-grid .sv-card')];
+    A(cards.length === 12);
+    const cat = [...document.querySelectorAll('#sv-cats .dict-cat')].find(b => b.dataset.c === '身体底盘');
+    A(!!cat);
+    cat.click();
+    const shown = cards.filter(c => !c.hidden);
+    A(shown.length === 4 && shown.every(c => c.dataset.cat === '身体底盘'));
+    svCat = 'all'; svVar = null; renderMap();
+  });
 
   /* ---------- 存档与迁移 ---------- */
   test('v2 旧档迁移到 v3，3-5 改名 finale，旧键保留', () => {
@@ -276,6 +333,24 @@ window.addEventListener('load', function () {
       `词典 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
     const cols = getComputedStyle(document.getElementById('dict-grid')).gridTemplateColumns.split(' ').length;
     A(cols === 1, `词典在 390px 应为单列，实际 ${cols} 列`);
+    ACTIONS['open-selfhelp']();
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `自助 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
+    const shCols = getComputedStyle(document.getElementById('sh-grid')).gridTemplateColumns.split(' ').length;
+    A(shCols === 1, `自助工具在 390px 应为单列，实际 ${shCols} 列`);
+    const stateCols = getComputedStyle(document.getElementById('sh-states')).gridTemplateColumns.split(' ').length;
+    A(stateCols === 1, `状态按钮在 390px 应为单列，实际 ${stateCols} 列`);
+    ACTIONS['open-slowvars']();
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `慢变量 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
+    const svCols = getComputedStyle(document.getElementById('sv-grid')).gridTemplateColumns.split(' ').length;
+    A(svCols === 1, `慢变量卡在 390px 应为单列，实际 ${svCols} 列`);
+    const svVarCols = getComputedStyle(document.getElementById('sv-vars')).gridTemplateColumns.split(' ').length;
+    A(svVarCols === 1, `慢变量按钮在 390px 应为单列，实际 ${svVarCols} 列`);
+    const svHorizonCols = getComputedStyle(document.querySelector('.sv-horizons')).gridTemplateColumns.split(' ').length;
+    A(svHorizonCols === 1, `时间尺度在 390px 应为单列，实际 ${svHorizonCols} 列`);
+    const svTrapCols = getComputedStyle(document.querySelector('.sv-traps')).gridTemplateColumns.split(' ').length;
+    A(svTrapCols === 1, `快变量陷阱在 390px 应为单列，实际 ${svTrapCols} 列`);
     renderMap();
   });
 

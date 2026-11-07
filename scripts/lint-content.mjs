@@ -21,7 +21,9 @@ const FILES = [
   'bank-adult-1-3',
   'bank-adult-island4',
   'library',
-  'dictionary'
+  'dictionary',
+  'selfhelp',
+  'slowvars'
 ];
 
 /* 让 sandbox 自己当 window：content 里写的是 window.MI = ... 之后又用裸 MI，
@@ -43,6 +45,8 @@ const MI = sandbox.window.MI || {};
 const { bands: BANDS = [], kid: KID = {}, adult: ADULT = {}, bankKid = {}, bankAdult = {}, library: LIB = {} } = MI;
 const CODEX = LIB.CODEX || {};
 const DICT = MI.dictionary || [];
+const SH = MI.selfhelp || {};
+const SLOW = MI.slowvars || {};
 
 const errors = [];
 const warns = [];
@@ -257,6 +261,89 @@ DICT.forEach((d, i) => {
 });
 DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典分类「${c}」没有词条`); });
 
+/* ---------- 自助工具箱 ---------- */
+const SH_CATS = ['心力恢复', '认知自助', '行为与身体', '关系与支持', '自助边界'];
+const SH_STATES = SH.states || [];
+const SH_TOOLS = SH.tools || [];
+const SH_DISTS = SH.distortions || [];
+if (!SH.safety) err('自助工具箱：缺 safety 边界说明');
+if (SH_STATES.length !== 5) err(`自助工具箱：状态应为 5 种，当前 ${SH_STATES.length} 种`);
+if (SH_TOOLS.length !== 32) err(`自助工具箱：工具卡应为 32 张，当前 ${SH_TOOLS.length} 张`);
+if (SH_DISTS.length !== 10) err(`自助工具箱：认知扭曲应为 10 条，当前 ${SH_DISTS.length} 条`);
+const seenShState = new Set();
+SH_STATES.forEach((s, i) => {
+  const tag = `自助状态#${i} ${s.name || '(无名)'}`;
+  ['id', 'name', 'sub', 'lead', 'avoid'].forEach(k => { if (!s[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (s.id && seenShState.has(s.id)) err(`${tag}: id 重复`);
+  seenShState.add(s.id);
+  if (!Array.isArray(s.moves) || s.moves.length < 3) err(`${tag}: 至少需要 3 个可做动作`);
+  (s.moves || []).forEach((m, mi) => {
+    if (!m.t || !m.d) err(`${tag}: 第 ${mi + 1} 个动作缺 t / d`);
+  });
+});
+const seenShTool = new Set();
+SH_TOOLS.forEach((t, i) => {
+  const tag = `自助工具#${i} ${t.t || '(无名)'}`;
+  ['t', 'e', 'c', 'when', 'note'].forEach(k => { if (!t[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (t.t && seenShTool.has(t.t)) err(`${tag}: 名称重复`);
+  seenShTool.add(t.t);
+  if (!SH_CATS.includes(t.c)) err(`${tag}: 未知分类「${t.c}」`);
+  if (!Array.isArray(t.how) || t.how.length < 2) err(`${tag}: 至少需要 2 个步骤`);
+  (t.how || []).forEach((x, xi) => { if (!x) err(`${tag}: 第 ${xi + 1} 步为空`); });
+});
+SH_CATS.forEach(c => { if (!SH_TOOLS.some(t => t.c === c)) err(`自助分类「${c}」没有工具卡`); });
+const seenShDist = new Set();
+SH_DISTS.forEach((d, i) => {
+  const tag = `认知扭曲#${i} ${d.t || '(无名)'}`;
+  ['t', 'd', 'eg'].forEach(k => { if (!d[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (d.t && seenShDist.has(d.t)) err(`${tag}: 名称重复`);
+  seenShDist.add(d.t);
+});
+
+/* ---------- 慢变量 ---------- */
+const SV_CATS = ['身体底盘', '价值与方向', '关系与复利'];
+const SV_VARS = SLOW.vars || [];
+const SV_PRACTICES = SLOW.practices || [];
+const SV_TRAPS = SLOW.traps || [];
+const SV_HORIZONS = SLOW.horizons || [];
+if (!SLOW.safety) err('慢变量：缺 safety 边界说明');
+if (SV_VARS.length !== 6) err(`慢变量：变量应为 6 个，当前 ${SV_VARS.length} 个`);
+if (SV_PRACTICES.length !== 12) err(`慢变量：练习卡应为 12 张，当前 ${SV_PRACTICES.length} 张`);
+if (SV_TRAPS.length !== 10) err(`慢变量：快变量陷阱应为 10 条，当前 ${SV_TRAPS.length} 条`);
+if (SV_HORIZONS.length !== 3) err(`慢变量：时间尺度应为 3 个，当前 ${SV_HORIZONS.length} 个`);
+const seenSvVar = new Set();
+SV_VARS.forEach((v, i) => {
+  const tag = `慢变量#${i} ${v.name || '(无名)'}`;
+  ['id', 'name', 'sub', 'lead', 'why', 'misuse', 'check'].forEach(k => { if (!v[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (v.id && seenSvVar.has(v.id)) err(`${tag}: id 重复`);
+  seenSvVar.add(v.id);
+  if (!v.move || !v.move.t || !v.move.d) err(`${tag}: 缺 move.t / move.d`);
+});
+const seenSvPractice = new Set();
+SV_PRACTICES.forEach((p, i) => {
+  const tag = `慢变量练习#${i} ${p.t || '(无名)'}`;
+  ['t', 'e', 'c', 'when', 'note'].forEach(k => { if (!p[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (p.t && seenSvPractice.has(p.t)) err(`${tag}: 名称重复`);
+  seenSvPractice.add(p.t);
+  if (!SV_CATS.includes(p.c)) err(`${tag}: 未知分类「${p.c}」`);
+  if (!Array.isArray(p.how) || p.how.length < 2) err(`${tag}: 至少需要 2 个步骤`);
+  (p.how || []).forEach((x, xi) => { if (!x) err(`${tag}: 第 ${xi + 1} 步为空`); });
+});
+SV_CATS.forEach(c => { if (!SV_PRACTICES.some(p => p.c === c)) err(`慢变量分类「${c}」没有练习卡`); });
+const seenSvTrap = new Set();
+SV_TRAPS.forEach((t, i) => {
+  const tag = `快变量陷阱#${i} ${t.t || '(无名)'}`;
+  ['t', 'd', 'eg'].forEach(k => { if (!t[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (t.t && seenSvTrap.has(t.t)) err(`${tag}: 名称重复`);
+  seenSvTrap.add(t.t);
+});
+SV_HORIZONS.forEach((h, i) => {
+  const tag = `时间尺度#${i} ${h.t || '(无名)'}`;
+  ['t', 'd'].forEach(k => { if (!h[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (!Array.isArray(h.asks) || h.asks.length < 2) err(`${tag}: 至少需要 2 个问题`);
+  (h.asks || []).forEach((a, ai) => { if (!a) err(`${tag}: 第 ${ai + 1} 个问题为空`); });
+});
+
 /* ---------- 静修间 / 漂流瓶 ---------- */
 const MOODS = ['现在很烦', '现在很累', '睡不着', '心里空'];
 const RETREAT_TYPES = ['ground', 'defuse', 'space'];
@@ -317,7 +404,7 @@ const countOf = (bank) => Object.values(bank).reduce((s, a) => s + a.length, 0);
 const perBand = (bank, id) => (bank[id] || []).length;
 console.log(`儿童 / 亲子：${KID.levels.length} 站（含终章）· ${(KID.islands || []).length} 岛 · 变体 ${countOf(bankKid)} 组`);
 console.log(`成年：${ADULT.levels.length} 站（含终章）· ${(ADULT.islands || []).length} 岛 · 变体 ${countOf(bankAdult)} 组`);
-console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条`);
+console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱`);
 
 if (warns.length) {
   console.log(`\n提示 ${warns.length} 条：`);

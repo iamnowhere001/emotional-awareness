@@ -9,7 +9,7 @@ const LEGACY_KEYS = ['mood-island-v2'];
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
-   bank-*.js / library.js / dictionary.js。这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
+   bank-*.js / library.js / dictionary.js / selfhelp.js / slowvars.js。这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
 const MI = window.MI || {};
 const AGE_BANDS = MI.bands || [];
 const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
@@ -26,6 +26,17 @@ const BOTTLES = LIB.BOTTLES || [];
 const RETREAT = LIB.RETREAT || [];
 const RETREAT_SAFETY = LIB.RETREAT_SAFETY || '';
 const DICTIONARY = MI.dictionary || [];
+const SELFHELP = MI.selfhelp || {};
+const SH_STATES = SELFHELP.states || [];
+const SH_TOOLS = SELFHELP.tools || [];
+const SH_DISTORTIONS = SELFHELP.distortions || [];
+const SH_SAFETY = SELFHELP.safety || '';
+const SLOWVARS = MI.slowvars || {};
+const SV_VARS = SLOWVARS.vars || [];
+const SV_PRACTICES = SLOWVARS.practices || [];
+const SV_TRAPS = SLOWVARS.traps || [];
+const SV_HORIZONS = SLOWVARS.horizons || [];
+const SV_SAFETY = SLOWVARS.safety || '';
 const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length);
 
 /* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。 */
@@ -57,6 +68,10 @@ let session = {
 let lastVariant = {};
 let dictCat = 'all';
 let dictQuery = '';
+let shState = null;
+let shCat = 'all';
+let svVar = null;
+let svCat = 'all';
 let breathTimer = null;
 let memoTimer = null;
 let lastFocus = null;
@@ -188,7 +203,7 @@ function updateTopbar() {
     bandEl.hidden = (session.view === 'gate' || !state.band);
     bandEl.textContent = state.band ? `${band().name} · ${band().tag}` : '';
   }
-  document.getElementById('progress-wrap').hidden = (session.view === 'home' || session.view === 'gate' || session.view === 'retreat' || session.view === 'dict');
+  document.getElementById('progress-wrap').hidden = (session.view === 'home' || session.view === 'gate' || session.view === 'retreat' || session.view === 'dict' || session.view === 'selfhelp' || session.view === 'slowvars');
   const track = document.getElementById('step-track');
   if (track) track.innerHTML = LEVELS.map((l, i) => {
     const done = state.cleared.includes(l.id);
@@ -367,6 +382,8 @@ function renderMap() {
     </div>`;
   html += `<div class="map-tools">
       <button class="tool-btn" data-action="open-dictionary">心理学词典（${DICTIONARY.length}）</button>
+      <button class="tool-btn" data-action="open-selfhelp">自助工具箱（心力 · 认知）</button>
+      <button class="tool-btn" data-action="open-slowvars">慢变量（健康 · 三观 · 目的）</button>
       <button class="tool-btn" data-action="open-codex">词卡图鉴（${gotCards}/${trackCards.length}）</button>
       <button class="tool-btn" data-action="open-skills">本领清单（${gotSkills}/${trackSkills.length}）</button>
       <button class="tool-btn" data-action="open-bottle">今日漂流瓶 · 一题</button>
@@ -495,6 +512,207 @@ function applyDictFilter() {
       : `${DICTIONARY.length} 条 · 点卡片展开释义`;
   }
   const empty = document.getElementById('dict-empty');
+  if (empty) empty.hidden = n !== 0;
+}
+
+/* ---------------------------------------------------------------- 自助工具箱
+   心力恢复与认知取向自助；只做科普和一般性练习，不诊断、不追踪、不落盘。 */
+function shStatePanel(id) {
+  const st = SH_STATES.find(s => s.id === id);
+  if (!st) return '';
+  return `<div class="sh-state-panel">
+    <div class="sh-state-head"><b>${esc(st.name)}</b><p>${esc(st.lead)}</p></div>
+    <div class="sh-moves">${st.moves.map((m, i) => `<div class="sh-move">
+      <span class="sh-move-num">${i + 1}</span>
+      <div><b>${esc(m.t)}</b><p>${esc(m.d)}</p></div></div>`).join('')}</div>
+    <p class="sh-avoid"><b>先别</b>${esc(st.avoid)}</p>
+    <button class="btn-read" data-action="sh-state-clear">换一个状态</button>
+  </div>`;
+}
+
+function renderSelfHelp() {
+  clearAsyncTimers(); stopSpeech();
+  session.view = 'selfhelp'; session.navDir = 'forward';
+  if (!SH_TOOLS.length) {
+    stage.innerHTML = `<div class="${viewClass()}">
+      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+      <h2>自助内容没有加载出来</h2>
+      <p class="lead">检查 index.html 是否在 dictionary.js 之后、script.js 之前引入 content/selfhelp.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
+    </div>`;
+    updateTopbar();
+    return;
+  }
+  const cats = [...new Set(SH_TOOLS.map(t => t.c))];
+  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
+  const cards = SH_TOOLS.map((t) => `<details class="dict-card sh-card" data-cat="${esc(t.c)}">
+    <summary>
+      <span class="dict-term">${esc(t.t)}</span>
+      <span class="dict-en">${esc(t.e)}</span>
+      <span class="dict-short">${esc(t.when)}</span>
+      <span class="dict-cat-badge">${esc(t.c)}</span>
+    </summary>
+    <div class="dict-detail">
+      <div class="sh-how"><b>怎么做</b><ol>${t.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
+      <p class="dict-mis"><b>提醒</b>${esc(t.note)}</p>
+    </div>
+  </details>`).join('');
+  stage.innerHTML = `<div class="${viewClass()}">
+    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+    <span class="eyebrow">自助工具箱 · 心力与认知</span>
+    <h2 style="margin:12px 0 10px">先恢复一点力气，再换一个看法</h2>
+    <p class="lead">${SH_STATES.length} 种“现在最像”的状态、${SH_TOOLS.length} 张工具卡、${SH_DISTORTIONS.length} 条认知扭曲速查。全部是选择式或阅读式，不填心情文字，也不记录你选了什么。</p>
+    <div class="retreat-safety">${esc(SH_SAFETY)}</div>
+    <section class="sh-section">
+      <h3 class="sh-section-title">现在最像哪一种？</h3>
+      <p class="muted sh-section-sub">不用选得很准，挑一个最接近的就好。选完只看这一组建议，不做测试，也不打分。</p>
+      <div class="sh-states" id="sh-states">
+        ${SH_STATES.map(s => `<button class="sh-state ${shState === s.id ? 'on' : ''}" data-action="sh-state" data-id="${esc(s.id)}">
+          <b>${esc(s.name)}</b><span>${esc(s.sub)}</span></button>`).join('')}
+      </div>
+      <div id="sh-state-panel">${shState ? shStatePanel(shState) : '<p class="sh-hint">选一个状态，这里会出现三件可以先做的小事。</p>'}</div>
+    </section>
+    <section class="sh-section">
+      <h3 class="sh-section-title">工具卡</h3>
+      <p class="muted sh-section-sub">按主题筛，点开看“怎么做”和“提醒”。</p>
+      <div class="sh-cats" id="sh-cats" role="group" aria-label="按主题筛选自助工具">
+        ${catBtns.map(x => `<button class="dict-cat ${shCat === x.c ? 'on' : ''}" data-action="sh-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
+      </div>
+      <p class="dict-count muted" id="sh-count" aria-live="polite">${SH_TOOLS.length} 张 · 点卡片展开</p>
+      <div class="dict-grid sh-grid" id="sh-grid">${cards}</div>
+      <p class="dict-empty" id="sh-empty" hidden>这一类暂时没有卡片。点「全部」看看。</p>
+    </section>
+    <section class="sh-section">
+      <h3 class="sh-section-title">认知扭曲速查</h3>
+      <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。</p>
+      <div class="sh-dist-grid">${SH_DISTORTIONS.map(d => `<div class="sh-dist">
+        <b>${esc(d.t)}</b><span>${esc(d.d)}</span><em>${esc(d.eg)}</em></div>`).join('')}</div>
+    </section>
+    <p class="home-note">自助适合日常调节，不替代专业帮助。如果困扰持续数周、明显影响生活，或出现伤害自己的念头，请尽快联系专业人士或当地急救。选择和搜索都不会被保存。</p>
+  </div>`;
+  updateTopbar();
+  applyShFilter();
+  stage.focus({ preventScroll: true });
+}
+
+function applyShFilter() {
+  let n = 0;
+  document.querySelectorAll('#sh-grid .sh-card').forEach((card) => {
+    const show = shCat === 'all' || card.dataset.cat === shCat;
+    card.hidden = !show;
+    if (show) n += 1;
+  });
+  const count = document.getElementById('sh-count');
+  if (count) {
+    count.textContent = shCat !== 'all'
+      ? `筛出 ${n} / ${SH_TOOLS.length} 张`
+      : `${SH_TOOLS.length} 张 · 点卡片展开`;
+  }
+  const empty = document.getElementById('sh-empty');
+  if (empty) empty.hidden = n !== 0;
+}
+
+/* ---------------------------------------------------------------- 慢变量
+   健康、三观、目的与目标等长期底盘；只做阅读与选择，不打卡、不打分、不落盘。 */
+function svPanel(id) {
+  const v = SV_VARS.find(x => x.id === id);
+  if (!v) return '';
+  return `<div class="sv-panel">
+    <div class="sv-panel-head"><b>${esc(v.name)}</b><span>${esc(v.sub)}</span><p>${esc(v.lead)}</p></div>
+    <div class="sv-rows">
+      <div class="sv-row"><b>为什么慢</b><p>${esc(v.why)}</p></div>
+      <div class="sv-row"><b>常见误用</b><p>${esc(v.misuse)}</p></div>
+      <div class="sv-row sv-row-move"><b>可以先做</b><p><strong>${esc(v.move.t)}</strong> ${esc(v.move.d)}</p></div>
+      <div class="sv-row"><b>不用什么衡量</b><p>${esc(v.check)}</p></div>
+    </div>
+    <button class="btn-read" data-action="sv-var-clear">换一个慢变量</button>
+  </div>`;
+}
+
+function renderSlowVars() {
+  clearAsyncTimers(); stopSpeech();
+  session.view = 'slowvars'; session.navDir = 'forward';
+  if (!SV_VARS.length || !SV_PRACTICES.length) {
+    stage.innerHTML = `<div class="${viewClass()}">
+      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+      <h2>慢变量内容没有加载出来</h2>
+      <p class="lead">检查 index.html 是否在 selfhelp.js 之后、script.js 之前引入 content/slowvars.js。打开浏览器控制台可以看到具体是哪个文件 404。</p>
+    </div>`;
+    updateTopbar();
+    return;
+  }
+  const cats = [...new Set(SV_PRACTICES.map(p => p.c))];
+  const catBtns = [{ c: 'all', name: '全部' }].concat(cats.map(c => ({ c, name: c })));
+  const cards = SV_PRACTICES.map((p) => `<details class="dict-card sv-card" data-cat="${esc(p.c)}">
+    <summary>
+      <span class="dict-term">${esc(p.t)}</span>
+      <span class="dict-en">${esc(p.e)}</span>
+      <span class="dict-short">${esc(p.when)}</span>
+      <span class="dict-cat-badge">${esc(p.c)}</span>
+    </summary>
+    <div class="dict-detail">
+      <div class="sh-how"><b>怎么做</b><ol>${p.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
+      <p class="dict-mis"><b>提醒</b>${esc(p.note)}</p>
+    </div>
+  </details>`).join('');
+  stage.innerHTML = `<div class="${viewClass()}">
+    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+    <span class="eyebrow">慢变量 · 在快时代里养底盘</span>
+    <h2 style="margin:12px 0 10px">有些东西，值得慢慢养</h2>
+    <p class="lead">${SV_VARS.length} 个慢变量、${SV_PRACTICES.length} 张练习卡、${SV_TRAPS.length} 个快变量陷阱、${SV_HORIZONS.length} 个时间尺度。没有打卡，也不问你做到了多少。</p>
+    <div class="retreat-safety">${esc(SV_SAFETY)}</div>
+    <section class="sv-section">
+      <h3 class="sv-section-title">你现在最想稳住哪一块？</h3>
+      <p class="muted sv-section-sub">不用选得很准；选一个最接近的，看看它为什么慢、可以先做什么。</p>
+      <div class="sv-vars" id="sv-vars">
+        ${SV_VARS.map(v => `<button class="sv-var ${svVar === v.id ? 'on' : ''}" data-action="sv-var" data-id="${esc(v.id)}">
+          <b>${esc(v.name)}</b><span>${esc(v.sub)}</span></button>`).join('')}
+      </div>
+      <div id="sv-panel">${svVar ? svPanel(svVar) : '<p class="sv-hint">选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。</p>'}</div>
+    </section>
+    <section class="sv-section">
+      <h3 class="sv-section-title">慢变量练习卡</h3>
+      <p class="muted sv-section-sub">按主题筛，点开看“怎么做”和“提醒”。不用全做，挑一张顺眼的就好。</p>
+      <div class="sv-cats" id="sv-cats" role="group" aria-label="按主题筛选慢变量练习">
+        ${catBtns.map(x => `<button class="dict-cat ${svCat === x.c ? 'on' : ''}" data-action="sv-cat" data-c="${esc(x.c)}">${esc(x.name)}</button>`).join('')}
+      </div>
+      <p class="dict-count muted" id="sv-count" aria-live="polite">${SV_PRACTICES.length} 张 · 点卡片展开</p>
+      <div class="dict-grid sv-grid" id="sv-grid">${cards}</div>
+      <p class="dict-empty" id="sv-empty" hidden>这一类暂时没有卡片。点「全部」看看。</p>
+    </section>
+    <section class="sv-section">
+      <h3 class="sv-section-title">三个时间尺度</h3>
+      <p class="muted sv-section-sub">同一个问题，放在不同长度里看，答案会不一样。</p>
+      <div class="sv-horizons">${SV_HORIZONS.map(h => `<div class="sv-horizon">
+        <b>${esc(h.t)}</b><p>${esc(h.d)}</p>
+        <ul>${h.asks.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`).join('')}</div>
+    </section>
+    <section class="sv-section">
+      <h3 class="sv-section-title">快变量陷阱速查</h3>
+      <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。</p>
+      <div class="sv-traps">${SV_TRAPS.map(t => `<div class="sv-trap">
+        <b>${esc(t.t)}</b><span>${esc(t.d)}</span><em>${esc(t.eg)}</em></div>`).join('')}</div>
+    </section>
+    <p class="home-note">慢变量不是另一套 KPI，也不是要求你立刻改变生活。选中的慢变量和分类只留在当前页面，不会被保存。身体或情绪上的持续不适，请找医生或专业支持。</p>
+  </div>`;
+  updateTopbar();
+  applySvFilter();
+  stage.focus({ preventScroll: true });
+}
+
+function applySvFilter() {
+  let n = 0;
+  document.querySelectorAll('#sv-grid .sv-card').forEach((card) => {
+    const show = svCat === 'all' || card.dataset.cat === svCat;
+    card.hidden = !show;
+    if (show) n += 1;
+  });
+  const count = document.getElementById('sv-count');
+  if (count) {
+    count.textContent = svCat !== 'all'
+      ? `筛出 ${n} / ${SV_PRACTICES.length} 张`
+      : `${SV_PRACTICES.length} 张 · 点卡片展开`;
+  }
+  const empty = document.getElementById('sv-empty');
   if (empty) empty.hidden = n !== 0;
 }
 
@@ -1055,6 +1273,42 @@ const ACTIONS = {
     document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
     applyDictFilter();
   },
+  'open-selfhelp': () => { session.navDir = 'forward'; renderSelfHelp(); },
+  'sh-state': (el) => {
+    shState = el.dataset.id || null;
+    document.querySelectorAll('#sh-states .sh-state').forEach(b => b.classList.toggle('on', b.dataset.id === shState));
+    const panel = document.getElementById('sh-state-panel');
+    if (panel) panel.innerHTML = shStatePanel(shState);
+  },
+  'sh-state-clear': () => {
+    shState = null;
+    document.querySelectorAll('#sh-states .sh-state').forEach(b => b.classList.remove('on'));
+    const panel = document.getElementById('sh-state-panel');
+    if (panel) panel.innerHTML = '<p class="sh-hint">选一个状态，这里会出现三件可以先做的小事。</p>';
+  },
+  'sh-cat': (el) => {
+    shCat = el.dataset.c || 'all';
+    document.querySelectorAll('#sh-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === shCat));
+    applyShFilter();
+  },
+  'open-slowvars': () => { session.navDir = 'forward'; renderSlowVars(); },
+  'sv-var': (el) => {
+    svVar = el.dataset.id || null;
+    document.querySelectorAll('#sv-vars .sv-var').forEach(b => b.classList.toggle('on', b.dataset.id === svVar));
+    const panel = document.getElementById('sv-panel');
+    if (panel) panel.innerHTML = svPanel(svVar);
+  },
+  'sv-var-clear': () => {
+    svVar = null;
+    document.querySelectorAll('#sv-vars .sv-var').forEach(b => b.classList.remove('on'));
+    const panel = document.getElementById('sv-panel');
+    if (panel) panel.innerHTML = '<p class="sv-hint">选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。</p>';
+  },
+  'sv-cat': (el) => {
+    svCat = el.dataset.c || 'all';
+    document.querySelectorAll('#sv-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === svCat));
+    applySvFilter();
+  },
   'open-skills': () => openSkills(),
   'open-bottle': () => openBottle(),
   'bottle-choose': () => {
@@ -1386,7 +1640,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (overlay.classList.contains('open')) { closeModal(); return; }
-    if (session.view === 'level' || session.view === 'retreat' || session.view === 'dict') { ACTIONS['go-map'](); return; }
+    if (session.view === 'level' || session.view === 'retreat' || session.view === 'dict' || session.view === 'selfhelp' || session.view === 'slowvars') { ACTIONS['go-map'](); return; }
   }
   if (overlay.classList.contains('open')) {
     if (e.key === 'Tab') trapTab(e);
@@ -1415,7 +1669,7 @@ if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>
     <p class="lead">content/ 下的数据文件没有读到。检查 index.html 里 content/*.js 的引入顺序：
-    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library → dictionary，最后才是 script.js。</p>
+    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library → dictionary → selfhelp → slowvars，最后才是 script.js。</p>
     <p class="muted">打开浏览器控制台可以看到具体是哪个文件 404。</p>
   </div>`;
 } else if (!state.band) renderAgeGate();
