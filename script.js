@@ -1,11 +1,11 @@
-/* 心情闯关岛 v0.10.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.11.0 · 纯前端、零依赖、不联网
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
    本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
 
-const SCHEMA_VERSION = 4;
-const STORAGE_KEY = 'mood-island-v4';
-const LEGACY_KEYS = ['mood-island-v3', 'mood-island-v2'];
+const SCHEMA_VERSION = 5;
+const STORAGE_KEY = 'mood-island-v5';
+const LEGACY_KEYS = ['mood-island-v4', 'mood-island-v3', 'mood-island-v2'];
 /* 导出文件的格式号，和发版号 / SCHEMA_VERSION 都不是一套：
    只在导出载荷的形状变化时 +1。游戏升级但载荷不变时，这个号不动。 */
 const EXPORT_VERSION = 1;
@@ -20,6 +20,11 @@ const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
 const ADULT = MI.adult || { track: 'adult', islands: [], levels: [] };
 const BANK = MI.bankKid || {};
 const BANK_ADULT = MI.bankAdult || {};
+/* 拼装试点：只有这两个关的题目由 bank-compose.js 组合出来，其余仍是手写变体池。 */
+const BANK_COMPOSE = MI.bankCompose || {};
+/* 成年「工作间」支线：关卡与变体都在 content/levels-adult-work.js。 */
+const WORK = Array.isArray(MI.adultWork) ? MI.adultWork : [];
+const BANK_WORK = MI.bankWork || {};
 const LIB = MI.library || {};
 const CODEX = LIB.CODEX || {};
 const QUOTES = LIB.QUOTES || [];
@@ -54,7 +59,8 @@ const HELP = MI.help || {};
 const HELP_ACTIONS = HELP.actions || [];
 const HELP_NUMBERS = HELP.numbers || {};
 const HELP_KID = HELP.kid || {};
-const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length && HELP_ACTIONS.length);
+const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length && HELP_ACTIONS.length
+  && Object.keys(BANK_COMPOSE).length && WORK.length);
 
 /* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。
    轨道身份以 bands.js 的 track 字段为准，不硬编码档位 id；
@@ -67,6 +73,25 @@ const ADULT_CARD_LEVELS = new Map(ADULT.levels.filter(l => l.card).map(l => [l.c
 /* 存档校验用的白名单：两轨合法 id / 本领。词卡按各自的 Map 校验。 */
 const ALL_LEVEL_IDS = new Set([...KID.levels, ...ADULT.levels].map(l => l.id));
 const ALL_SKILLS = new Set([...KID.levels, ...ADULT.levels].map(l => l.skill).filter(Boolean));
+/* 支线 id 单独一张白名单：sideCleared 只认这 4 个，主线的 cleared / awarded 不认。
+   支线进度因此不可能混进 17 站，也不会被主线解锁逻辑读到。 */
+const WORK_IDS = new Set(WORK.map(l => l.id));
+/* 拼装：把「场景 × 想法 × 问法」展开成组合键白名单，迁移与选道都按这张表校验。
+   组合键形如 s1:t2:a1；任何不在表里的键都不会进存档。 */
+const COMPOSE_LEVEL_IDS = Object.keys(BANK_COMPOSE);
+const SEEN_CAP = 8;
+const COMPOSE_KEYS = {};
+for (const id of COMPOSE_LEVEL_IDS) {
+  const cfg = BANK_COMPOSE[id] || {};
+  const keys = new Set();
+  for (const scene of cfg.scenes || []) {
+    for (const tid of scene.thoughts || []) {
+      const th = (cfg.thoughts || {})[tid];
+      for (const aid of (th && th.askIds) || []) keys.add(`${scene.id}:${tid}:${aid}`);
+    }
+  }
+  COMPOSE_KEYS[id] = keys;
+}
 /* 字号既可能是用户手选的 3 档，也可能是档位自带的 scale；只有这些值会被接受 */
 const SCALE_VALUES = new Set([1, 1.15, 1.3].concat(AGE_BANDS.map(b => b.scale).filter(Number.isFinite)));
 /* skills 目前不分轨：两轨没有同名本领，回归会断言这一点。
@@ -98,6 +123,9 @@ function isKidTone() {
 const DEFAULT_STATE = {
   version: SCHEMA_VERSION,
   band: null, cleared: [], awarded: [], cards: { kid: [], adult: [] }, skills: [], shells: 0, decor: [],
+  /* seen：只记两关拼装题已经出现过的组合键，按关分桶，最多 8 条；不是打卡进度，界面上不显示。
+     sideCleared：成年「工作间」支线的完成记录，与主线的 cleared 完全分开。 */
+  seen: {}, sideCleared: [],
   settings: { scale: 1, motion: false, speak: true, speakTouched: false, autoSpeak: false, contrast: false }
 };
 /* 旧版终章 id 是 3-5，现在独立成 finale，老存档需要改一次名。
@@ -194,12 +222,27 @@ function migrateCards(rawCards, s) {
   return out;
 }
 
+/* v5 的 seen 只接受拼装关的组合键，且必须真的存在于当前内容里。
+   旧档没有这个字段，按空桶补齐；导入的坏结构也不会让选道读到不存在的组合。 */
+function migrateSeen(rawSeen) {
+  const out = {};
+  const src = rawSeen && typeof rawSeen === 'object' && !Array.isArray(rawSeen) ? rawSeen : {};
+  for (const id of COMPOSE_LEVEL_IDS) {
+    const list = Array.isArray(src[id]) ? src[id] : [];
+    const known = COMPOSE_KEYS[id] || new Set();
+    const clean = [...new Set(list.filter(k => typeof k === 'string' && known.has(k)))];
+    out[id] = clean.slice(-SEEN_CAP);
+  }
+  return out;
+}
+
 function migrate(s) {
   if (!s || typeof s !== 'object') return clone(DEFAULT_STATE);
   const from = Number.isFinite(s.version) ? s.version : 2;
-  /* v2 → v3：补 version 字段与 3-5 → finale；v3 → v4：词卡按轨拆分（见 migrateCards）。
-     之后只做字段白名单校验，不再改结构：旧档和现有 v4 档都走同一条路径。 */
-  if (from < 4) s.version = 4;
+  /* v2 → v3：补 version 字段与 3-5 → finale；v3 → v4：词卡按轨拆分（见 migrateCards）；
+     v4 → v5：补 seen / sideCleared。之后只做字段白名单校验，不再改结构：
+     旧档和现有 v5 档都走同一条路径，主线进度、词卡、本领、贝壳一样不丢。 */
+  if (from < 5) s.version = 5;
   const validIds = arr => [...new Set(arr.filter(id => typeof id === 'string' && ALL_LEVEL_IDS.has(id)))];
   const rawCleared = Array.isArray(s.cleared) ? remapIds(s.cleared) : [];
   const rawAwarded = Array.isArray(s.awarded) ? remapIds(s.awarded)
@@ -218,6 +261,11 @@ function migrate(s) {
     /* 装饰下标必须落在 DECOR 内，最多 3 个；旧档里的脏数据不会让终章取到空对象 */
     decor: Array.isArray(s.decor)
       ? [...new Set(s.decor.filter(i => Number.isInteger(i) && i >= 0 && i < DECOR.length))].slice(0, 3)
+      : [],
+    seen: migrateSeen(s.seen),
+    /* 支线白名单只认 WORK_IDS；mix 进主线的 id（例如 W-1）不会被接受 */
+    sideCleared: Array.isArray(s.sideCleared)
+      ? [...new Set(s.sideCleared.filter(id => typeof id === 'string' && WORK_IDS.has(id)))]
       : [],
     settings: {
       scale, motion: !!settings.motion,
@@ -267,8 +315,102 @@ const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 /* 打乱选项时保留原始下标，答案比对仍按原始下标走 */
 const withIndex = arr => arr.map((v, i) => ({ v, i }));
 
-function pickVariant(id) {
-  const all = (BANK[id] || []).concat(BANK_ADULT[id] || []);
+/* ---------------------------------------------------------------- 拼装选道
+   试点只覆盖 4-3 与 A4-3。选道是纯函数：不碰 Math.random，同一份历史 + 同一种子
+   必得同一个组合；组合键直接写到 DOM 的 data-variant 上，测试可以用 forceKey 复现。
+   seen 只用来判断「这组见过没有」，不是可见进度，界面不显示任何组合计数。 */
+function hash32(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function seededRandom(seed) {
+  let x = seed >>> 0 || 0x9e3779b9;
+  return () => {
+    x ^= x << 13; x >>>= 0;
+    x ^= x >> 17;
+    x ^= x << 5; x >>>= 0;
+    return x / 4294967296;
+  };
+}
+/* 用组合键派生固定种子打乱选项：同一 key 每次渲染的选项顺序与答案位置都相同。 */
+function seededShuffle(arr, seed) {
+  const a = arr.slice();
+  const rnd = seededRandom(seed);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function seenKeys(id) {
+  return (state.seen && Array.isArray(state.seen[id])) ? state.seen[id] : [];
+}
+/* 出现即记录；上限 8 条，超出丢最旧。已存在时不重复写，也不额外触发存档。 */
+function recordSeen(id, key) {
+  if (!COMPOSE_KEYS[id] || !COMPOSE_KEYS[id].has(key)) return;
+  if (!state.seen || typeof state.seen !== 'object') state.seen = {};
+  const list = seenKeys(id);
+  if (list.includes(key)) return;
+  state.seen[id] = list.concat(key).slice(-SEEN_CAP);
+  save();
+}
+function materializeComposed(id, key) {
+  const cfg = BANK_COMPOSE[id];
+  const known = COMPOSE_KEYS[id];
+  if (!cfg || !known || !known.has(key)) return null;
+  const [sid, tid, aid] = key.split(':');
+  const scene = (cfg.scenes || []).find(x => x.id === sid);
+  const th = (cfg.thoughts || {})[tid];
+  const ask = (cfg.asks || []).find(x => x.id === aid);
+  if (!scene || !th || !ask || !Array.isArray(th.lenses) || !th.lenses.some(l => l.ok)) return null;
+  const base = th.lenses.map(l => ({ t: l.t, d: l.d || '', ok: !!l.ok }));
+  const order = seededShuffle(base.map((_, i) => i), hash32(id + '|' + key));
+  const options = order.map(i => ({ t: base[i].t, d: base[i].d }));
+  const answer = order.findIndex(i => base[i].ok);
+  return {
+    b: (cfg.b || []).slice(), thought: th.text, question: ask.q,
+    options, answer, why: th.why, key, compose: id
+  };
+}
+/* 选道顺序：未见过的「想法」优先，其次未见过的「问法」；每关 12 组，
+   记录只保留最近 8 条，所以连续 8 轮内一定不重复，12 组轮完一遍后才会回收最早那组。
+   若某关组合数少于上限、真的全部见过，则从第一组重新开始。
+   seed 缺省由「关 id + 已见组合」派生，因此历史不变 → 结果不变。 */
+function pickComposed(id, seen, seed, opts) {
+  const cfg = BANK_COMPOSE[id];
+  const combos = [...(COMPOSE_KEYS[id] || [])];
+  const o = opts || {};
+  if (o.forceKey && COMPOSE_KEYS[id] && COMPOSE_KEYS[id].has(o.forceKey)) {
+    return materializeComposed(id, o.forceKey) || {};
+  }
+  if (!combos.length) return {};
+  const seenSet = new Set(Array.isArray(seen) ? seen : []);
+  const baseSeed = Number.isFinite(seed) ? seed : hash32(id + '|' + [...seenSet].sort().join(','));
+  let pool = combos.filter(k => !seenSet.has(k));
+  const reset = pool.length === 0;
+  if (reset) pool = combos;   /* 12 组全见过才重置，重置后仍按确定性顺序开始 */
+  const seenThoughts = new Set([...seenSet].map(k => k.split(':').slice(0, 2).join(':')));
+  const fresh = pool.filter(k => !seenThoughts.has(k.split(':').slice(0, 2).join(':')));
+  const source = fresh.length ? fresh : pool;
+  const ordered = source.slice().sort((a, b) =>
+    hash32(baseSeed + '|' + a) - hash32(baseSeed + '|' + b) || (a < b ? -1 : 1));
+  const key = ordered[0];
+  const out = materializeComposed(id, key) || {};
+  if (out && typeof out === 'object') out.resetSeen = reset;
+  return out;
+}
+function pickVariant(id, opts) {
+  if (BANK_COMPOSE[id]) {
+    const o = opts || {};
+    const r = pickComposed(id, seenKeys(id), o.seed, o);
+    if (!o.forceKey) recordSeen(id, r.key);
+    return r;
+  }
+  const all = (BANK[id] || []).concat(BANK_ADULT[id] || []).concat(BANK_WORK[id] || []);
   const pool = all.filter(v => !v.b || v.b.includes(state.band));
   const arr = pool.length ? pool : all;
   if (!arr.length) return {};
@@ -311,7 +453,9 @@ const VIEW_CONFIG = {
   retreat: { progress: false, esc: 'map', title: null, band: true },
   dict: { progress: false, esc: 'map', title: null, band: true },
   selfhelp: { progress: false, esc: 'map', title: null, band: true },
-  slowvars: { progress: false, esc: 'map', title: null, band: true }
+  slowvars: { progress: false, esc: 'map', title: null, band: true },
+  /* 成年专题「工作间」：时间线视图，支线进度不算进 17 站 */
+  work: { progress: false, esc: 'map', title: null, band: true }
 };
 function viewCfg(v) { return VIEW_CONFIG[v] || {}; }
 /* 贝壳是否出现 / 发放由 bands.js 的 shells 字段决定，不在代码里按轨道 id 硬判 */
@@ -341,17 +485,22 @@ function updateTopbar() {
     helpBtn.setAttribute('aria-label', kid ? '打开 1 分钟安抚：现在有点难受' : '打开 1 分钟安抚与求助：现在很难受');
   }
   document.getElementById('progress-wrap').hidden = !vc.progress;
+  /* 支线关卡里不画主线站点：18 个圆点会把「工作间只走一幕」误读成主线进度。
+     只保留一句支线说明，主线的 cleared / TOTAL 一个都不动。 */
+  const sideNow = session.view === 'level' && !!play.side;
   const track = document.getElementById('step-track');
-  if (track) track.innerHTML = LEVELS.map((l, i) => {
+  if (track) track.innerHTML = sideNow ? '' : LEVELS.map((l, i) => {
     const done = state.cleared.includes(l.id);
     const cur = session.view === 'level' && state.levelIndex === i;
     const unlocked = isUnlocked(i);
     return `<button class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" data-action="open-level" data-i="${i}" ${unlocked ? '' : 'disabled'} ${cur ? 'aria-current="step"' : ''} title="${esc(l.id + ' · ' + l.name)}" aria-label="第 ${i + 1} 站 ${esc(l.name)}${done ? '，已走过' : ''}"></button>`;
   }).join('');
   const pt = document.getElementById('progress-text');
-  if (pt) pt.textContent = (vc.title === 'current' && LEVELS[state.levelIndex])
-    ? `第 ${state.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[state.levelIndex].name}`
-    : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
+  if (pt) pt.textContent = sideNow
+    ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
+    : (vc.title === 'current' && LEVELS[state.levelIndex])
+      ? `第 ${state.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[state.levelIndex].name}`
+      : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
   syncHash();
 }
 function viewClass() {
@@ -365,7 +514,7 @@ function viewClass() {
    - 写地址用 history.replaceState：不往历史栈里塞每一步，Esc / 浏览器返回仍是原来的语义。
      file:// 下个别浏览器会拒绝 replaceState，此时退回 location.hash（多一条历史，功能不丢）。
    - hash 里的 id 只查当前轨的关卡表：另一条轨的站视为「不可达」，回落地图。 */
-const ROUTE_VIEWS = new Set(['gate', 'home', 'map', 'help', 'retreat', 'dict', 'selfhelp', 'slowvars']);
+const ROUTE_VIEWS = new Set(['gate', 'home', 'map', 'help', 'retreat', 'dict', 'selfhelp', 'slowvars', 'work']);
 /* 首次路由前 session.view 只是占位值，不能拿它做「已在目标屏」的判断 */
 let routeReady = false;
 
@@ -383,7 +532,7 @@ function parseHash(hash) {
 
 function hashFor(view) {
   if (view === 'level') {
-    const lv = LEVELS[state.levelIndex];
+    const lv = currentLevel();
     return lv ? `#/level/${encodeURIComponent(lv.id)}` : '#/map';
   }
   return `#/${view}`;
@@ -402,7 +551,7 @@ function syncHash() {
    （急救页会因此清掉刚选的词，首页会清掉刚取的提示）。 */
 function atRoute(r) {
   if (r.view === 'level') {
-    const lv = LEVELS[state.levelIndex];
+    const lv = currentLevel();
     return session.view === 'level' && !!lv && lv.id === r.id;
   }
   return r.view !== 'bad' && !!r.view && session.view === r.view;
@@ -420,7 +569,25 @@ function routeTo(r) {
   }
   if (r.view === 'level') {
     const idx = LEVELS.findIndex(l => l.id === r.id);
+    /* 支线 id 单独查：儿童 / 亲子轨直接视为不可达，成年轨要满足幕次解锁 */
     if (idx === -1) {
+      const wi = WORK.findIndex(l => l.id === r.id);
+      if (wi !== -1) {
+        if (!isAdultTrack()) {
+          session.tip = '工作间只在成年档开放，先回地图。';
+          renderMap();
+          return;
+        }
+        if (!sideUnlocked(wi)) {
+          session.tip = '这一幕还没解锁，先回到工作间。';
+          renderWork();
+          return;
+        }
+        session.navDir = '';
+        closeModal();
+        renderLevel(null, WORK[wi], wi);
+        return;
+      }
       session.tip = '链接里的这一站不在当前年龄段，先回到地图挑一站。';
       renderMap();
       return;
@@ -431,8 +598,18 @@ function routeTo(r) {
       return;
     }
     state.levelIndex = idx;
+    play = {};
     session.navDir = '';
     renderLevel();
+    return;
+  }
+  if (r.view === 'work') {
+    if (!isAdultTrack()) {
+      session.tip = '工作间只在成年档开放，先回地图。';
+      renderMap();
+      return;
+    }
+    renderWork();
     return;
   }
   if (r.view === 'retreat' && !band().mindful) {
@@ -463,7 +640,7 @@ function showFeedback(type, html) {
 }
 function nudge(msg, el) {
   play.tries = (play.tries || 0) + 1;
-  const lv = LEVELS[state.levelIndex] || LEVELS[0];
+  const lv = currentLevel();
   const extra = (play.tries >= 2 && lv.hint) ? `<div class="hint-line">小提示：${esc(lv.hint)}　·　还点得动，慢慢来。</div>` : '';
   showFeedback('gentle', `${esc(msg)}${extra}`);
   const target = el || lastClicked;
@@ -486,6 +663,19 @@ function isUnlocked(i) {
   const prevIsland = LEVELS.filter(l => l.island === lv.island - 1 && l.type !== 'finale');
   if (!prevIsland.length) return true;
   return state.cleared.includes(prevIsland[prevIsland.length - 1].id);
+}
+/* 当前正在玩的那一关：主线读 state.levelIndex，支线读 play.sideIndex。
+   支线不改 state.levelIndex，所以退出支线后主线停在哪一站原样保留。 */
+function currentLevel() {
+  if (play && play.side) return WORK[play.sideIndex] || WORK[0] || {};
+  return LEVELS[state.levelIndex] || LEVELS[0] || {};
+}
+/* 工作间四幕线性解锁：走完 A1-4 开放第一幕，之后每一幕要求上一幕已完成。
+   只读 sideCleared，不读主线 cleared（A1-4 是入口条件，不是支线进度）。 */
+function sideUnlocked(i) {
+  if (!isAdultTrack() || i < 0 || i >= WORK.length) return false;
+  if (i === 0) return state.cleared.includes('A1-4');
+  return state.sideCleared.includes(WORK[i - 1].id);
 }
 function clearAsyncTimers() {
   if (breathTimer) {
@@ -612,7 +802,8 @@ function renderHelp() {
   const say = kid ? reach.sayKid : reach.say;
   const backLabels = {
     map: '回到地图', gate: '回到选年龄段', level: '回到刚才那一站',
-    retreat: '回到静修间', dict: '回到词典', selfhelp: '回到工具箱', slowvars: '回到慢变量'
+    retreat: '回到静修间', dict: '回到词典', selfhelp: '回到工具箱', slowvars: '回到慢变量',
+    work: '回到工作间'
   };
   const backLabel = backLabels[session.helpFrom] || '回到首页';
   stage.innerHTML = `<div class="view help-view">
@@ -807,6 +998,16 @@ function renderMap() {
         </button>
       </div>
     </section>
+    ${isAdultTrack() && WORK.length ? `<section class="hub-block">
+      <div class="hub-head"><h3>专题 · 工作间</h3><span class="muted">支线 · 不计入 ${TOTAL} 站</span></div>
+      <div class="hub-grid">
+        <button class="hub-card hub-work" data-action="go-work">
+          <span class="hub-name">工作间</span>
+          <span class="hub-desc">会前、汇报被否、冲突、下班反刍：四个工作日的时刻。</span>
+          <span class="hub-meta">${sideUnlocked(0) ? `${WORK.length} 个时刻 · 不加奖励` : '走完 A1-4 后开放'}</span>
+        </button>
+      </div>
+    </section>` : ''}
     <section class="hub-block">
       <div class="hub-head"><h3>知识与工具</h3><span class="muted">想查就查，不占进度</span></div>
       <div class="hub-grid">
@@ -859,6 +1060,41 @@ function renderMap() {
     const n = document.querySelector('.node.just-done');
     if (n) n.classList.remove('just-done');
   }, 1800);
+}
+
+/* ---------------------------------------------------------------- 工作间（成年档支线）
+   时间线不是一个平铺题库：四幕按一个工作日的时间往下排，每幕只说一个时刻。
+   完成只写 state.sideCleared；这里不显示「已完成几幕」，避免变成打卡。 */
+function renderWork() {
+  clearAsyncTimers(); stopSpeech();
+  session.view = 'work'; session.navDir = '';
+  const done = new Set(state.sideCleared);
+  const open0 = sideUnlocked(0);
+  const stops = WORK.map((l, i) => {
+    const unlocked = sideUnlocked(i);
+    const finished = done.has(l.id);
+    const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? '走完 A1-4 开放' : '先走上一幕');
+    return `<button class="work-stop ${finished ? 'done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-work-level" data-i="${i}" ${unlocked ? '' : 'disabled'}>
+      <span class="work-time">${esc(l.time)}</span>
+      <span class="work-body">
+        <span class="work-name">${esc(l.name)}</span>
+        <span class="work-kind">${esc(l.kind)}</span>
+        <span class="work-goal">${esc(l.goal)}</span>
+      </span>
+      <span class="work-state">${esc(stateText)}</span>
+    </button>`;
+  }).join('');
+  stage.innerHTML = `<div class="${viewClass()} work-view">
+    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+    ${takeTip()}
+    <span class="eyebrow">成年档 · 专题支线</span>
+    <h2 style="margin-top:10px">工作间</h2>
+    <p class="lead">四个时刻，沿着一个工作日往下走。它是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领；主线停在哪一站，出来还是那一站。</p>
+    ${!open0 ? '<div class="notice">走完地图上的 A1-4 后开放第一幕。</div>' : ''}
+    <div class="work-line">${stops}</div>
+    <p class="home-note">不用按顺序打卡，也不记录时长。想停就停，进度只留在本机。</p>
+  </div>`;
+  updateTopbar();
 }
 
 /* ---------------------------------------------------------------- 静修间（成年档支线） */
@@ -1385,9 +1621,12 @@ const RENDERERS = {
     </div>`;
   },
   reframe(v) {
-    const opts = shuffled(withIndex(v.options));
+    /* 拼装题的选项顺序已由组合键确定，不能再随机打乱，否则同一历史会看到不同顺序；
+       手写变体仍按原来的随机打乱，行为不变。 */
+    const opts = v.compose ? withIndex(v.options) : shuffled(withIndex(v.options));
+    const prompt = esc(v.question || '下面几个镜头里，哪一个更贴近事实、也更留得住原本的感受？');
     return `${scenarioBox('脑子里自动冒出来的那句话', v.thought)}
-      <p class="prompt">下面几个镜头里，哪一个更贴近事实、也更留得住原本的感受？</p>
+      <p class="prompt">${prompt}</p>
       <div class="opt-grid">${opts.map(({ v: o, i }, k) => optBtn(k, o.t, o.d, 'reframe-choose', i)).join('')}</div>`;
   },
   chain(v) {
@@ -1527,20 +1766,26 @@ function makePlay(lv, v) {
   }
 }
 
-function renderLevel(resumePlay) {
+function renderLevel(resumePlay, lvOverride, sideIndex) {
   clearAsyncTimers(); stopSpeech();
   session.view = 'level';
-  const lv = LEVELS[state.levelIndex];
+  const lv = lvOverride || currentLevel();
   /* 从急救页返回时沿用同一份进行态：不重新抽题、不清已选；
      呼吸计时器已被 clearAsyncTimers 停掉，把 running 归位即可。 */
   play = resumePlay || makePlay(lv, lv.type === 'finale' ? {} : pickVariant(lv.id));
+  if (sideIndex !== undefined) {
+    play.side = true;
+    play.sideIndex = sideIndex;
+    play.sideId = lv.id;
+  }
   const v = play.v;
   if (play.type === 'breath') play.running = false;
   const b = band();
+  const side = !!play.side;
   const speakBtns = (state.settings.speak && lv.type !== 'finale')
     ? `<button class="btn-read" data-action="speak-question" aria-label="朗读题目">🔊 读题目</button><button class="btn-read" data-action="speak-options" aria-label="朗读选项">🔊 读选项</button>` : '';
-  stage.innerHTML = `<div class="${viewClass()}">
-    <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
+  stage.innerHTML = `<div class="${viewClass()}${side ? ' side-view' : ''}" data-variant="${v && v.key ? esc(v.key) : ''}"${side ? ' data-side="1"' : ''}>
+    <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : side ? `工作间 · ${esc(lv.time || '')} · 支线` : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
       ${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}
       ${speakBtns}
     </div>
@@ -1635,7 +1880,36 @@ function completeLevelHtml(html) {
     const word = document.getElementById('breath-word');
     if (word) word.textContent = '做完了';
   }
-  const lv = LEVELS[state.levelIndex];
+  const lv = currentLevel();
+  /* 支线完成：只写 sideCleared，不碰 cleared / awarded / cards / skills / shells，
+     也不触发「一轮歇一下」的计数。主线进度与支线进度在这里彻底分开。 */
+  if (play.side) {
+    if (!state.sideCleared.includes(lv.id)) state.sideCleared.push(lv.id);
+    save();
+    updateTopbar();
+    const nextI = play.sideIndex + 1;
+    const canNext = nextI < WORK.length && sideUnlocked(nextI);
+    const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一幕 · ${esc(WORK[nextI].name)}</button>` : ''}
+      <button class="btn btn-secondary" data-action="go-work">回到工作间</button>
+      <button class="btn btn-ghost" data-action="reroll">这一幕再玩一次</button>`;
+    const slot = document.getElementById('feedback-slot');
+    if (slot) {
+      slot.innerHTML = `<div class="feedback good result-card">
+        <div class="result-kicker"><span class="result-check" aria-hidden="true">✓</span>这一幕走过了 · 支线</div>
+        <p class="result-main">${html}</p>
+        <div class="result-rows">
+          <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+          ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
+          <div class="result-row"><b>说明</b><span>工作间是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领。</span></div>
+        </div>
+        <div class="result-actions">${buttons}</div>
+      </div>`;
+      try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
+    }
+    const actions = document.getElementById('level-actions');
+    if (actions) actions.innerHTML = '';
+    return;
+  }
   if (!state.cleared.includes(lv.id)) state.cleared.push(lv.id);
   if (!state.awarded.includes(lv.id)) {
     state.awarded.push(lv.id);
@@ -1982,9 +2256,27 @@ const ACTIONS = {
   'open-level': (el) => {
     if (session.view === 'map') session.mapScroll = window.scrollY || 0;
     state.levelIndex = Number(el.dataset.i);
+    play = {};
     session.navDir = 'forward'; closeModal(); renderLevel();
   },
-  'next-level': () => { state.levelIndex += 1; session.navDir = 'forward'; renderLevel(); },
+  'open-work-level': (el) => {
+    const i = Number(el.dataset.i);
+    if (!sideUnlocked(i)) return;
+    session.navDir = 'forward'; closeModal();
+    renderLevel(null, WORK[i], i);
+  },
+  'go-work': () => { stopSpeech(); closeModal(); session.navDir = 'back'; renderWork(); },
+  'next-level': () => {
+    if (play.side) {
+      const i = play.sideIndex + 1;
+      if (i < WORK.length && sideUnlocked(i)) {
+        session.navDir = 'forward';
+        renderLevel(null, WORK[i], i);
+      }
+      return;
+    }
+    state.levelIndex += 1; session.navDir = 'forward'; renderLevel();
+  },
   'reroll': () => { session.navDir = 'forward'; renderLevel(); showFeedback('gentle', '换了一道题，进度还留着。慢慢来。'); },
   'goto-band': () => { stopSpeech(); session.navDir = ''; renderAgeGate(); },
   /* 急救入口：记下进入前那一屏，Esc 与「回到…」都回到那里。
@@ -2061,11 +2353,11 @@ const ACTIONS = {
     if (el.dataset.next === 'map') renderMap(); else renderHome();
   },
   'restart-all': () => {
-    /* 只重置当前轨，另一条轨的进度不动 */
+    /* 只重置当前轨的主线；另一条轨的进度、支线 sideCleared、拼装题的 seen 都不动。 */
     const mine = new Set(LEVELS.map(l => l.id));
     state.cleared = state.cleared.filter(id => !mine.has(id));
     session.clearedThisRun = 0; lastVariant = {}; save();
-    session.tip = '新的一轮，题目换了一批；词卡和本领都还留着。';
+    session.tip = '新的一轮，当前轨的主线重新开始；词卡、本领、贝壳、工作间和已见过的题型都还留着。';
     renderMap();
   },
   'open-settings': () => openSettings(),
@@ -2561,6 +2853,15 @@ document.addEventListener('keydown', (e) => {
   }
   if (session.view === 'level' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     const d = e.key === 'ArrowLeft' ? -1 : 1;
+    if (play.side) {
+      const i = play.sideIndex + d;
+      if (i >= 0 && i < WORK.length && sideUnlocked(i)) {
+        session.navDir = d < 0 ? 'back' : 'forward';
+        renderLevel(null, WORK[i], i);
+        e.preventDefault();
+      }
+      return;
+    }
     const i = state.levelIndex + d;
     if (i >= 0 && i < TOTAL && isUnlocked(i)) {
       session.navDir = d < 0 ? 'back' : 'forward';

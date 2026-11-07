@@ -1318,3 +1318,36 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .breath-ring.running { transform: scale(1); }
 }
+
+/* ---------- 成年专题「工作间」：一条工作日时间线 ---------- */
+.work-view { max-width: 760px; }
+.work-line { display: grid; gap: 10px; margin: 22px 0 18px; position: relative; }
+.work-stop {
+    display: flex; align-items: stretch; gap: 14px; width: 100%;
+    padding: 14px 18px 14px 0; text-align: left;
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 4px solid var(--line-strong); border-radius: 14px;
+    color: var(--ink);
+}
+.work-stop:hover:not(:disabled) { border-color: var(--accent); border-left-color: var(--accent); background: var(--surface-2); }
+.work-stop.done { border-left-color: var(--accent); }
+.work-stop.locked { opacity: .58; }
+.work-stop:disabled { cursor: default; }
+.work-time {
+    flex: none; width: 72px; padding-left: 18px;
+    font-size: calc(.92rem * var(--scale)); font-weight: 700;
+    color: var(--accent); letter-spacing: .02em;
+}
+.work-body { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; }
+.work-name { font-size: calc(1.04rem * var(--scale)); font-weight: 600; }
+.work-kind { font-size: calc(.78rem * var(--scale)); color: var(--warm); letter-spacing: .06em; }
+.work-goal { font-size: calc(.86rem * var(--scale)); color: var(--ink-3); line-height: 1.6; }
+.work-state { flex: none; align-self: center; font-size: calc(.8rem * var(--scale)); color: var(--ink-3); }
+.work-stop.done .work-state { color: var(--accent); }
+@media (max-width: 640px) {
+    .work-stop { flex-wrap: wrap; gap: 6px 12px; padding: 12px 14px 12px 0; }
+    .work-time { width: 62px; padding-left: 14px; }
+    .work-body { flex-basis: calc(100% - 74px); }
+    .work-state { margin-left: 76px; }
+}
+

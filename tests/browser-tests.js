@@ -263,16 +263,48 @@ window.addEventListener('load', function () {
   });
 
   /* ---------- 存档与迁移 ---------- */
-  test('v2 旧档迁移到 v4，3-5 改名 finale，旧键保留', () => {
-    for (const k of ['mood-island-v4', 'mood-island-v3', 'mood-island-v2']) localStorage.removeItem(k);
+  test('v2 旧档迁移到 v5，3-5 改名 finale，旧键保留', () => {
+    for (const k of ['mood-island-v5', 'mood-island-v4', 'mood-island-v3', 'mood-island-v2']) localStorage.removeItem(k);
     localStorage.setItem('mood-island-v2', JSON.stringify({
       band: 'a6', cleared: ['1-1', '3-5'], shells: 4, cards: ['觉察']
     }));
     state = load();
-    A(state.version === 4);
+    A(state.version === 5);
     A(state.cleared.includes('finale') && !state.cleared.includes('3-5'));
     A(localStorage.getItem('mood-island-v2') !== null);
     A(state.cards.kid.includes('觉察') && state.cards.adult.length === 0, '旧档词卡应只进儿童轨');
+  });
+  test('v2 / v3 / v4 旧档升到 v5：主线、词卡、本领、贝壳都不丢', () => {
+    const kidLv = KID.levels[0];
+    const adultLv = ADULT.levels[0];
+    const cases = [
+      { version: 2, band: 'a6', cleared: [kidLv.id, '3-5'], cards: [kidLv.card] },
+      { version: 3, band: 'a6', cleared: [kidLv.id], cards: [kidLv.card] },
+      { version: 4, band: 'a6', cleared: [kidLv.id], cards: { kid: [kidLv.card], adult: [] } }
+    ];
+    cases.forEach((raw) => {
+      const s = migrate({
+        ...raw, awarded: [kidLv.id], skills: [kidLv.skill], shells: 5,
+        settings: { scale: 1 }
+      });
+      A(s.version === 5, `v${raw.version} 应升到 v5`);
+      A(s.cleared.includes(kidLv.id) && (raw.version !== 2 || s.cleared.includes('finale')), '主线进度不应丢');
+      A(s.cards.kid.includes(kidLv.card), `v${raw.version} 词卡不应丢`);
+      A(s.skills.includes(kidLv.skill), `v${raw.version} 本领不应丢`);
+      A(s.shells === 5, `v${raw.version} 贝壳不应丢`);
+      A(Array.isArray(s.seen['4-3']) && Array.isArray(s.seen['A4-3']), 'v5 应补齐 seen 空桶');
+      A(Array.isArray(s.sideCleared) && s.sideCleared.length === 0, 'v5 应补齐 sideCleared');
+    });
+    const adult = migrate({
+      version: 4, band: 'adult', cleared: [adultLv.id], awarded: [adultLv.id],
+      cards: { kid: [], adult: [adultLv.card] }, shells: 2,
+      sideCleared: ['W-1', 'W-9'],
+      seen: { '4-3': ['s1:t1:a1', 'bad', 's9:t9:a9'], 'A4-3': ['s1:t1:a1'] }
+    });
+    A(adult.sideCleared.join(',') === 'W-1', '支线只保留合法 id');
+    A(adult.seen['4-3'].join(',') === 's1:t1:a1', 'seen 只保留真实组合键');
+    A(adult.seen['A4-3'].length === 1);
+    A(adult.cards.adult.includes(adultLv.card) && adult.shells === 2);
   });
   test('旧档同名卡按通关证据归轨，不虚增成年档', () => {
     const kid = migrate({ version: 3, band: 'a6', cleared: ['1-1'], cards: ['觉察'] });
@@ -292,29 +324,31 @@ window.addEventListener('load', function () {
   });
   test('坏存档回落默认值，不抛错', () => {
     const s = migrate(null);
-    A(s.version === 4 && Array.isArray(s.cleared) && Array.isArray(s.cards.kid));
+    A(s.version === 5 && Array.isArray(s.cleared) && Array.isArray(s.cards.kid) && Array.isArray(s.sideCleared));
   });
-  test('v4 新键损坏时回退到 v3 旧档', () => {
-    for (const k of ['mood-island-v4', 'mood-island-v3', 'mood-island-v2']) localStorage.removeItem(k);
-    localStorage.setItem('mood-island-v4', '{broken');
-    localStorage.setItem('mood-island-v3', JSON.stringify({ version: 3, band: 'a6', cleared: ['1-1'], cards: ['觉察'] }));
+  test('v5 新键损坏时回退到 v4 旧档', () => {
+    for (const k of ['mood-island-v5', 'mood-island-v4', 'mood-island-v3', 'mood-island-v2']) localStorage.removeItem(k);
+    localStorage.setItem('mood-island-v5', '{broken');
+    localStorage.setItem('mood-island-v4', JSON.stringify({ version: 4, band: 'a6', cleared: ['1-1'], cards: { kid: ['觉察'], adult: [] } }));
     state = load();
-    A(state.version === 4 && state.cleared.includes('1-1') && state.cards.kid.includes('觉察'));
+    A(state.version === 5 && state.cleared.includes('1-1') && state.cards.kid.includes('觉察'));
   });
-  test('save 写入 v4 新键', () => {
+  test('save 写入 v5 新键', () => {
     save();
-    const raw = localStorage.getItem('mood-island-v4');
-    A(!!raw && JSON.parse(raw).version === 4 && Array.isArray(JSON.parse(raw).cards.kid));
+    const raw = localStorage.getItem('mood-island-v5');
+    A(!!raw && JSON.parse(raw).version === 5 && Array.isArray(JSON.parse(raw).cards.kid));
   });
-  test('v4 档字段非法时逐项回落到安全值', () => {
+  test('v5 档字段非法时逐项回落到安全值', () => {
     const s = migrate({
-      version: 4, band: 'adult',
+      version: 5, band: 'adult',
       cleared: ['1-1', '1-1', 'ghost', 7],
       awarded: ['A1-1', 'nope'],
       cards: { kid: ['觉察', '不存在的卡', 7], adult: ['身体信号'] },
       skills: ['注意到自己有感觉', '不存在的本领', 7],
       shells: -3,
       decor: ['2', 99, 1, 1, 4],
+      seen: { '4-3': ['s1:t1:a1', 'bad', 7], 'A4-3': 'oops' },
+      sideCleared: ['W-1', 'W-1', 'W-9', 7],
       settings: { scale: 99, motion: 'yes', speak: false, contrast: 1 }
     });
     A(s.cleared.length === 1 && s.cleared[0] === '1-1');
@@ -324,9 +358,12 @@ window.addEventListener('load', function () {
     A(s.skills.length === 1 && s.skills[0] === '注意到自己有感觉');
     A(s.shells === 0);
     A(s.decor.length === 2 && s.decor.join(',') === '1,4', '装饰下标应去重并限定在 DECOR 范围内');
+    A(s.seen['4-3'].join(',') === 's1:t1:a1' && s.seen['A4-3'].length === 0, 'seen 应逐条清洗');
+    A(s.sideCleared.join(',') === 'W-1', 'sideCleared 应去重并只留合法 id');
     A(s.settings.scale === 1 && s.settings.motion === true && s.settings.speak === false && s.settings.contrast === true);
   });
   test('清空本机进度会连旧键一起删掉，不会回退复活', () => {
+    localStorage.setItem('mood-island-v4', JSON.stringify({ version: 4, band: 'a6', cleared: ['1-1'] }));
     localStorage.setItem('mood-island-v3', JSON.stringify({ version: 3, band: 'a6', cleared: ['1-1'] }));
     localStorage.setItem('mood-island-v2', JSON.stringify({ band: 'a6', cleared: ['1-1'] }));
     state.band = 'a6';
@@ -334,8 +371,8 @@ window.addEventListener('load', function () {
     state.cleared = ['1-1'];
     state.shells = 4;
     ACTIONS['clear-progress-confirm']();
-    A(!localStorage.getItem('mood-island-v3') && !localStorage.getItem('mood-island-v2'));
-    const saved = JSON.parse(localStorage.getItem('mood-island-v4'));
+    A(!localStorage.getItem('mood-island-v4') && !localStorage.getItem('mood-island-v3') && !localStorage.getItem('mood-island-v2'));
+    const saved = JSON.parse(localStorage.getItem('mood-island-v5'));
     A(saved.cleared.length === 0 && saved.shells === 0 && saved.cards.kid.length === 0);
     A(state.band === 'a6', '清空进度不应丢年龄段');
   });
@@ -418,11 +455,13 @@ window.addEventListener('load', function () {
     state.cleared = [];
     bandTo('adult');
     renderMap();
-    A(document.querySelectorAll('#stage .map-hub .hub-card').length === 8);
+    A(document.querySelectorAll('#stage .map-hub .hub-card').length === 9);
     A(!!document.querySelector('#stage .map-hub .hub-help'), '急救入口应在地图「随时可用」组里');
+    A(!!document.querySelector('#stage .map-hub [data-action="go-work"]'), '成年地图应有工作间支线入口');
     A(document.querySelectorAll('#stage .map-tools').length === 0);
     const heads = [...document.querySelectorAll('#stage .hub-head h3')].map(e => e.textContent.trim());
     A(heads.includes('随时可用') && heads.includes('知识与工具') && heads.includes('这一趟的收集'));
+    A(heads.includes('专题 · 工作间'), '工作间应是独立分组，不是塞进收集区');
   });
   test('地图只标一个下一站，岛头显示走过站数', () => {
     state.cleared = [];
@@ -546,7 +585,7 @@ window.addEventListener('load', function () {
     A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 9, state: {} })).code === 'export-version-newer');
     A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1 })).code === 'state-missing');
     A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1, state: { version: 9 } })).code === 'schema-newer');
-    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1, state: { version: 4 } })).code === 'empty');
+    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1, state: { version: 5 } })).code === 'empty');
   });
   test('导入一律走 migrate()，旧结构词卡按轨补齐', () => {
     const cardLv = KID.levels.find(l => l.card);
@@ -626,6 +665,105 @@ window.addEventListener('load', function () {
     A(session.view === 'level' && play.v === vBefore, 'Esc 应回到同一站同一题');
     A(location.hash === '#/level/' + ADULT.levels[0].id);
     bandTo('a6'); renderHome();
+  });
+
+  /* ---------- 拼装试点 / 工作间支线 ---------- */
+  test('拼装题物化成 reframe 契约，同一组合键选项顺序固定', () => {
+    bandTo('a6');
+    const cfg = MI.bankCompose['4-3'];
+    const key = 's1:t1:a1';
+    const a = pickVariant('4-3', { forceKey: key, seed: 1 });
+    const b = pickVariant('4-3', { forceKey: key, seed: 99 });
+    A(a.key === key && a.compose === '4-3', '应物化到指定组合');
+    A(a.options.length === 4 && a.answer >= 0 && a.answer < 4, 'reframe 契约要求 3–4 个选项且 answer 合法');
+    A(a.question === cfg.asks.find(x => x.id === 'a1').q);
+    A(a.options[a.answer].t === cfg.thoughts.t1.lenses.find(l => l.ok).t, 'answer 应指向 ok 镜头');
+    A(JSON.stringify(a.options) === JSON.stringify(b.options), '同一 key 换种子也不得改变选项顺序');
+    A(a.options.every(o => o.t && o.d && !o.ok), '对外只暴露 t / d，不泄漏 ok 标记');
+    const idx = KID.levels.findIndex(l => l.id === '4-3');
+    state.levelIndex = idx;
+    play = makePlay(KID.levels[idx], a);
+    renderLevel(play);
+    const root = document.querySelector('#stage [data-variant]');
+    A(!!root && root.dataset.variant === key, '组合键必须能在 DOM 上读到');
+    renderMap();
+  });
+  test('拼装同关连续 6 轮不出现重复组合，seen 落盘且上限 8', () => {
+    bandTo('a6');
+    state.seen = { '4-3': [], 'A4-3': [] };
+    lastVariant = {};
+    save();
+    const keys = [];
+    const combos = [];
+    for (let i = 0; i < 6; i++) {
+      const p = pickVariant('4-3');
+      keys.push(p.key);
+      combos.push(p.thought + '|' + p.question);
+    }
+    A(new Set(keys).size === 6, `6 轮应有 6 个不同组合，实际 ${keys.join(' / ')}`);
+    A(new Set(combos).size === 6, '题干与问法合起来也不得重复');
+    A(state.seen['4-3'].length === 6, '每轮出现的组合都应记录');
+    A(JSON.parse(localStorage.getItem(STORAGE_KEY)).seen['4-3'].length === 6, 'seen 应随存档落盘');
+    for (let i = 0; i < 4; i++) pickVariant('4-3');
+    A(state.seen['4-3'].length === 8, `seen 上限应为 8，实际 ${state.seen['4-3'].length}`);
+    A(JSON.parse(localStorage.getItem(STORAGE_KEY)).seen['4-3'].length === 8);
+    const before = state.seen['4-3'].slice();
+    ACTIONS['restart-all']();
+    A(state.seen['4-3'].join(',') === before.join(','), 'restart-all 不应清已见组合');
+  });
+  test('工作间只在成年档出现，儿童轨看不到入口', () => {
+    bandTo('adult'); state.cleared = ['A1-4']; renderMap();
+    A(!!document.querySelector('#stage [data-action="go-work"]'), '成年地图应有工作间入口');
+    A(document.getElementById('stage').textContent.includes('工作间'));
+    bandTo('a6'); renderMap();
+    A(!document.querySelector('#stage [data-action="go-work"]'), '儿童轨不应出现工作间入口');
+  });
+  test('工作间按幕解锁，完成只写 sideCleared 且不加任何奖励', () => {
+    bandTo('adult');
+    state.cleared = ['A1-4']; state.awarded = []; state.sideCleared = [];
+    state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
+    save(); applySettings();
+    A(sideUnlocked(0) && !sideUnlocked(1), '只开放第一幕');
+    const beforeCards = JSON.stringify(state.cards);
+    const beforeSkills = JSON.stringify(state.skills);
+    renderLevel(null, WORK[0], 0);
+    A(play.side && currentLevel().id === 'W-1');
+    A(document.getElementById('progress-text').textContent.includes('支线'), '顶栏应标明支线');
+    completeLevel('这一幕走过了');
+    A(state.sideCleared.join(',') === 'W-1', '完成应写入 sideCleared');
+    A(state.cleared.join(',') === 'A1-4', '支线不得写进主线 cleared');
+    A(JSON.stringify(state.cards) === beforeCards && JSON.stringify(state.skills) === beforeSkills && state.shells === 0,
+      '支线不加词卡 / 本领 / 贝壳');
+    A(state.awarded.length === 0);
+    A(TOTAL === 17 && clearedInTrack() === 1, '支线不计入 17 站');
+    A(sideUnlocked(1), '完成第一幕后第二幕解锁');
+    const card = document.getElementById('feedback-slot').textContent;
+    A(card.includes('不计入 17 站') && card.includes('不加贝壳、词卡或本领'), '完成卡应写明支线口径');
+    A(!document.querySelector('#feedback-slot [data-action="next-chapter"]'));
+    renderLevel(null, WORK[1], 1);
+    A(play.side && currentLevel().id === 'W-2');
+    completeLevel('第二幕');
+    A(state.sideCleared.join(',') === 'W-1,W-2');
+    A(state.cleared.join(',') === 'A1-4', '连续两幕也不得污染主线');
+  });
+  test('工作间 hash 直达、不可达回落、Esc 回地图', () => {
+    bandTo('adult'); state.cleared = ['A1-4']; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
+    renderHome();
+    routeTo(parseHash('#/level/W-1'));
+    A(session.view === 'level' && currentLevel().id === 'W-1' && !!play.side, '应直达第一幕');
+    A(location.hash === '#/level/W-1');
+    A(state.levelIndex === 0, '支线不应改写主线停在哪一站');
+    routeTo(parseHash('#/work'));
+    A(session.view === 'work' && location.hash === '#/work', '应进入工作间时间线');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    A(session.view === 'map' && location.hash === '#/map', 'Esc 应回地图');
+    routeTo(parseHash('#/level/W-2'));
+    A(session.view === 'work', '未解锁的幕应回落工作间');
+    A(document.getElementById('stage').textContent.includes('还没解锁'));
+    bandTo('a6'); renderHome();
+    routeTo(parseHash('#/level/W-1'));
+    A(session.view === 'map', '儿童轨把工作间视为不可达');
+    A(location.hash === '#/map');
   });
 
   /* ---------- 玩法与洗牌 ---------- */

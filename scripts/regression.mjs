@@ -40,13 +40,14 @@ const css = readFileSync(join(root, 'style.css'), 'utf8');
 const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
-  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4', 'library', 'dictionary', 'selfhelp', 'slowvars', 'help'
+  'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4',
+  'bank-compose', 'levels-adult-work', 'library', 'dictionary', 'selfhelp', 'slowvars', 'help'
 ];
 const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
 /* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
 S('script.js 头注释 / package.json 一致且采用 0.x 台阶制',
   headerVersion === pkg.version && /^0\.\d+\.\d+$/.test(pkg.version) &&
-  /const SCHEMA_VERSION = \d+;/.test(src) && /const STORAGE_KEY = 'mood-island-v4';/.test(src));
+  /const SCHEMA_VERSION = \d+;/.test(src) && /const STORAGE_KEY = 'mood-island-v5';/.test(src));
 const clVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map(m => m[1]);
 S('README / CHANGELOG / ROADMAP 版本口径一致且历史编号已重排',
   readme.includes(`当前版本 **${pkg.version}**`) &&
@@ -79,6 +80,8 @@ S('心理学词典在 library 之后、script.js 之前', html.indexOf('content/
 S('自助工具箱在 dictionary 之后、script.js 之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < html.indexOf('script.js'));
 S('慢变量在 selfhelp 之后、script.js 之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < html.indexOf('script.js'));
 S('急救入口文案在 slowvars 之后、script.js 之前', html.indexOf('content/help.js') > html.indexOf('content/slowvars.js') && html.indexOf('content/help.js') < html.indexOf('script.js'));
+S('拼装数据在题库之后、script.js 之前', html.indexOf('content/bank-compose.js') > html.indexOf('content/bank-adult-island4.js') && html.indexOf('content/bank-compose.js') < html.indexOf('script.js'));
+S('工作间数据在拼装数据之后、script.js 之前', html.indexOf('content/levels-adult-work.js') > html.indexOf('content/bank-compose.js') && html.indexOf('content/levels-adult-work.js') < html.indexOf('script.js'));
 /* 急救入口的红线：文案是本地常量，不联网、不拨号；视图本身不写存档。 */
 const helpSrc = readFileSync(join(root, 'content/help.js'), 'utf8');
 S('急救入口文案不含网络调用或链接', !/fetch\s*\(|XMLHttpRequest|https?:\/\//.test(helpSrc));
@@ -118,7 +121,45 @@ S('hash 路由：解析、同步、回落齐全',
   /routeReady/.test(src) && /#\/level\//.test(src));
 S('hash 写地址优先 replaceState，file:// 下有回落',
   /history\.replaceState/.test(src) && /location\.hash = want/.test(src));
-/* 视图配置表：所有 session.view 取值都必须登记，避免新增视图漏藏进度条 / 漏配 Esc */
+/* 0.11.0：拼装试点 / 工作间支线 / 复玩不重复 */
+S('存档 v5：storage key 升级，旧键 v4/v3/v2 仍在 LEGACY_KEYS',
+  /const SCHEMA_VERSION = 5;/.test(src) &&
+  /const STORAGE_KEY = 'mood-island-v5';/.test(src) &&
+  /const LEGACY_KEYS = \['mood-island-v4', 'mood-island-v3', 'mood-island-v2'\]/.test(src));
+S('迁移 v5 补 seen / sideCleared，旧的 cards / skills / shells 路径不变',
+  /seen:\s*migrateSeen\(s\.seen\)/.test(src) && /sideCleared:\s*Array\.isArray/.test(src) &&
+  /cards:\s*migrateCards\(s\.cards/.test(src) && /skills:\s*Array\.isArray\(s\.skills\)/.test(src));
+S('支线白名单与主线白名单分开，side 不计入 ALL_LEVEL_IDS',
+  /const ALL_LEVEL_IDS = new Set\(\[\.\.\.KID\.levels, \.\.\.ADULT\.levels\]/.test(src) &&
+  /const WORK_IDS = new Set\(WORK\.map/.test(src) && /WORK_IDS\.has\(id\)/.test(src));
+S('拼装选道不碰 Math.random，同历史可复现',
+  (() => {
+    const at = src.indexOf('function pickComposed');
+    const end = src.indexOf('function pickVariant', at);
+    const block = at !== -1 && end > at ? src.slice(at, end) : '';
+    return block.length > 0 && !/Math\.random/.test(block) && /hash32/.test(block) && /forceKey/.test(block);
+  })());
+S('组合键写进 DOM，测试可强制复现',
+  /data-variant="\$\{v && v\.key/.test(src) && /forceKey/.test(src));
+S('工作间支线只写 sideCleared，不碰主线 cleared / cards / skills / shells',
+  (() => {
+    const at = src.indexOf("if (play.side) {");
+    const end = src.indexOf('if (!state.cleared.includes(lv.id))', at);
+    const block = at !== -1 && end > at ? src.slice(at, end) : '';
+    return block.length > 0 && /state\.sideCleared\.push/.test(block) &&
+      !/state\.cleared\.push/.test(block) && !/state\.cards/.test(block) &&
+      !/state\.skills\.push/.test(block) && !/state\.shells\s*\+=/.test(block);
+  })());
+S('restart-all 不清 seen，也不清 sideCleared',
+  (() => {
+    const at = src.indexOf("'restart-all'");
+    const end = src.indexOf("'clear-progress-confirm'", at);
+    const block = at !== -1 && end > at ? src.slice(at, end) : '';
+    return block.length > 0 && !/seen\s*=\s*\{\}/.test(block) && !/sideCleared\s*=/.test(block);
+  })());
+S('文档不显示拼装组合计数 / 打卡压力',
+  !/本轮已换过几组题|已换过.{0,4}组/.test(roadmap) && !/本轮已换过几组题/.test(readme));
+
 const viewAssigns = [...new Set([...src.matchAll(/session\.view\s*=\s*'([a-z]+)'/g)].map(m => m[1]))];
 const viewBlock = src.slice(src.indexOf('const VIEW_CONFIG'), src.indexOf('function viewCfg'));
 S('VIEW_CONFIG 覆盖所有 session.view 取值',

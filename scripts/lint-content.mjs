@@ -20,6 +20,8 @@ const FILES = [
   'bank-kid-island4',
   'bank-adult-1-3',
   'bank-adult-island4',
+  'bank-compose',
+  'levels-adult-work',
   'library',
   'dictionary',
   'selfhelp',
@@ -162,7 +164,7 @@ TRACKS.forEach((tr) => {
 });
 
 /* ---------- 题型内部一致性 ---------- */
-const allBanks = [['儿童', bankKid], ['成年', bankAdult]];
+const allBanks = [['儿童', bankKid], ['成年', bankAdult], ['工作间', MI.bankWork || {}]];
 allBanks.forEach(([label, bank]) => Object.entries(bank).forEach(([id, arr]) => arr.forEach((v, i) => {
   const tag = `${label} ${id}#${i}`;
 
@@ -463,6 +465,126 @@ bottles.forEach((b, i) => {
   if (seenBottleQ.has(b.q)) err(`漂流瓶#${i}: 题目重复`);
   seenBottleQ.add(b.q);
 });
+
+/* ---------- 工作间（成年支线） ----------
+   支线关卡不在 ADULT.levels 里，所以不参与 17 站结构检查；这里单独校验：
+   4 幕、id 唯一、只标成年档、变体池与关卡一一对应、不带 card / skill / island / num。 */
+const WORK = MI.adultWork || [];
+const WBANK = MI.bankWork || {};
+if (WORK.length !== 4) err(`工作间：应为 4 幕，当前 ${WORK.length} 幕`);
+const workIds = new Set();
+WORK.forEach((l, i) => {
+  const tag = `工作间#${i} ${l.id || '(无 id)'}`;
+  ['id', 'time', 'name', 'type', 'kind', 'goal', 'tip', 'hint'].forEach(k => { if (!l[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (l.id && !/^W-\d+$/.test(l.id)) err(`${tag}: id 应为 W-数字`);
+  if (workIds.has(l.id)) err(`${tag}: id 重复`);
+  workIds.add(l.id);
+  if (!TYPES.includes(l.type) || l.type === 'finale') err(`${tag}: type「${l.type}」不适合支线`);
+  ['island', 'num', 'card', 'skill'].forEach(k => { if (k in l) err(`${tag}: 支线不得带 ${k}（会混进主线进度 / 奖励）`); });
+  if (ADULT.levels.some(x => x.id === l.id)) err(`${tag}: id 与主线关卡冲突`);
+});
+if (new Set(WORK.map(l => l.time)).size !== WORK.length) err('工作间：时间点重复，时间线会读不出先后');
+Object.keys(WBANK).forEach(id => {
+  if (!workIds.has(id)) err(`工作间题库「${id}」没有对应关卡`);
+});
+WORK.forEach(l => {
+  const pool = WBANK[l.id] || [];
+  if (pool.length < MIN_VARIANTS) err(`工作间 ${l.id}: 变体只有 ${pool.length} 组（要求 ≥${MIN_VARIANTS}）`);
+  pool.forEach((v, i) => {
+    const tag = `工作间 ${l.id}#${i}`;
+    const b = v.b || [];
+    if (!b.length || b.some(x => x !== 'adult')) err(`${tag}: b 必须只标 adult`);
+    (NEED[l.type] || []).forEach(k => { if (v[k] === undefined) err(`${tag}: 缺字段 ${k}`); });
+    if (v.answer !== undefined) {
+      const n = Array.isArray(v.options) ? v.options.length : 0;
+      if (!Number.isInteger(v.answer) || v.answer < 0 || v.answer >= n) err(`${tag}: answer 越界（选项 ${n} 个）`);
+    }
+  });
+});
+
+/* ---------- 变体拼装试点 ----------
+   只在 4-3 / A4-3 两关上做通。这里校验数据的语义约束，而不是随机结果：
+   - 想法只能属于一个场景（树形，不做自由交叉）
+   - 每条想法恰好 1 个 ok，4 个镜头，组内文案不重复
+   - 问法只换提问角度，不换正确答案；每个组合物化后都必须满足 reframe 契约
+   - 每关正确答案的原始位置至少 2 种，避免「总是第一个」 */
+const COMPOSE = MI.bankCompose || {};
+const COMPOSE_IDS = Object.keys(COMPOSE);
+if (COMPOSE_IDS.length !== 2) err(`拼装试点应为 2 关，当前 ${COMPOSE_IDS.length} 关`);
+COMPOSE_IDS.forEach((id) => {
+  const cfg = COMPOSE[id] || {};
+  const tag = `拼装 ${id}`;
+  const owner = [...KID.levels, ...ADULT.levels].find(l => l.id === id);
+  if (!owner) err(`${tag}: 找不到对应关卡`);
+  else if (owner.type !== 'reframe') err(`${tag}: 只有 reframe 题型可以拼装，当前 ${owner.type}`);
+  if (!Array.isArray(cfg.asks) || cfg.asks.length !== 2) err(`${tag}: 问法应为 2 句，当前 ${(cfg.asks || []).length} 句`);
+  const askIds = new Set((cfg.asks || []).map(a => a.id));
+  if (askIds.size !== (cfg.asks || []).length) err(`${tag}: 问法 id 重复`);
+  (cfg.asks || []).forEach((a, i) => {
+    if (!a.id || !a.q) err(`${tag}: 问法#${i} 缺 id / q`);
+    if (!/^[a-z][a-z0-9-]*$/.test(a.id)) err(`${tag}: 问法 id「${a.id}」应小写起头`);
+    checkLen(a.q, `${tag} 问法#${i}`);
+  });
+  if (!Array.isArray(cfg.scenes) || cfg.scenes.length !== 3) err(`${tag}: 场景应为 3 个，当前 ${(cfg.scenes || []).length} 个`);
+  if (!Array.isArray(cfg.b) || !cfg.b.length) err(`${tag}: 缺 b 档位标记`);
+  (cfg.b || []).forEach(b => { if (!BANDS.some(x => x.id === b)) err(`${tag}: 未知档位「${b}」`); });
+  const sceneIds = new Set();
+  const thoughtHome = new Map();
+  const thoughtIds = new Set(Object.keys(cfg.thoughts || {}));
+  (cfg.scenes || []).forEach((s, si) => {
+    if (!s.id || !s.text) err(`${tag}: 场景#${si} 缺 id / text`);
+    if (sceneIds.has(s.id)) err(`${tag}: 场景 id 重复`);
+    sceneIds.add(s.id);
+    if (!Array.isArray(s.thoughts) || s.thoughts.length !== 2) err(`${tag}: 场景#${si} 应有 2 条想法`);
+    (s.thoughts || []).forEach((tid) => {
+      if (thoughtHome.has(tid)) err(`${tag}: 想法「${tid}」同时属于多个场景`);
+      thoughtHome.set(tid, s.id);
+      if (!thoughtIds.has(tid)) err(`${tag}: 场景引用了不存在的想法「${tid}」`);
+    });
+  });
+  thoughtIds.forEach(tid => { if (!thoughtHome.has(tid)) err(`${tag}: 想法「${tid}」没有归属场景（会成为孤儿）`); });
+  const answerPositions = new Set();
+  let combos = 0;
+  thoughtIds.forEach((tid) => {
+    const th = cfg.thoughts[tid];
+    const ttag = `${tag} ${tid}`;
+    if (!th || !th.text || !th.why) err(`${ttag}: 缺 text / why`);
+    checkLen(th.text, ttag);
+    if (!Array.isArray(th.askIds) || !th.askIds.length) err(`${ttag}: askIds 为空`);
+    (th.askIds || []).forEach(a => { if (!askIds.has(a)) err(`${ttag}: askIds 引用了不存在的问法「${a}」`); });
+    const lenses = th.lenses || [];
+    if (lenses.length < 3 || lenses.length > 4) err(`${ttag}: 镜头应为 3–4 个，当前 ${lenses.length} 个`);
+    const okCount = lenses.filter(l => l.ok).length;
+    if (okCount !== 1) err(`${ttag}: 恰好 1 个 ok，当前 ${okCount} 个`);
+    const seenT = new Set();
+    lenses.forEach((l, li) => {
+      if (!l.t || !l.d) err(`${ttag}: 镜头#${li} 缺 t / d`);
+      checkLen(l.t, ttag);
+      if (seenT.has(l.t)) err(`${ttag}: 镜头文案重复「${l.t}」`);
+      seenT.add(l.t);
+      if (l.ok) answerPositions.add(li);
+    });
+  });
+  /* 每关正确答案的原始位置至少 2 种：拼装不能把答案永远放在第一项。
+     运行时还会按组合键做确定性打乱，但原始位置的多样性先在这里守住。 */
+  if (answerPositions.size < 2) err(`${tag}: 正确答案在原始数据里只有 1 种位置，容易形成「总选第一个」`);
+  /* 组合展开：场景 × 想法 × 问法，组合键唯一，且至少 5 组可做到 5 轮不重复 */
+  (cfg.scenes || []).forEach(s => (s.thoughts || []).forEach(tid => {
+    const th = cfg.thoughts[tid] || {};
+    (th.askIds || []).forEach(aid => {
+      combos += 1;
+      const key = `${s.id}:${tid}:${aid}`;
+      if (!/^[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-]+$/.test(key)) err(`${tag}: 组合键「${key}」含非法字符`);
+      const lenses = th.lenses || [];
+      const answer = lenses.findIndex(l => l.ok);
+      if (answer < 0 || answer >= lenses.length) err(`${tag} ${key}: 物化后 answer 越界`);
+      if (lenses.length && lenses[answer].ok !== true) err(`${tag} ${key}: answer 没有指向 ok 镜头`);
+    });
+  }));
+  if (combos < 5) err(`${tag}: 组合只有 ${combos} 组，做不到 5 轮不重复`);
+  if (combos < 10) warn(`${tag}: 组合 ${combos} 组，复玩空间偏小`);
+});
+
 
 /* ---------- 红线词 ---------- */
 const RED = ['得分率', '分数', '排名', '正确率', '治疗', '疗效', '诊断', '抑郁症', '焦虑症', '量表', '障碍'];

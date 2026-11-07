@@ -2,7 +2,7 @@
 
 > 一起认出心里的天气。按年龄分级的情绪启蒙小游戏：**纯前端 · 零依赖 · 不联网 · 不打分 · 不采集心情文本**。
 >
-> 当前版本 **0.10.0**（0.x 预发布台阶，历史批次已自 v0.1.0 重排，见 [CHANGELOG.md](CHANGELOG.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
+> 当前版本 **0.11.0**（0.x 预发布台阶，历史批次已自 v0.1.0 重排，见 [CHANGELOG.md](CHANGELOG.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
 
 这不是心理测评，也不能代替专业帮助。它做的事只有一件：把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。
 
@@ -77,6 +77,8 @@
 │   ├── bank-kid-island4.js       # 儿童题库（岛 4）
 │   ├── bank-adult-1-3.js         # 成年题库（岛 1-3）
 │   ├── bank-adult-island4.js     # 成年题库（岛 4）
+│   ├── bank-compose.js           # 拼装试点：4-3 / A4-3 的场景 × 想法 × 问法槽位
+│   ├── levels-adult-work.js      # 成年「工作间」支线：4 幕 + 每幕 2 组手写变体
 │   ├── library.js                # 词卡释义/金句/聊卡/微行动/装饰/漂流瓶/静修间
 │   ├── dictionary.js             # 心理学词典 155 条 + dictionaryMeta（纯数据，3 组 / 11 主题 / 4 类型）
 │   ├── selfhelp.js               # 自助工具箱：5 状态 / 32 工具卡 / 10 条认知扭曲（纯数据）
@@ -87,7 +89,7 @@
 │   ├── regression.mjs            # 无头 Chrome 浏览器回归（注入测试页，不改源文件）
 │   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用
 ├── tests/
-│   └── browser-tests.js          # 83 项浏览器用例，由 regression.mjs 注入 390×900 iframe
+│   └── browser-tests.js          # 89 项浏览器用例，由 regression.mjs 注入 390×900 iframe
 ├── package.json                  # check / lint / serve / test:e2e / verify
 ├── .gitignore
 ├── README.md  CHANGELOG.md  ROADMAP.md
@@ -100,7 +102,7 @@
 
 **为什么不用 ES module**：`content/*.js` 用经典 `<script>` 顺序加载，是为了让双击 `index.html` 的 `file://` 场景也能跑（ES module 在 `file://` 下会被 CORS 拦住）。`index.html` 里的顺序是契约：
 
-`bands → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → library → dictionary → selfhelp → slowvars → script.js`
+`bands → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → dictionary → selfhelp → slowvars → script.js`
 
 顺序错了或文件缺失，`script.js` 启动时会显示「内容没加载出来」的可读提示，不会白屏。
 
@@ -194,15 +196,27 @@
 
 **返回契约**：`session.helpFrom` 记录进入前那一屏，返回按钮与 Esc 都回到那里（首页 / 地图 / 选档页 / 关卡 / 静修间 / 词典 / 工具箱 / 慢变量）。从关卡进入时暂存进行态（题目、已选、试过几次），返回沿用同一道题，不重新抽题；暂存只在内存，不落盘。
 
-### 4.9 改完必跑
+### 4.9 拼装试点与工作间支线
+
+**拼装试点**只在 `4-3`（儿童 / 亲子）与 `A4-3`（成年）两关做通，数据在 `content/bank-compose.js`：
+
+- `asks` 是两种问法，只换提问角度，不换正确答案；`scenes` 把想法按情境分组，一个想法只能属于一个场景；`thoughts` 每条自带 3–4 个镜头，恰好 1 个 `ok`。
+- 物化后仍是现有 `reframe` 契约，只多一个可选 `question`；手写题不受影响。
+- 组合键是 `scene:thought:ask`，展开成 3 场景 × 2 想法 × 2 问法 = 12 组。选道是纯函数，不碰 `Math.random`：同一份 `seen` 与种子必得同一组合；选项顺序由组合键派生固定种子打乱，答案不会因为刷新而换位置。
+- `seen` 落盘但不在界面显示；每关最多 8 条，超出丢最旧，未见过的想法优先、再未见过的问法。每关 12 组，所以连续 8 轮内一定不重复，12 组轮完一遍后才会回收最早那组。`restart-all` 不清 `seen`。
+- 调试点：`pickVariant('4-3', { forceKey: 's1:t1:a1' })` 可强制复现；DOM 上 `[data-variant]` 能读到组合键。
+
+**工作间**是成年轨的专题支线，数据在 `content/levels-adult-work.js`：09:00 会前 / 11:00 汇报被否 / 15:00 冲突 / 19:30 下班反刍，四幕线性解锁，走完 `A1-4` 开放第一幕。入口在成年地图的独立分组「专题 · 工作间」，时间线视图是 `#/work`。它不计入 17 站，不加贝壳 / 词卡 / 本领，也不参与终章解锁；完成只写 `state.sideCleared`，儿童 / 亲子轨看不到入口。每幕 2 组手写变体，题型分别是 `clue / reframe / compose / chain`。
+
+### 4.10 改完必跑
 
 ```bash
-npm run verify      # = 语法检查 + 内容自检 + 83 项浏览器回归 + 33 项源码检查
+npm run verify      # = 语法检查 + 内容自检 + 89 项浏览器回归 + 43 项源码检查
 ```
 
-内容自检覆盖：两轨关卡结构与岛屿对应、每档每关 ≥2 组、终章位置与唯一性、词卡/本领唯一且 `CODEX` 有释义、题库多余键、各题型内部一致性（`answer` 越界、`chain` 标签对应、`sort` 落筐、`compose` 每行恰 1 个 gentle、记忆牌去重、`ladder` 档位字段）、**静修练习的分组与字段、漂流瓶题量与去重、心理学词典的数量下限/主题与类型元数据/关联引用/字段/去重、自助工具箱的状态/工具/扭曲数量与分类/字段/去重、慢变量的变量/练习/陷阱/时间尺度数量与字段、`v` 关联与 `cards` 交叉引用、急救入口的动作数量/字段/号码/免责口径**、文案长度、评分/诊断/疗效类红线词。当前结果：**0 错误，2 条无害提示**（「排名」1 次、「治疗」10 次，均在免责、科普语境或词条关联名里）。
+内容自检覆盖：两轨关卡结构与岛屿对应、每档每关 ≥2 组、终章位置与唯一性、词卡/本领唯一且 `CODEX` 有释义、题库多余键、各题型内部一致性（`answer` 越界、`chain` 标签对应、`sort` 落筐、`compose` 每行恰 1 个 gentle、记忆牌去重、`ladder` 档位字段）、**拼装槽位结构（想法单场景归属 / 恰好 1 个 ok / 组合键合法 / 答案位置不恒定 / ≥5 组可复玩）、工作间 4 幕与变体池一一对应且不带奖励字段**、**静修练习的分组与字段、漂流瓶题量与去重、心理学词典的数量下限/主题与类型元数据/关联引用/字段/去重、自助工具箱的状态/工具/扭曲数量与分类/字段/去重、慢变量的变量/练习/陷阱/时间尺度数量与字段、`v` 关联与 `cards` 交叉引用、急救入口的动作数量/字段/号码/免责口径**、文案长度、评分/诊断/疗效类红线词。当前结果：**0 错误，2 条无害提示**（「排名」1 次、「治疗」10 次，均在免责、科普语境或词条关联名里）。
 
-浏览器回归用 `tests/browser-tests.js` 覆盖内容加载、旧档迁移与词卡按轨拆分、双轨切换、按岛解锁、洗牌、计时器回收、两套终章、弹窗焦点、选项徽标与数字键一致（含字母键不误触）、`completeLevel` 纯文本转义、清空进度连旧键一起删除、换档提示不串屏，以及心理学词典 / 自助工具箱 / 慢变量的内容和筛选交互（词典另覆盖分组标题与目录锚点、主题 × 类型 × 搜索三维叠加、分区条数联动、关联跳转、重新进入清空；慢变量另覆盖变量→练习联动、清选、非法 id、重新进入清空、页内目录与尺度引用）；P2 又补了弹窗 `aria-labelledby`、进度格 `aria-current`、记忆牌 `aria-label`、三处英文词条 `lang="en"`、两轨岛末站「今日微行动」与终章不发放。`npm run test:e2e -- --verbose` 可看逐项结果。源码检查还会校验 `VIEW_CONFIG` 覆盖所有 `session.view`、三个知识库视图共用 `renderLibraryView`、词典数量不再写死、主题与类型由 `dictionaryMeta` 驱动、`#overlay` 不挂 `aria-live`、`style.css` 无残留死样式。0.9.0 另补了急救入口的两轨措辞、进入 / 返回（首页 / 地图 / 选档页 / 关卡 / 词典，关卡返回同一道题）、三个动作可完成、不写存档，以及真 390×900 视口断言（用例跑在固定 390×900 的 iframe 里，绕开 Chrome 无头的 500px 钳制）。
+浏览器回归用 `tests/browser-tests.js` 覆盖内容加载、旧档迁移与词卡按轨拆分、双轨切换、按岛解锁、洗牌、计时器回收、两套终章、弹窗焦点、选项徽标与数字键一致（含字母键不误触）、`completeLevel` 纯文本转义、清空进度连旧键一起删除、换档提示不串屏，以及心理学词典 / 自助工具箱 / 慢变量的内容和筛选交互（词典另覆盖分组标题与目录锚点、主题 × 类型 × 搜索三维叠加、分区条数联动、关联跳转、重新进入清空；慢变量另覆盖变量→练习联动、清选、非法 id、重新进入清空、页内目录与尺度引用）；P2 又补了弹窗 `aria-labelledby`、进度格 `aria-current`、记忆牌 `aria-label`、三处英文词条 `lang="en"`、两轨岛末站「今日微行动」与终章不发放。0.9.0 另补了急救入口的两轨措辞、进入 / 返回（首页 / 地图 / 选档页 / 关卡 / 词典，关卡返回同一道题）、三个动作可完成、不写存档，以及真 390×900 视口断言（用例跑在固定 390×900 的 iframe 里，绕开 Chrome 无头的 500px 钳制）。0.11.0 补了拼装题物化契约与同键复现、连续 6 轮无重复且 `seen` 落盘上限 8、`restart-all` 不清 `seen`、v2 / v3 / v4 升 v5 不丢主线 / 词卡 / 本领 / 贝壳、工作间两轨可见性、按幕解锁、完成只写 `sideCleared` 且无奖励、`#/work` 与 `#/level/W-x` 直达及回落。`npm run test:e2e -- --verbose` 可看逐项结果。源码检查还会校验 `VIEW_CONFIG` 覆盖所有 `session.view`、三个知识库视图共用 `renderLibraryView`、词典数量不再写死、主题与类型由 `dictionaryMeta` 驱动、`#overlay` 不挂 `aria-live`、`style.css` 无残留死样式；0.11.0 另锁定 v5 键与 LEGACY、拼装选道无 `Math.random`、`data-variant` 可见、支线白名单与主线分离、`restart-all` 不清 `seen`、文档不出现组合计数。
 
 ---
 
@@ -210,19 +224,21 @@ npm run verify      # = 语法检查 + 内容自检 + 83 项浏览器回归 + 33
 
 | 项 | 值 |
 | --- | --- |
-| 当前键 | `mood-island-v4` |
-| 旧键 | `mood-island-v3`（0.7.0 及更早）、`mood-island-v2`（读到后自动迁移；正常升级时**旧键保留**以便回退，「清空本机进度」会连旧键一起删除） |
-| schema 版本 | `SCHEMA_VERSION = 4` |
-| 字段 | `version, band, cleared, awarded, cards{kid[],adult[]}, skills, shells, decor, settings{scale, motion, speak, speakTouched, autoSpeak, contrast}` |
+| 当前键 | `mood-island-v5` |
+| 旧键 | `mood-island-v4`（0.10.0 及更早）、`mood-island-v3`（0.7.0 及更早）、`mood-island-v2`（读到后自动迁移；正常升级时**旧键保留**以便回退，「清空本机进度」会连旧键一起删除） |
+| schema 版本 | `SCHEMA_VERSION = 5` |
+| 字段 | `version, band, cleared, awarded, cards{kid[],adult[]}, skills, shells, decor, seen{关id:[组合键]}, sideCleared[], settings{scale, motion, speak, speakTouched, autoSpeak, contrast}` |
 | id 改名 | `ID_REMAP = { '3-5': 'finale' }`，旧终章进度不会丢 |
 
-`load()` → `readRaw()`（v4 优先，v4 损坏或不存在时回退 v3 / v2）→ `migrate()`。**以后加任何字段，都在 `migrate()` 里补一段白名单式默认值**，不要直接改 `DEFAULT_STATE` 就完事，否则老用户进度可能被静默重置。`migrate()` 还会逐项清掉无效数据：未知关卡 id、重复的 `cleared / awarded`、内容里已不存在的词卡与本领、越界或重复的 `decor` 下标、负数或小数的 `shells`、不在允许档位里的 `settings.scale`；其余字段不受影响，所以旧档和现有 v4 档都不会被整体重置。
+`load()` → `readRaw()`（v5 优先，v5 损坏或不存在时依次回退 v4 / v3 / v2）→ `migrate()`。**以后加任何字段，都在 `migrate()` 里补一段白名单式默认值**，不要直接改 `DEFAULT_STATE` 就完事，否则老用户进度可能被静默重置。`migrate()` 还会逐项清掉无效数据：未知关卡 id、重复的 `cleared / awarded`、内容里已不存在的词卡与本领、越界或重复的 `decor` 下标、负数或小数的 `shells`、不在允许档位里的 `settings.scale`、不存在的拼装组合键、越界的支线 id；其余字段不受影响，所以旧档和现有 v5 档都不会被整体重置。
+
+**v4 → v5 只加两个字段**：`seen`（拼装题已出现过的组合键，按关分桶，每关最多 8 条，超出丢最旧）与 `sideCleared`（成年「工作间」支线完成记录，白名单只认 `W-1…W-4`）。主线 `cleared / awarded / cards / skills / shells / decor` 的迁移路径一字未改；`sideCleared` 不计入 17 站、不加贝壳 / 词卡 / 本领，也不参与终章解锁。`seen` 不是可见进度，界面上不显示任何组合计数；`restart-all` 不清它，「清空本机进度」才删。
 
 **v3 → v4 只改词卡语义**：旧档的 `cards` 是不分轨的数组，`migrateCards()` 按以下顺序推断归属——① 只在一轨出现的卡，直接归该轨；② 两轨同名的卡，对应关卡有通关 / 领贝壳记录就归该轨，两轨都有记录则两边都算真拿到；③ 对不上记录时，只玩过一轨就归那一轨；④ 两轨都玩过但仍无法判定，归**儿童档**（宁可少给成年档，也不把儿童卡虚增成成年卡）。`cleared / awarded` 不受影响。
 
 **`skills` 暂不按轨拆分**：两轨现在没有同名本领，所以共用一份数组不会串档；回归会断言两轨本领名不重复。以后若要复用同一个本领名，必须先把 `skills` 拆成按轨结构并补迁移，否则会在另一轨提前点亮。词卡已经按轨拆分（`cards: { kid, adult }`），不受这个约束影响。
 
-**回退**：正常升级时旧键从不被新代码覆盖，旧版本代码仍读 v3；升级后产生的新进度只写 v4，回退到旧代码会看不到升级后的新进度，但不会破坏旧档，也不会把词卡串档。用户点「清空本机进度」是明确的删除动作，会移除 v4 / v3 / v2，之后不能再靠旧键找回。
+**回退**：正常升级时旧键从不被新代码覆盖，旧版本代码仍读 v4；升级后产生的新进度只写 v5，回退到旧代码会看不到升级后的新进度，但不会破坏旧档，也不会把词卡串档。用户点「清空本机进度」是明确的删除动作，会移除 v5 / v4 / v3 / v2，之后不能再靠旧键找回。
 
 **不会保存**：开场选的天气、任何心情文本（应用不提供心情输入框；词典搜索框只做本地过滤）、心理学词典的主题 / 类型 / 搜索词（每次重新打开都会清空）、自助工具箱选中的状态与分类、慢变量选中的变量与分类（每次重新打开都会清空）、练习次数、静修间做过几次。隐私 / 无痕模式下若 `localStorage` 不可写，页面会常驻一条说明、设置页同步提示，不会谎报「已保存」。
 
@@ -245,7 +261,7 @@ npm run verify      # = 语法检查 + 内容自检 + 83 项浏览器回归 + 33
 
 ### 5.2 直达链接
 
-地址形如 `#/map`、`#/level/4-2`、`#/help`、`#/dict`、`#/selfhelp`、`#/slowvars`、`#/retreat`、`#/home`、`#/gate`，刷新、收藏、分享都不会丢站。写地址用 `history.replaceState`（不进历史栈，Esc / 返回路径保持原语义），`file://` 下被浏览器拒绝时退回 `location.hash`。只认当前轨的关卡 id：未知地址、另一条轨的站、尚未解锁的站都回落地图（无档时回选档页），并把地址改回合法值，不留在坏链接上。
+地址形如 `#/map`、`#/level/4-2`、`#/work`、`#/level/W-1`、`#/help`、`#/dict`、`#/selfhelp`、`#/slowvars`、`#/retreat`、`#/home`、`#/gate`，刷新、收藏、分享都不会丢站。写地址用 `history.replaceState`（不进历史栈，Esc / 返回路径保持原语义），`file://` 下被浏览器拒绝时退回 `location.hash`。只认当前轨的关卡 id：未知地址、另一条轨的站、尚未解锁的站都回落地图（无档时回选档页），并把地址改回合法值，不留在坏链接上。`#/work` 与 `#/level/W-x` 只在成年轨可用；儿童 / 亲子轨视作不可达，未解锁的幕次回落到工作间时间线。
 
 ---
 
@@ -256,7 +272,7 @@ npm run verify      # = 语法检查 + 内容自检 + 83 项浏览器回归 + 33
 | `npm run check` | `node --check script.js`，只查逻辑文件语法 |
 | `npm run lint` | 内容自检，不引依赖、不启浏览器 |
 | `npm run serve [端口]` | 本地静态服务，默认 5173；传参写 `npm run serve -- 8080` |
-| `npm run test:e2e` | 无头 Chrome 回归（83 项用例 + 33 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
+| `npm run test:e2e` | 无头 Chrome 回归（89 项用例 + 43 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
 | `npm run verify` | check + lint + test:e2e，**每次提交前至少跑这个** |
 
 `test:e2e` 需要本机有 Chrome / Chromium；找不到时设置 `CHROME_PATH=/path/to/chrome`。测试页是在内存里注入用例生成的临时 HTML，**不会改动任何源文件**，也不写项目目录。
