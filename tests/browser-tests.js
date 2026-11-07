@@ -528,6 +528,106 @@ window.addEventListener('load', function () {
     ACTIONS['help-close']();
   });
 
+  /* ---------- 导出 / 导入 ---------- */
+  test('导出载荷带独立 exportVersion，文件名带时间戳', () => {
+    bandTo('a6');
+    const p = exportPayload();
+    A(p.app === 'mood-island');
+    A(p.exportVersion === EXPORT_VERSION && EXPORT_VERSION === 1, '导出格式号应独立且当前为 1');
+    A(typeof p.exportedAt === 'string' && !Number.isNaN(new Date(p.exportedAt).getTime()));
+    A(!!p.state && p.state.version === SCHEMA_VERSION, '载荷里应是完整存档');
+    const name = exportFilename(new Date(2026, 10, 7, 9, 5));
+    A(name === 'mood-island-progress-20261107-0905.json', `文件名不对：${name}`);
+  });
+  test('导入逐条拒绝坏文件 / 陌生来源 / 更新的格式', () => {
+    A(validateImport('{').code === 'json');
+    A(validateImport('[]').code === 'shape');
+    A(validateImport(JSON.stringify({ app: 'other', exportVersion: 1, state: {} })).code === 'app');
+    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 9, state: {} })).code === 'export-version-newer');
+    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1 })).code === 'state-missing');
+    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1, state: { version: 9 } })).code === 'schema-newer');
+    A(validateImport(JSON.stringify({ app: 'mood-island', exportVersion: 1, state: { version: 4 } })).code === 'empty');
+  });
+  test('导入一律走 migrate()，旧结构词卡按轨补齐', () => {
+    const cardLv = KID.levels.find(l => l.card);
+    const old = {
+      app: 'mood-island', exportVersion: 1, exportedAt: '2026-11-07T00:00:00.000Z',
+      state: { version: 3, band: 'a6', cleared: [cardLv.id], awarded: [cardLv.id], cards: [cardLv.card], shells: 4, settings: { scale: 1 } }
+    };
+    const res = validateImport(JSON.stringify(old));
+    A(res.ok, `旧结构应能导入：${res.message || ''}`);
+    A(res.state.version === SCHEMA_VERSION);
+    A(res.state.cards.kid.includes(cardLv.card) && !res.state.cards.adult.includes(cardLv.card), '旧数组词卡应按证据归到儿童轨');
+  });
+  test('导入预览不改当前档，确认后覆盖、可撤销一次', () => {
+    bandTo('a6');
+    state.cleared = [KID.levels[0].id];
+    state.cards.kid = [];
+    state.shells = 2;
+    save();
+    const payload = {
+      app: 'mood-island', exportVersion: 1, exportedAt: '2026-11-07T00:00:00.000Z',
+      state: { version: 3, band: 'adult', cleared: [ADULT.levels[0].id], awarded: [ADULT.levels[0].id], cards: [], shells: 6, settings: { scale: 1.15 } }
+    };
+    previewImport(JSON.stringify(payload), 'backup.json');
+    A(state.band === 'a6' && state.shells === 2, '预览阶段不能动当前档');
+    A(overlay.textContent.includes('导入前先看一眼'));
+    ACTIONS['import-confirm']();
+    A(state.band === 'adult' && state.shells === 6 && state.settings.scale === 1.15, '确认后应换成文件里的档');
+    A(state.version === SCHEMA_VERSION);
+    A(overlay.textContent.includes('导入完成') && !!document.querySelector('[data-action="import-undo"]'));
+    ACTIONS['import-undo']();
+    A(state.band === 'a6' && state.shells === 2 && state.cleared.length === 1, '撤销应恢复导入前');
+    A(localStorage.getItem(STORAGE_KEY) === JSON.stringify(state), '撤销后应写回本机');
+    bandTo('a6'); renderHome();
+  });
+
+  /* ---------- hash 路由 ---------- */
+  test('hash 解析：合法视图 / 关卡 id / 非法地址', () => {
+    A(parseHash('#/map').view === 'map');
+    A(parseHash('#level/4-2').view === 'level' && parseHash('#level/4-2').id === '4-2');
+    A(parseHash('#/level/').view === 'bad');
+    A(parseHash('#/nope').view === 'bad');
+    A(parseHash('').view === null);
+  });
+  test('直达关卡按 id 定位，刷新前后地址一致', () => {
+    bandTo('a6');
+    state.cleared = KID.levels.map(l => l.id);
+    save(); applySettings();
+    const lv = KID.levels[3];
+    state.levelIndex = 0;
+    routeTo(parseHash('#/level/' + lv.id));
+    A(session.view === 'level' && state.levelIndex === 3, `应定位到第 4 站，实际 ${state.levelIndex}`);
+    A(location.hash === '#/level/' + lv.id, `地址应同步，实际 ${location.hash}`);
+    renderMap();
+    A(location.hash === '#/map');
+  });
+  test('未知或不可达的 hash 回落，不报错', () => {
+    bandTo('a6'); state.cleared = []; save(); renderHome();
+    state.levelIndex = 0;
+    routeTo(parseHash('#/level/' + KID.levels[16].id));
+    A(session.view === 'map' && location.hash === '#/map', '未解锁的站应回到地图');
+    A(stage.textContent.includes('还没解锁'));
+    routeTo(parseHash('#/nope'));
+    A(session.view === 'home' && location.hash === '#/home', '认不出的地址应落到首页并改写地址');
+    routeTo(parseHash('#/level/' + ADULT.levels[0].id));
+    A(session.view === 'map' && location.hash === '#/map', '另一条轨的站应视为不可达');
+  });
+  test('hash 进急救不打断 Esc / 返回路径', () => {
+    bandTo('adult');
+    state.cleared = ADULT.levels.map(l => l.id);
+    save(); applySettings();
+    routeTo(parseHash('#/level/' + ADULT.levels[0].id));
+    const vBefore = play.v;
+    routeTo(parseHash('#/help'));
+    A(session.view === 'help' && session.helpFrom === 'level');
+    A(helpResume === play, '应暂存关卡的进行态');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    A(session.view === 'level' && play.v === vBefore, 'Esc 应回到同一站同一题');
+    A(location.hash === '#/level/' + ADULT.levels[0].id);
+    bandTo('a6'); renderHome();
+  });
+
   /* ---------- 玩法与洗牌 ---------- */
   test('clue 选项渲染时会洗牌', () => {
     bandTo('a6');

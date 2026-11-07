@@ -87,6 +87,37 @@ S('急救入口视图不写存档', helpFn.length > 0 && !/save\s*\(|localStorag
 S('急救入口已接线：动作 + 视图 + 返回前一屏',
   /'open-help'\s*:/.test(src) && /'help-close'\s*:/.test(src) && /'help-ground'\s*:/.test(src) && /'help-word'\s*:/.test(src) && /help:\s*\{\s*progress:\s*false,\s*esc:\s*'back'/.test(src));
 S('顶栏入口常驻且共用同一动作', /id="help-entry"[^>]*data-action="open-help"/.test(html));
+/* PWA：manifest 与 sw 是纯本地资源，不能借缓存引入任何远程请求。
+   file:// 下不注册 SW，页面照旧完整可玩（注册代码必须自己按协议判断）。 */
+const manifest = JSON.parse(readFileSync(join(root, 'manifest.webmanifest'), 'utf8'));
+const swSrc = readFileSync(join(root, 'sw.js'), 'utf8');
+S('PWA：manifest 可解析、start_url 指向 index、图标齐全且含 maskable',
+  manifest.start_url === './index.html' &&
+  manifest.icons.length >= 3 &&
+  manifest.icons.some(i => i.purpose === 'maskable') &&
+  manifest.icons.every(i => existsSync(join(root, i.src))));
+S('PWA：service worker 预缓存全部内容文件且不引用外部域名',
+  contentFiles.every(n => swSrc.includes(`./content/${n}.js`)) && !/https?:\/\//.test(swSrc));
+S('PWA：注册只在 http(s) 下执行，file:// 直接跳过',
+  /location\.protocol !== 'http:' && location\.protocol !== 'https:'/.test(src) &&
+  /serviceWorker\.register/.test(src));
+S('PWA：index.html 引入 manifest 与图标', /rel="manifest"/.test(html) && /icons\/icon-192\.png/.test(html));
+/* 0.10.0：导出 / 导入与 hash 路由 */
+S('sw.js 的 VERSION 与 package.json 版本一致',
+  (swSrc.match(/const VERSION = '([^']+)'/) || [])[1] === pkg.version);
+S('导出格式号独立于发版号与 schema 号',
+  /const EXPORT_VERSION = \d+;/.test(src) && /exportVersion:\s*EXPORT_VERSION/.test(src));
+S('导入先校验来源与结构，再走 migrate()',
+  /function validateImport/.test(src) && /data\.app !== EXPORT_APP/.test(src) &&
+  /data\.exportVersion/.test(src) && /migrate\(raw\)/.test(src));
+S('导入确认前不改当前档，确认后可撤销一次',
+  /pendingImport/.test(src) && /importUndo/.test(src) &&
+  /'import-confirm'\s*:/.test(src) && /'import-undo'\s*:/.test(src));
+S('hash 路由：解析、同步、回落齐全',
+  /function parseHash/.test(src) && /function syncHash/.test(src) &&
+  /routeReady/.test(src) && /#\/level\//.test(src));
+S('hash 写地址优先 replaceState，file:// 下有回落',
+  /history\.replaceState/.test(src) && /location\.hash = want/.test(src));
 /* 视图配置表：所有 session.view 取值都必须登记，避免新增视图漏藏进度条 / 漏配 Esc */
 const viewAssigns = [...new Set([...src.matchAll(/session\.view\s*=\s*'([a-z]+)'/g)].map(m => m[1]))];
 const viewBlock = src.slice(src.indexOf('const VIEW_CONFIG'), src.indexOf('function viewCfg'));

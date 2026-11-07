@@ -1,0 +1,18 @@
+{
+  "name": "心情闯关岛 · 一起认出心里的天气",
+  "short_name": "心情闯关岛",
+  "description": "按年龄分级的情绪启蒙小游戏。不打分、不排名、不收集心情记录，全部内容离线可用。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f0",
+  "theme_color": "#f6f5f0",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

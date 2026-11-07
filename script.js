@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.9.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.10.0 · 纯前端、零依赖、不联网
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
    本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
@@ -6,6 +6,10 @@
 const SCHEMA_VERSION = 4;
 const STORAGE_KEY = 'mood-island-v4';
 const LEGACY_KEYS = ['mood-island-v3', 'mood-island-v2'];
+/* 导出文件的格式号，和发版号 / SCHEMA_VERSION 都不是一套：
+   只在导出载荷的形状变化时 +1。游戏升级但载荷不变时，这个号不动。 */
+const EXPORT_VERSION = 1;
+const EXPORT_APP = 'mood-island';
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
@@ -348,10 +352,110 @@ function updateTopbar() {
   if (pt) pt.textContent = (vc.title === 'current' && LEVELS[state.levelIndex])
     ? `第 ${state.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[state.levelIndex].name}`
     : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
+  syncHash();
 }
 function viewClass() {
   return session.navDir === 'back' ? 'view enter-back'
     : session.navDir === 'forward' ? 'view enter-forward' : 'view';
+}
+
+/* ---------------------------------------------------------------- hash 路由
+   地址形如 #/map、#/level/4-2、#/help：刷新、收藏、分享都能回到同一屏。
+   - 只认下面这张固定表，其余一律回落，不把用户留在坏地址上。
+   - 写地址用 history.replaceState：不往历史栈里塞每一步，Esc / 浏览器返回仍是原来的语义。
+     file:// 下个别浏览器会拒绝 replaceState，此时退回 location.hash（多一条历史，功能不丢）。
+   - hash 里的 id 只查当前轨的关卡表：另一条轨的站视为「不可达」，回落地图。 */
+const ROUTE_VIEWS = new Set(['gate', 'home', 'map', 'help', 'retreat', 'dict', 'selfhelp', 'slowvars']);
+/* 首次路由前 session.view 只是占位值，不能拿它做「已在目标屏」的判断 */
+let routeReady = false;
+
+function parseHash(hash) {
+  const raw = String(hash || '').replace(/^#\/?/, '');
+  const parts = raw.split('/').filter(Boolean);
+  if (!parts.length) return { view: null };
+  if (parts[0] === 'level') {
+    if (parts.length < 2) return { view: 'bad' };
+    return { view: 'level', id: decodeURIComponent(parts.slice(1).join('/')) };
+  }
+  if (parts.length > 1 || !ROUTE_VIEWS.has(parts[0])) return { view: 'bad' };
+  return { view: parts[0] };
+}
+
+function hashFor(view) {
+  if (view === 'level') {
+    const lv = LEVELS[state.levelIndex];
+    return lv ? `#/level/${encodeURIComponent(lv.id)}` : '#/map';
+  }
+  return `#/${view}`;
+}
+
+/* 把当前 session.view 同步回地址栏。幂等：地址已经是目标值就直接返回，
+   所以 hashchange → 渲染 → syncHash 不会自己触发自己。 */
+function syncHash() {
+  const want = hashFor(session.view);
+  if (location.hash === want) return;
+  try { history.replaceState(null, '', want); }
+  catch (e) { try { location.hash = want; } catch (e2) { /* 极端环境只影响地址栏 */ } }
+}
+
+/* 当前地址是否已经就是这一屏：避免 hashchange 把同一屏重新渲染一遍
+   （急救页会因此清掉刚选的词，首页会清掉刚取的提示）。 */
+function atRoute(r) {
+  if (r.view === 'level') {
+    const lv = LEVELS[state.levelIndex];
+    return session.view === 'level' && !!lv && lv.id === r.id;
+  }
+  return r.view !== 'bad' && !!r.view && session.view === r.view;
+}
+
+function routeTo(r) {
+  if (routeReady && atRoute(r)) return;
+  routeReady = true;
+  /* 没选年龄段时不放行地图 / 关卡 / 知识库：先选档，和冷启动一致。
+     急救页是例外——难受的当下不该先被问年龄。 */
+  if (!state.band) {
+    if (r.view === 'help') { session.helpFrom = 'gate'; renderHelp(); return; }
+    renderAgeGate();
+    return;
+  }
+  if (r.view === 'level') {
+    const idx = LEVELS.findIndex(l => l.id === r.id);
+    if (idx === -1) {
+      session.tip = '链接里的这一站不在当前年龄段，先回到地图挑一站。';
+      renderMap();
+      return;
+    }
+    if (!isUnlocked(idx)) {
+      session.tip = '这一站还没解锁，先回到地图。';
+      renderMap();
+      return;
+    }
+    state.levelIndex = idx;
+    session.navDir = '';
+    renderLevel();
+    return;
+  }
+  if (r.view === 'retreat' && !band().mindful) {
+    session.tip = '静修间只在成年档开放，先回地图。';
+    renderMap();
+    return;
+  }
+  if (r.view === 'help') {
+    session.helpFrom = session.view === 'gate' && state.band ? 'home' : (session.view || 'home');
+    if (session.view === 'level') helpResume = play;
+    renderHelp();
+    return;
+  }
+  if (r.view === 'gate') { session.navDir = ''; renderAgeGate(); return; }
+  if (r.view === 'home') { session.navDir = ''; renderHome(); return; }
+  if (r.view === 'map') { session.navDir = ''; renderMap(); return; }
+  if (r.view === 'retreat') { renderRetreatList(); return; }
+  if (r.view === 'dict') { ACTIONS['open-dictionary'](); return; }
+  if (r.view === 'selfhelp') { ACTIONS['open-selfhelp'](); return; }
+  if (r.view === 'slowvars') { ACTIONS['open-slowvars'](); return; }
+  /* 空地址或认不出的地址：落到默认首屏，syncHash 会把坏地址改回合法值 */
+  session.navDir = '';
+  renderHome();
 }
 function showFeedback(type, html) {
   const slot = document.getElementById('feedback-slot');
@@ -458,8 +562,13 @@ function renderHome() {
     <div class="home-horizon" aria-hidden="true">
       <span class="hh-sun"></span>
       <span class="hh-islet i1"></span><span class="hh-islet i2"></span><span class="hh-islet i3"></span>
+      <span class="hh-route"></span>
       <span class="hh-land"></span>
       <span class="hh-wave"></span><span class="hh-wave w2"></span>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" data-action="start">${hasProgress ? '继续上岛' : '开始上岛'}</button>
+      ${hasProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
     </div>
     <div class="home-points">
       <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>情绪不分好坏，这一趟不打分、不排名、不比谁快。</span></div>
@@ -473,10 +582,6 @@ function renderHome() {
         <span>先落地、给感受一个词、找一个人。不计进度，也不保存你选了什么。</span>
       </div>
       <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
-    </div>
-    <div class="actions">
-      <button class="btn btn-primary" data-action="start">${hasProgress ? '继续上岛' : '开始上岛'}</button>
-      ${hasProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
     </div>
     <div class="home-shortcuts">
       <span class="muted">还没准备好上岛？</span>
@@ -639,17 +744,19 @@ function renderMap() {
         <span class="island-count">${doneCount} / ${items.length} 站</span>
       </div>
       <div class="node-grid">`;
-    items.forEach(l => {
+    const firstLocked = items.findIndex(l => !isUnlocked(LEVELS.indexOf(l)));
+    items.forEach((l, itemIdx) => {
       const idx = LEVELS.indexOf(l);
       const done = state.cleared.includes(l.id);
       const unlocked = isUnlocked(idx);
       const isNext = idx === nextIdx;
       const extra = l.card ? `，会留下「${esc(l.card)}」词卡` : '';
+      const lockedHint = itemIdx === firstLocked ? '未解锁 · 先走完上一岛' : '未解锁';
       html += `<button class="node ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${session.lastCleared === l.id ? 'just-done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-level" data-i="${idx}" ${unlocked ? '' : 'disabled'} aria-label="${esc(l.name)}${done ? '，已走过' : ''}${isNext ? '，可以从这里继续' : ''}${unlocked ? '，' + esc(l.kind) + extra : '，尚未解锁'}"${unlocked ? '' : ' title="先把上一座岛走到头"'}>
         ${isNext ? '<span class="node-next">下一站</span>' : ''}
         <span class="node-pin" aria-hidden="true">${done ? '✓' : esc(String(l.num || '·'))}</span>
         <span class="node-name">${esc(l.name)}</span>
-        <span class="node-type">${unlocked ? esc(l.kind) : '先把上一座岛走到头'}</span>
+        <span class="node-type">${unlocked ? esc(l.kind) : lockedHint}</span>
       </button>`;
     });
     html += `</div></section>`;
@@ -1614,6 +1721,181 @@ function openRest() {
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">好，继续</button>
     <button class="btn btn-ghost" data-action="go-map">先到这里，回地图</button></div>`);
 }
+/* ---------------------------------------------------------------- 导出 / 导入
+   导出把 README §5 的存档字段原样装进 JSON，带独立的 exportVersion。
+   导入的文件属于外部输入：先校验来源与结构，再让用户确认覆盖；
+   确认之前不改动当前档，确认后仍可用内存里的快照撤销一次。 */
+let pendingImport = null;   /* 校验通过、等待确认的导入 */
+let importUndo = null;      /* 上一次导入前的快照，只存在内存里 */
+
+function exportFilename(d = new Date()) {
+  const pad = n => String(n).padStart(2, '0');
+  return `mood-island-progress-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+}
+
+function exportPayload() {
+  return {
+    app: EXPORT_APP,
+    exportVersion: EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    state: clone(state)
+  };
+}
+
+function setDataStatus(msg) {
+  const el = document.getElementById('data-status');
+  if (el) el.textContent = msg;
+}
+
+function exportProgress() {
+  const name = exportFilename();
+  const text = JSON.stringify(exportPayload(), null, 2);
+  try {
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    /* 立刻 revoke 会让个别浏览器把下载取消掉，挪到下一轮事件循环 */
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { /* noop */ } }, 0);
+    setDataStatus(`已导出 ${name}。文件在浏览器的下载目录里，只含本机的进度与设置。`);
+  } catch (e) {
+    setDataStatus('这台浏览器不允许导出文件。可以换用 Chrome / Safari 再试。');
+  }
+}
+
+function hasProgress(s) {
+  return !!s.band || s.cleared.length > 0 || s.awarded.length > 0
+    || s.cards.kid.length > 0 || s.cards.adult.length > 0
+    || s.skills.length > 0 || s.shells > 0 || s.decor.length > 0;
+}
+
+/* 只做校验，不碰当前 state。返回 code 供测试断言，message 直接给用户看。 */
+function validateImport(text) {
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { return { ok: false, code: 'json', message: '这个文件不是有效的 JSON，可能不是本游戏导出的文件，或者传输时被改坏了。' }; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { ok: false, code: 'shape', message: '文件内容不是一份进度存档。' };
+  }
+  if (data.app !== EXPORT_APP) {
+    return { ok: false, code: 'app', message: '这不是《心情闯关岛》导出的进度文件：缺少应用标识。请选设置里「导出进度」得到的 JSON。' };
+  }
+  const ev = data.exportVersion;
+  if (!Number.isInteger(ev) || ev < 1) {
+    return { ok: false, code: 'export-version-missing', message: '文件里的导出格式版本缺失或无法识别。' };
+  }
+  if (ev > EXPORT_VERSION) {
+    return { ok: false, code: 'export-version-newer', message: `这个文件来自更新的导出格式（v${ev}），当前版本只认得 v${EXPORT_VERSION}。请先更新游戏再导入。` };
+  }
+  const raw = data.state;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, code: 'state-missing', message: '文件里缺少存档内容（state），无法导入。当前进度没有被改动。' };
+  }
+  const sv = Number(raw.version);
+  if (Number.isFinite(sv) && sv > SCHEMA_VERSION) {
+    return { ok: false, code: 'schema-newer', message: `这份存档的结构版本（v${sv}）比当前游戏（v${SCHEMA_VERSION}）新，导进来可能会丢字段。请先更新游戏。` };
+  }
+  /* 不论导出时是哪个结构版本，都走同一条 migrate()：白名单过滤 + 旧档补齐 */
+  const next = migrate(raw);
+  if (!hasProgress(next)) {
+    return { ok: false, code: 'empty', message: '这份文件里没有可以导入的进度（没有年龄段、关卡、词卡、本领或贝壳）。当前进度没有被改动。' };
+  }
+  return { ok: true, state: next, exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '', exportVersion: ev };
+}
+
+function summarizeState(s) {
+  const b = AGE_BANDS.find(x => x.id === s.band);
+  return {
+    band: b ? `${b.name} · ${b.tag}` : '还没选年龄段',
+    kid: s.cleared.filter(id => KID.levels.some(l => l.id === id)).length,
+    adult: s.cleared.filter(id => ADULT.levels.some(l => l.id === id)).length,
+    cards: s.cards.kid.length + s.cards.adult.length,
+    skills: s.skills.length,
+    shells: s.shells
+  };
+}
+
+function formatExportTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try { return d.toLocaleString('zh-CN', { hour12: false }); }
+  catch (e) { return iso; }
+}
+
+function importSummaryHtml(s) {
+  return `<p>${esc(s.band)}</p>
+    <p>儿童轨 ${s.kid} 站 · 成年轨 ${s.adult} 站</p>
+    <p>词卡 ${s.cards} 张 · 本领 ${s.skills} 个 · 贝壳 ${s.shells}</p>`;
+}
+
+function showImportError(message, fileName) {
+  openModal(`<div class="modal-title">导入失败</div>
+    <div class="modal-body">
+      ${fileName ? `<p>文件：<b>${esc(fileName)}</b></p>` : ''}
+      <p>${esc(message)}</p>
+      <p class="muted">当前设备上的进度没有被改动。</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-action="close-modal">知道了</button>
+      <button class="btn btn-primary" data-action="import-progress">换个文件</button>
+    </div>`);
+}
+
+function previewImport(text, fileName) {
+  const res = validateImport(text);
+  if (!res.ok) { showImportError(res.message, fileName); return; }
+  pendingImport = { ...res, fileName };
+  const now = summarizeState(state);
+  const next = summarizeState(res.state);
+  const when = formatExportTime(res.exportedAt);
+  openModal(`<div class="modal-title">导入前先看一眼</div>
+    <div class="modal-body">
+      <p>文件：<b>${esc(fileName || '未命名')}</b>${when ? ` · 导出于 ${esc(when)}` : ''}</p>
+      <div class="import-compare">
+        <div><b>文件里的进度</b>${importSummaryHtml(next)}</div>
+        <div><b>当前设备</b>${importSummaryHtml(now)}</div>
+      </div>
+      <p class="muted">导入会<b>覆盖</b>当前设备的进度与显示设置，不做合并。确认后，本次打开期间还可以撤销一次。</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-action="cancel-import">先不导入</button>
+      <button class="btn btn-primary" data-action="import-confirm">覆盖并导入</button>
+    </div>`);
+}
+
+function readImportFile(file) {
+  if (!file) return;
+  /* 进度 JSON 只有几十 KB；过大的文件多半不是本游戏的导出，先挡在门外 */
+  if (file.size > 5 * 1024 * 1024) {
+    showImportError('这个文件太大了（超过 5 MB），不像是一份进度备份。当前进度没有被改动。', file.name);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => previewImport(String(reader.result || ''), file.name);
+  reader.onerror = () => showImportError('读不出这个文件，可能是权限或编码问题。当前进度没有被改动。', file.name);
+  reader.readAsText(file);
+}
+
+/* 文件选择框按需创建、用完移除：设置页 DOM 里不留常驻的 input，
+   既符合「页面上没有自由文本输入框」的约束，也不让选择器打断设置页的焦点顺序。 */
+function pickImportFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.style.display = 'none';
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    input.remove();
+    if (file) readImportFile(file);
+  });
+  /* 用户取消选择：清掉临时 input（cancel 事件较新，旧浏览器靠 change 分支） */
+  input.addEventListener('cancel', () => input.remove());
+  document.body.appendChild(input);
+  input.click();
+}
+
 function openSettings() {
   const s = state.settings;
   openModal(`<div class="modal-title">显示、朗读与数据</div>
@@ -1638,6 +1920,14 @@ function openSettings() {
         <p>只存「年龄段、走到哪一站、词卡、本领、贝壳、小岛摆设、显示设置」，全部留在这台设备的浏览器里，不上传、不联网。</p>
         <p><b>不会保存</b>：开场选的天气、任何输入的心情文字（本游戏也不提供文字输入框）。</p>
         ${storageWritable ? '' : '<p class="muted"><b>当前浏览器无法保存数据</b>：这一趟仍能继续玩，但关掉页面后进度不会留下来。换普通窗口打开即可正常保存。</p>'}</div>
+      <div class="setting-row"><strong>备份与迁移</strong>
+        <p>导出会生成一个 JSON 文件，只含上面这些字段；换设备或清浏览器数据前留一份，之后可以再导入。</p>
+        <p class="muted">导入会先让你核对年龄段与站数，确认后才覆盖；覆盖前的那一份在本次打开期间还能撤销一次。</p>
+        <div class="seg">
+          <button data-action="export-progress">导出进度</button>
+          <button data-action="import-progress">导入进度</button>
+        </div>
+        <p class="muted" id="data-status" role="status"></p></div>
     </div>
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">完成</button>
       <button class="btn btn-ghost" data-action="clear-progress">清空本机进度</button></div>`);
@@ -1779,6 +2069,45 @@ const ACTIONS = {
     renderMap();
   },
   'open-settings': () => openSettings(),
+  'export-progress': () => exportProgress(),
+  'import-progress': () => pickImportFile(),
+  'cancel-import': () => { pendingImport = null; closeModal(); openSettings(); },
+  'import-confirm': () => {
+    if (!pendingImport) return;
+    /* 先留一份内存快照，再覆盖；写盘失败也不影响撤销（快照不依赖 localStorage） */
+    const before = clone(state);
+    const fileName = pendingImport.fileName;
+    state = pendingImport.state;
+    pendingImport = null;
+    importUndo = before;
+    save(); applySettings();
+    closeModal();
+    openModal(`<div class="modal-title">导入完成</div>
+      <div class="modal-body">
+        <p>已用 <b>${esc(fileName || '这份文件')}</b> 覆盖当前进度。年龄段与显示设置也一起换成了文件里的。</p>
+        <p class="muted">如果选错了文件，现在还可以恢复成导入前的那一份；关掉页面后就不再提供撤销。</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" data-action="import-undo">撤销这次导入</button>
+        <button class="btn btn-primary" data-action="import-finish">好，继续</button>
+      </div>`);
+  },
+  'import-undo': () => {
+    if (importUndo) {
+      state = importUndo;
+      save(); applySettings();
+    }
+    importUndo = null;
+    closeModal();
+    session.tip = '已撤销这次导入，恢复到导入前的进度。';
+    if (!state.band) renderAgeGate(); else renderHome();
+  },
+  'import-finish': () => {
+    importUndo = null;
+    closeModal();
+    session.tip = '进度已导入。';
+    if (!state.band) renderAgeGate(); else renderHome();
+  },
   'set-scale': (el) => { state.settings.scale = Number(el.dataset.v); save(); applySettings(); openSettings(); },
   'toggle-flag': (el) => {
     state.settings[el.dataset.k] = el.dataset.v === '1';
@@ -2240,8 +2569,31 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+/* ---------------------------------------------------------------- 离线与安装 */
+/* PWA 只在 http(s) 下注册。file:// 双击打开时没有可用的 Service Worker：
+   这里直接跳过，页面照常完整可玩；注册失败也只影响「装到主屏」，不影响玩法。
+   先等页面加载完再注册，避免和首屏渲染抢资源。 */
+function registerOffline() {
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  if (!('serviceWorker' in navigator)) return;
+  const register = () => {
+    try {
+      navigator.serviceWorker.register('sw.js')
+        /* 主动检查更新：SW 本身带版本号，新版本 install 后立刻接管并清掉旧缓存 */
+        .then((reg) => { try { reg.update(); } catch (e) { /* noop */ } })
+        .catch(() => { /* 离线能力不是玩法的前提，失败不打扰用户 */ });
+    } catch (e) { /* noop */ }
+  };
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
+}
+
 /* ---------------------------------------------------------------- 启动 */
 applySettings();
+registerOffline();
+/* 地址栏里带了 hash 就按它直达；没有则落到默认首屏，并由 syncHash 写入合法地址。
+   hashchange 覆盖手动改地址、刷新后同页跳转，以及少数浏览器 replaceState 失败时的回落。 */
+window.addEventListener('hashchange', () => routeTo(parseHash(location.hash)));
 if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>
@@ -2249,6 +2601,11 @@ if (!CONTENT_OK) {
     需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → library → dictionary → selfhelp → slowvars，最后才是 script.js。</p>
     <p class="muted">打开浏览器控制台可以看到具体是哪个文件 404。</p>
   </div>`;
-} else if (!state.band) renderAgeGate();
-else renderHome();
+} else {
+  const initial = parseHash(location.hash);
+  /* 没选档时 routeTo 自己会回落到选档页；正常有档则按地址 / 默认首页 */
+  routeTo(initial);
+  /* 空地址或非法地址在渲染时已被 syncHash 改写；这里再兜一次，确保首次进入地址合法 */
+  if (!initial.view) syncHash();
+}
 

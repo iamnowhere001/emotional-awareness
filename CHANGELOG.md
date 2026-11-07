@@ -1,8 +1,54 @@
 # 更新日志
 
-本项目按「交付批次」倒序记录。**版本口径**：自 2026-11-07 起统一采用 `0.x.y` 台阶制编号（规则见 [ROADMAP.md](ROADMAP.md) §4），`package.json` 的 `version` 是唯一权威值；原 v1–v6.1.3 十轮批次按顺位重排为 **v0.1.0 → v0.8.2**，v0.9.0 起为新批次；只改文档与源码头注释，**不触碰 `SCHEMA_VERSION` 与 `mood-island-v4` 存档键**。`SCHEMA_VERSION` 只在存档结构变化时 +1（当前为 4），与发版号是两套编号。v0.1.0 日期未记录；v0.2.0–v0.6.0 完成于 **2026-11-06**；v0.7.0–v0.9.0 完成于 **2026-11-07**。
+本项目按「交付批次」倒序记录。**版本口径**：自 2026-11-07 起统一采用 `0.x.y` 台阶制编号（规则见 [ROADMAP.md](ROADMAP.md) §4），`package.json` 的 `version` 是唯一权威值；原 v1–v6.1.3 十轮批次按顺位重排为 **v0.1.0 → v0.8.2**，v0.9.0 起为新批次；只改文档与源码头注释，**不触碰 `SCHEMA_VERSION` 与 `mood-island-v4` 存档键**。`SCHEMA_VERSION` 只在存档结构变化时 +1（当前为 4），与发版号是两套编号。v0.1.0 日期未记录；v0.2.0–v0.6.0 完成于 **2026-11-06**；v0.7.0–v0.10.0 完成于 **2026-11-07**。
 
 格式参考 Keep a Changelog，按「新增 / 变更 / 修复 / 工程 / 验证 / 取舍」分组。每次发版的固定动作见 [ROADMAP.md](ROADMAP.md) §5。
+
+---
+
+## [0.10.0] — 2026-11-07
+
+**把进度带得走。** 本轮补三件「离开这台设备」的能力：PWA（可装主屏、断网仍能打开）、进度 JSON 导出 / 导入（换设备或清浏览器数据前后能接上）、`#/level/x` 直达路由（刷新与分享都不丢站）。三条都保持原有边界：不打分、不采集心情文本、零构建零依赖；PWA 只缓存同源静态文件，没有引入任何远程请求。存档结构未变，`SCHEMA_VERSION` 仍为 4，`mood-island-v4` 键不变。按台阶制记为 MINOR **0.10.0**。
+
+### 新增
+
+- PWA：`manifest.webmanifest`、`sw.js`、`icons/`（192 / 512 / maskable-512 PNG + 源 SVG）；`index.html` 接入 manifest、图标与 `theme-color`。
+- `registerOffline()`：只在 `http(s)` 下注册 service worker；`file://` 直接跳过，双击打开仍完整可玩，不因注册失败报错或白屏。
+- 设置页「备份与迁移」：导出 `mood-island-progress-YYYYMMDD-HHmm.json`；载荷为 `{ app, exportVersion, exportedAt, state }`。
+- 导入预览：并排显示文件与当前设备的年龄段、两轨站数、词卡、本领、贝壳，确认后才覆盖；覆盖后本次打开期间可撤销一次（快照只在内存）。
+- hash 路由：`#/gate`、`#/home`、`#/map`、`#/level/<id>`、`#/help`、`#/retreat`、`#/dict`、`#/selfhelp`、`#/slowvars`；启动按地址直达，`hashchange` 跟随手动修改。
+
+### 变更
+
+- 每个视图渲染后由 `syncHash()` 把当前屏写回地址栏（`history.replaceState`，不进历史栈），Esc / 返回路径保持原语义。
+- 导入沿用 `migrate()`：v3 的不分轨词卡等旧结构会按白名单补齐，不要求文件与当前 `SCHEMA_VERSION` 完全一致。
+- 版本五处同步 0.10.0；`sw.js` 的 `VERSION` 与 `package.json` 版本一致由源码检查强制。
+
+### 修复
+
+- 无。本轮未改动既有玩法与存档语义。
+
+### 工程
+
+- `sw.js`：按 `VERSION` 命名缓存，`install` 预缓存 20 项静态资源并 `skipWaiting`，`activate` 清掉旧版本缓存并 `claim`；导航请求网络优先、失败回落缓存，避免旧版卡住不更新。
+- 导出 / 导入：`validateImport()` 只校验不改档，覆盖前保留内存快照；文件选择框按需创建、用完移除，设置页 DOM 不新增常驻 `input`。
+- 路由：`parseHash()` 只认固定视图表与当前轨关卡 id；未解锁、另一条轨、未知地址都回落并把 hash 改回合法值；`routeReady` 防止首次渲染被「已在目标屏」误判。
+- 新增 8 项浏览器用例（75 → 83）：导出载荷与文件名、坏文件逐条反馈、旧结构走 `migrate()`、预览不改档 / 确认覆盖 / 撤销、hash 解析、直达定位与地址同步、未知或不可达回落、hash 进急救后 Esc 回原题。
+- 新增 6 项源码检查（27 → 33）：`sw.js` 版本对齐、`exportVersion` 独立、导入先校验再迁移、确认与撤销接线、hash 解析 / 同步 / 回落、`replaceState` 与 `file://` 回落。
+
+### 验证
+
+- `npm run verify`：83 项浏览器 + 33 项源码 = **116 PASS / 0 FAIL**；lint 0 错误、2 条无害提示。
+- PWA：`http://localhost` 下可安装，CDP 断网重载仍渲染选档页；`file://` 双击不注册 service worker，选档页、关卡、导出导入与 `#/level/x` 均正常。
+- 旧档：v2 / v3 / v4 均未改结构，`migrate()` 行为与 0.9.0 一致；导入旧结构文件后 `state.version` 归到 4。
+
+### 取舍
+
+- **导出格式号独立**：`exportVersion` 只在载荷形状变化时 +1，不与 `package.json` 版本或 `SCHEMA_VERSION` 混用；游戏升级但载荷不变时它不动，避免「发版就要改导入兼容」。
+- **导入先确认、不合并**：进度是「一台设备的整体状态」，合并会让两轨站数、词卡与贝壳互相矛盾；先显示差异再覆盖，并保留一次内存撤销。
+- **hash 不用 pushState**：每站一条历史会让 Esc / 返回变成「按很多次」，与现有 `session.view` 语义冲突；用 `replaceState`，失败时退回 `location.hash`。
+- **回落而不是报错**：坏链接最终落到地图或选档页，并把地址改写为合法值；只有关卡未解锁 / 跨轨时给一句原因。
+- 未做：进度云端同步、跨设备合并、导出加密；岛 5 仍按 ROADMAP 押后到 1.1.0。
 
 ---
 
