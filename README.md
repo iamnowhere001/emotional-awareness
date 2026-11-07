@@ -2,7 +2,7 @@
 
 > 一起认出心里的天气。按年龄分级的情绪启蒙小游戏：**纯前端 · 零依赖 · 不联网 · 不打分 · 不采集心情文本**。
 >
-> 当前版本 **0.11.1**（0.x 预发布台阶，历史批次已自 v0.1.0 重排，见 [CHANGELOG.md](CHANGELOG.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
+> 当前版本 **0.12.0**（0.x 预发布台阶，历史批次已自 v0.1.0 重排，见 [CHANGELOG.md](CHANGELOG.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
 
 这不是心理测评，也不能代替专业帮助。它做的事只有一件：把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。
 
@@ -64,7 +64,16 @@
 .
 ├── index.html                    # 容器 + 内容文件加载顺序（顺序敏感）
 ├── style.css                     # 浅色主题、字号/动效/高对比、3-6 档大按钮
-├── script.js                     # 全部逻辑：状态 / 渲染器 / 动作分发 / 事件 / 存档迁移 / 导出导入 / hash 路由
+├── js/                           # 全部逻辑，经典脚本顺序加载，共用同一个全局词法作用域
+│   ├── core.js                   # 常量 / 内容别名 / 派生白名单 / 轨道辅助 / 顶层状态 / 存档 load·migrate·save
+│   ├── util.js                   # 转义与洗牌 / 拼装选道 / 微型渲染件 / 设置应用
+│   ├── shell.js                  # 视图配置表 / 顶栏与进度 / hash 路由 / 反馈 / 解锁链 / 朗读
+│   ├── views-main.js             # 选年龄段 / 首页 / 急救 / 地图 / 工作间 / 静修列表
+│   ├── views-library.js          # 知识库公共骨架 / 词典 / 自助工具箱 / 慢变量 / 静修练习
+│   ├── views-level.js            # RENDERERS / makePlay / renderLevel / 子渲染 / 通关结果卡
+│   ├── ui.js                     # 弹窗 / 导出导入 / 设置 / 词卡图鉴 / 本领 / 漂流瓶
+│   ├── actions.js                # ACTIONS 动作分发表
+│   └── boot.js                   # 事件委托 / 离线注册 / 按 hash 进首屏（必须最后加载）
 ├── manifest.webmanifest          # PWA 清单：名称、起始页、图标（只在 http(s) 下被浏览器读取）
 ├── sw.js                         # service worker：按版本号预缓存静态资源，不含任何用户数据
 ├── icons/                        # 192 / 512 / maskable-512 PNG + 源 SVG
@@ -86,6 +95,8 @@
 │   └── help.js                   # 急救入口：3 个 1 分钟动作 / 儿童档说明 / 本地求助信息（纯数据）
 ├── scripts/
 │   ├── lint-content.mjs          # 内容自检（用 vm 按加载顺序执行 content/*.js）
+│   ├── js-files.mjs              # 逻辑脚本清单（加载顺序的单一来源）
+│   ├── check-syntax.mjs          # 逐个 + 拼接解析 js/*.js，抓跨文件重复顶层声明
 │   ├── regression.mjs            # 无头 Chrome 浏览器回归（注入测试页，不改源文件）
 │   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用
 ├── tests/
@@ -100,11 +111,11 @@
 - **双击 `index.html`（`file://`）**：内容、玩法、导出、导入、`#/level/x` 直达全部可用；service worker 只在 `http(s)` 下注册，`file://` 下直接跳过，不报错也不白屏。
 - **本地静态服务（`npm run serve`，`http://localhost:5173`）**：额外获得「安装到主屏 / 离线打开」。`sw.js` 预缓存全部静态资源，缓存名带 `VERSION`；新版本发布时 `VERSION` 变化会让旧缓存在 `activate` 阶段被清掉，页面导航走网络优先、失败才用缓存，避免旧版卡住不更新。应用本身仍然零远程请求：报文只来自同源的本地文件。
 
-**为什么不用 ES module**：`content/*.js` 用经典 `<script>` 顺序加载，是为了让双击 `index.html` 的 `file://` 场景也能跑（ES module 在 `file://` 下会被 CORS 拦住）。`index.html` 里的顺序是契约：
+**为什么不用 ES module**：`content/*.js` 与 `js/*.js` 都用经典 `<script>` 顺序加载，是为了让双击 `index.html` 的 `file://` 场景也能跑（ES module 在 `file://` 下会被 CORS 拦住）。`index.html` 里的顺序是契约：
 
-`bands → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → dictionary → selfhelp → slowvars → script.js`
+`bands → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → dictionary → selfhelp → slowvars → help → js/core → js/util → js/shell → js/views-main → js/views-library → js/views-level → js/ui → js/actions → js/boot`
 
-顺序错了或文件缺失，`script.js` 启动时会显示「内容没加载出来」的可读提示，不会白屏。
+顺序错了或文件缺失，`js/boot.js` 启动时会显示「内容没加载出来」的可读提示，不会白屏。九块逻辑脚本共用同一个全局词法作用域（`let/const` 跨脚本可见，不挂 `window`），因此**同一顶层名字只能声明一次**；`npm run check` 会把九块拼起来再解析一次，专门拦跨文件重复声明。
 
 ---
 
@@ -139,7 +150,7 @@
 
 ### 4.4 加一种题型
 
-需要动四处：`script.js` 的 `RENDERERS`（渲染）、`makePlay`（初始化 play 状态）、`ACTIONS`（交互处理）、`style.css`；以及 `lint-content.mjs` 的 `TYPES` / `NEED`。参考 `ladder` 这个题型，它是最小实现。
+需要动四处：`js/views-level.js` 的 `RENDERERS`（渲染）与 `makePlay`（初始化 play 状态）、`js/actions.js` 的 `ACTIONS`（交互处理）、`style.css`；以及 `lint-content.mjs` 的 `TYPES` / `NEED`。参考 `ladder` 这个题型，它是最小实现。
 
 ### 4.5 加 / 改词典词条
 
@@ -156,7 +167,7 @@
 ```
 
 - **数量不设上限**。0.8.2 起取消「固定 100 条」，`npm run lint` 只保留一条「少于 100 条即报错」的防误删下限。加词条不必删旧词条，也不必同步改测试里的数字（浏览器用例一律读 `DICTIONARY.length`）。
-- `c`（主题）与 `k`（概念类型）**只认 `MI.dictionaryMeta`**：`groups[]` 的 `cats` 展开即合法主题，顺序就是词典页的分区顺序；`kinds[]` 的 `id` 是合法类型。当前 **3 个大组 / 11 个主题 / 4 种类型**（`core` 入门核心 / `frontier` 当代议题 / `method` 方法与证据 / `myth` 容易误读）。**新增主题或类型只改数据文件**，不用动 `lint-content.mjs` 与 `script.js`。
+- `c`（主题）与 `k`（概念类型）**只认 `MI.dictionaryMeta`**：`groups[]` 的 `cats` 展开即合法主题，顺序就是词典页的分区顺序；`kinds[]` 的 `id` 是合法类型。当前 **3 个大组 / 11 个主题 / 4 种类型**（`core` 入门核心 / `frontier` 当代议题 / `method` 方法与证据 / `myth` 容易误读）。**新增主题或类型只改数据文件**，不用动 `lint-content.mjs` 与 `js/core.js`。
 - 必填 `t / e / c / k / s / d`，`t` 不重复；`r` 若给出，必须是真实存在的词条名、不能指向自己、不能重复。改完跑 `npm run lint`，它会校验字段、主题、类型、关联引用、名词去重、每个主题 / 类型都有词条与文案长度。
 - **交互契约**：`dictCat`（主题）/ `dictKind`（类型）/ `dictQuery`（搜索）只在内存里，每次从入口打开词典都会清空；三个筛选可叠加，计数与分区标题的条数一起更新，分区被筛空时标题跟着收起。点卡片底部的「接着看」会先清掉全部筛选、再滚动并展开目标卡，避免「点了没反应」。分类按钮数量、类型按钮数量、页内目录锚点、卡片类型角标全部由数据派生。
 - 写内容时优先用可重复的研究结论，对效应量与争议保守表述；不写诊断、疗效或个体化建议。三条知识库仍共用 `renderLibraryView`，词典只通过可选钩子（`groupTitle / catNameHtml / queryKind / countText / syncSelection / active`）扩展，自助工具箱与慢变量不受影响。
@@ -211,12 +222,12 @@
 ### 4.10 改完必跑
 
 ```bash
-npm run verify      # = 语法检查 + 内容自检 + 93 项浏览器回归 + 46 项源码检查
+npm run verify      # = 语法检查 + 内容自检 + 93 项浏览器回归 + 51 项源码检查
 ```
 
 内容自检覆盖：两轨关卡结构与岛屿对应、每档每关 ≥2 组、终章位置与唯一性、词卡/本领唯一且 `CODEX` 有释义、题库多余键、各题型内部一致性（`answer` 越界、`chain` 标签对应、`sort` 落筐、`compose` 每行恰 1 个 gentle、记忆牌去重、`ladder` 档位字段）、**拼装槽位结构（想法单场景归属 / 恰好 1 个 ok / 组合键合法 / 答案位置不恒定 / ≥5 组可复玩）、工作间 4 幕与变体池一一对应且不带奖励字段**、**静修练习的分组与字段、漂流瓶题量与去重、心理学词典的数量下限/主题与类型元数据/关联引用/字段/去重、自助工具箱的状态/工具/扭曲数量与分类/字段/去重、慢变量的变量/练习/陷阱/时间尺度数量与字段、`v` 关联与 `cards` 交叉引用、急救入口的动作数量/字段/号码/免责口径**、文案长度、评分/诊断/疗效类红线词。当前结果：**0 错误，2 条无害提示**（「排名」1 次、「治疗」10 次，均在免责、科普语境或词条关联名里）。
 
-浏览器回归用 `tests/browser-tests.js` 覆盖内容加载、旧档迁移与词卡按轨拆分、双轨切换、按岛解锁、洗牌、计时器回收、两套终章、弹窗焦点、选项徽标与数字键一致（含字母键不误触）、`completeLevel` 纯文本转义、清空进度连旧键一起删除、换档提示不串屏，以及心理学词典 / 自助工具箱 / 慢变量的内容和筛选交互（词典另覆盖分组标题与目录锚点、主题 × 类型 × 搜索三维叠加、分区条数联动、关联跳转、重新进入清空；慢变量另覆盖变量→练习联动、清选、非法 id、重新进入清空、页内目录与尺度引用）；P2 又补了弹窗 `aria-labelledby`、进度格 `aria-current`、记忆牌 `aria-label`、三处英文词条 `lang="en"`、两轨岛末站「今日微行动」与终章不发放。0.9.0 另补了急救入口的两轨措辞、进入 / 返回（首页 / 地图 / 选档页 / 关卡 / 词典 / 工作间，关卡返回同一道题；已有档时选档页按首页回落）、三个动作可完成、不写存档，以及真 390×900 视口断言（用例跑在固定 390×900 的 iframe 里，绕开 Chrome 无头的 500px 钳制）。0.11.0 补了拼装题物化契约与同键复现、连续 6 轮无重复且 `seen` 落盘上限 8、`restart-all` 不清 `seen`、v2 / v3 / v4 升 v5 不丢主线 / 词卡 / 本领 / 贝壳、工作间两轨可见性、按幕解锁、完成只写 `sideCleared` 且无奖励、`#/work` 与 `#/level/W-x` 直达及回落。0.11.1 补了支线换题后 side 上下文与「通关不写主线」、工作间进急救的按钮 / Esc 返回、已完成幕在从头再来后仍可回看与直达。`npm run test:e2e -- --verbose` 可看逐项结果。源码检查还会校验 `VIEW_CONFIG` 覆盖所有 `session.view`、三个知识库视图共用 `renderLibraryView`、词典数量不再写死、主题与类型由 `dictionaryMeta` 驱动、`#overlay` 不挂 `aria-live`、`style.css` 无残留死样式；0.11.0 另锁定 v5 键与 LEGACY、拼装选道无 `Math.random`、`data-variant` 可见、支线白名单与主线分离、`restart-all` 不清 `seen`、文档不出现组合计数；0.11.1 另锁定支线换题上下文、急救返回覆盖 `backLabels` 全部来源、已完成幕可达。
+浏览器回归用 `tests/browser-tests.js` 覆盖内容加载、旧档迁移与词卡按轨拆分、双轨切换、按岛解锁、洗牌、计时器回收、两套终章、弹窗焦点、选项徽标与数字键一致（含字母键不误触）、`completeLevel` 纯文本转义、清空进度连旧键一起删除、换档提示不串屏，以及心理学词典 / 自助工具箱 / 慢变量的内容和筛选交互（词典另覆盖分组标题与目录锚点、主题 × 类型 × 搜索三维叠加、分区条数联动、关联跳转、重新进入清空；慢变量另覆盖变量→练习联动、清选、非法 id、重新进入清空、页内目录与尺度引用）；P2 又补了弹窗 `aria-labelledby`、进度格 `aria-current`、记忆牌 `aria-label`、三处英文词条 `lang="en"`、两轨岛末站「今日微行动」与终章不发放。0.9.0 另补了急救入口的两轨措辞、进入 / 返回（首页 / 地图 / 选档页 / 关卡 / 词典 / 工作间，关卡返回同一道题；已有档时选档页按首页回落）、三个动作可完成、不写存档，以及真 390×900 视口断言（用例跑在固定 390×900 的 iframe 里，绕开 Chrome 无头的 500px 钳制）。0.11.0 补了拼装题物化契约与同键复现、连续 6 轮无重复且 `seen` 落盘上限 8、`restart-all` 不清 `seen`、v2 / v3 / v4 升 v5 不丢主线 / 词卡 / 本领 / 贝壳、工作间两轨可见性、按幕解锁、完成只写 `sideCleared` 且无奖励、`#/work` 与 `#/level/W-x` 直达及回落。0.11.1 补了支线换题后 side 上下文与「通关不写主线」、工作间进急救的按钮 / Esc 返回、已完成幕在从头再来后仍可回看与直达。`npm run test:e2e -- --verbose` 可看逐项结果。源码检查还会校验 `VIEW_CONFIG` 覆盖所有 `session.view`、三个知识库视图共用 `renderLibraryView`、词典数量不再写死、主题与类型由 `dictionaryMeta` 驱动、`#overlay` 不挂 `aria-live`、`style.css` 无残留死样式；0.11.0 另锁定 v5 键与 LEGACY、拼装选道无 `Math.random`、`data-variant` 可见、支线白名单与主线分离、`restart-all` 不清 `seen`、文档不出现组合计数；0.11.1 另锁定支线换题上下文、急救返回覆盖 `backLabels` 全部来源、已完成幕可达。0.12.0 把源码检查改为按 `scripts/js-files.mjs` 清单拼接后断言，并新增 5 条结构锁：`index.html` 按清单顺序引入九块逻辑脚本、九块文件都在磁盘上、块间无重复顶层声明、`sw.js` 预缓存清单与清单一致、`package.json` 的 `check` 走清单化语法检查。
 
 ---
 
@@ -269,10 +280,10 @@ npm run verify      # = 语法检查 + 内容自检 + 93 项浏览器回归 + 46
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run check` | `node --check script.js`，只查逻辑文件语法 |
+| `npm run check` | `node scripts/check-syntax.mjs`：逐个 + 拼接解析 `js/*.js`，顺带拦跨文件重复顶层声明 |
 | `npm run lint` | 内容自检，不引依赖、不启浏览器 |
 | `npm run serve [端口]` | 本地静态服务，默认 5173；传参写 `npm run serve -- 8080` |
-| `npm run test:e2e` | 无头 Chrome 回归（93 项用例 + 46 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
+| `npm run test:e2e` | 无头 Chrome 回归（93 项用例 + 51 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
 | `npm run verify` | check + lint + test:e2e，**每次提交前至少跑这个** |
 
 `test:e2e` 需要本机有 Chrome / Chromium；找不到时设置 `CHROME_PATH=/path/to/chrome`。测试页是在内存里注入用例生成的临时 HTML，**不会改动任何源文件**，也不写项目目录。
@@ -312,7 +323,7 @@ npm run verify      # = 语法检查 + 内容自检 + 93 项浏览器回归 + 46
 | # | 原问题 | 处理结果 |
 | --- | --- | --- |
 | 1 | 隐私模式 `localStorage` 写入失败被静默吞掉 | `save()` 失败置 `storageWritable = false`，插入常驻 `.storage-warning`，设置页同步说明；回归有专项用例 |
-| 2 | `script.js` 头注释写 v5、`package.json` 写 0.6.0 | 当时统一到 **0.7.0**；0.8.0 起改为源码级校验：`script.js` 头注释、README / CHANGELOG / ROADMAP 的当前版本都必须与 `package.json` 完全一致 |
+| 2 | `js/core.js` 头注释写 v5、`package.json` 写 0.6.0 | 当时统一到 **0.7.0**；0.8.0 起改为源码级校验：`js/core.js` 头注释、README / CHANGELOG / ROADMAP 的当前版本都必须与 `package.json` 完全一致 |
 | 3 | `index.html` 静态占位写死「已探索 0 / 13 关」 | 改为中性的「已走过 0 站」，运行时由 `updateTopbar()` 覆盖 |
 | 4 | `isUnlocked()` 注释说「走完上一座岛」，实现只检查收尾站 | **保持行为**（岛内自由是刻意设计），注释与地图按钮文案改齐为「先把上一座岛走到头」 |
 | 5 | 成年档 v0.6.0 之前的进度不迁移 | **已决不处理**：开放阶段不做映射，也不再排期（见 §5） |
@@ -326,9 +337,9 @@ npm run verify      # = 语法检查 + 内容自检 + 93 项浏览器回归 + 46
 | --- | --- | --- |
 | 词典 `data-search` 改索引 | 不做 | 155 条时全量字符串索引不到 100KB，过滤只读 `dataset.search`，实机无感；等条目超过 500 再换成 Map 索引 |
 | 合并 `levels-kid*.js` / `bank-kid*.js` | 不做 | 会同时改动 `index.html` 加载顺序、`lint-content.mjs` 的 `FILES`、`regression.mjs` 的顺序断言、岛 4 的 `splice` 插入逻辑与题库 `Object.assign`，收益只是少 2 个文件 |
-| 拆分 `script.js` 为 state / views / actions | 排进 0.12.0，本轮不做 | 0.11.1 审查确认已触发 §1.1 的行数条件（2914 行 > 2500）；但拆分只做搬运，必须与行为修复分开提交，且测试与主脚本共享经典脚本的顶层词法作用域（`state / LEVELS / play / …`），要先收成显式导出，`file://` 的加载顺序契约也更脆，工作量是独立一轮 |
+| 拆分 `script.js` 为 state / views / actions | 0.12.0 已交付 | 0.11.1 审查确认触发 §1.1 的行数条件（2914 行 > 2500）后，0.12.0 按 9 个连续切片搬进 `js/`：`core → util → shell → views-main → views-library → views-level → ui → actions → boot`。仍是经典脚本顺序加载、共用全局词法作用域，测试与主脚本的隐式依赖原样保留；加载顺序、重复声明、`sw.js` 预缓存清单都由结构断言锁住 |
 
-**已交付 / 未排期**：0.9.0 已交付「现在很难受」入口（顶栏常驻 + 首页卡片 + 地图卡）、3 个 1 分钟动作、本地求助信息分层、真 390×900 回归脚手架、§6 四项决策收口与无障碍顺带项；0.10.0 已交付 PWA（`file://` 仍完整可玩）、进度 JSON 导出 / 导入（带独立 `exportVersion`、确认后覆盖、可撤销一次）与 `#/level/x` 直达路由；0.11.0 已交付变体拼装试点与成年「工作间」支线；0.11.1 完成一轮逻辑审查（支线上下文、急救返回、已完成幕可重玩）并确认 `script.js` 拆分条件已触发、排入 0.12.0。之后直接对 1.0.0 正式发布门槛；岛 5 押后到 1.1.0。详见 [ROADMAP.md](ROADMAP.md)。
+**已交付 / 未排期**：0.9.0 已交付「现在很难受」入口（顶栏常驻 + 首页卡片 + 地图卡）、3 个 1 分钟动作、本地求助信息分层、真 390×900 回归脚手架、§6 四项决策收口与无障碍顺带项；0.10.0 已交付 PWA（`file://` 仍完整可玩）、进度 JSON 导出 / 导入（带独立 `exportVersion`、确认后覆盖、可撤销一次）与 `#/level/x` 直达路由；0.11.0 已交付变体拼装试点与成年「工作间」支线；0.11.1 完成一轮逻辑审查（支线上下文、急救返回、已完成幕可重玩）；0.12.0 把 2914 行的 `script.js` 按职责搬进 `js/` 九块脚本，行为与对外契约不变。之后直接对 1.0.0 正式发布门槛；岛 5 押后到 1.1.0。详见 [ROADMAP.md](ROADMAP.md)。
 
 ---
 
