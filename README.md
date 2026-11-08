@@ -101,7 +101,7 @@
 │   ├── regression.mjs            # 无头 Chrome 浏览器回归（注入测试页，不改源文件）
 │   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用
 ├── tests/
-│   └── browser-tests.js          # 93 项浏览器用例，由 regression.mjs 注入 390×900 iframe
+│   └── browser-tests.js          # 115 项浏览器用例，由 regression.mjs 注入 390×900 iframe
 ├── package.json                  # check / lint / serve / test:e2e / verify
 ├── .gitignore
 ├── README.md  CHANGELOG.md  ROADMAP.md
@@ -242,7 +242,7 @@
 ### 4.11 改完必跑
 
 ```bash
-npm run verify      # = 语法检查 + 内容自检 + 113 项浏览器回归 + 51 项源码检查
+npm run verify      # = 语法检查 + 内容自检 + 115 项浏览器回归 + 51 项源码检查
 ```
 
 内容自检覆盖：两轨关卡结构与岛屿对应、每档每关 ≥2 组、终章位置与唯一性、词卡/本领唯一且 `CODEX` 有释义、题库多余键、各题型内部一致性（`answer` 越界、`chain` 标签对应、`sort` 落筐、`compose` 每行恰 1 个 gentle、记忆牌去重、`ladder` 档位字段）、**拼装槽位结构（想法单场景归属 / 恰好 1 个 ok / 组合键合法 / 答案位置不恒定 / ≥5 组可复玩）、工作间 4 幕与变体池一一对应且不带奖励字段**、**静修练习的分组与字段、漂流瓶题量与去重、心理学词典的数量下限/主题与类型元数据/关联引用/字段/去重、自助工具箱的状态/工具/扭曲数量与分类/字段/去重、慢变量的变量/练习/陷阱/时间尺度数量与字段、`v` 关联与 `cards` 交叉引用、急救入口的动作数量/字段/号码/免责口径、概念层 16 条的 id 唯一 / 两轨卡名 / 反链真实性 / 依赖不成环 / 教学站先于依赖 / 词典锚点只引用已有词条，以及工作间四幕用到的概念必须早于 `MI.workGate` 教完**、文案长度、评分/诊断/疗效类红线词。当前结果：**0 错误，5 条无害提示**（2 条「终章未挂概念」+ 3 条红线词提醒，均在免责或科普语境里）。
@@ -303,7 +303,7 @@ npm run verify      # = 语法检查 + 内容自检 + 113 项浏览器回归 + 5
 | `npm run check` | `node scripts/check-syntax.mjs`：逐个 + 拼接解析 `js/*.js`，顺带拦跨文件重复顶层声明 |
 | `npm run lint` | 内容自检，不引依赖、不启浏览器 |
 | `npm run serve [端口]` | 本地静态服务，默认 5173；传参写 `npm run serve -- 8080` |
-| `npm run test:e2e` | 无头 Chrome 回归（93 项用例 + 51 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
+| `npm run test:e2e` | 无头 Chrome 回归（115 项用例 + 51 项源码检查，跑在真 390×900 iframe 里），约 1.5 秒 |
 | `npm run verify` | check + lint + test:e2e，**每次提交前至少跑这个** |
 
 `test:e2e` 需要本机有 Chrome / Chromium；找不到时设置 `CHROME_PATH=/path/to/chrome`。测试页是在内存里注入用例生成的临时 HTML，**不会改动任何源文件**，也不写项目目录。

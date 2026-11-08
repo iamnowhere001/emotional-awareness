@@ -638,6 +638,45 @@ window.addEventListener('load', function () {
     bandTo('a6'); renderHome();
   });
 
+  test('导出 → 清空 → 导入：同一份载荷逐字段闭环', () => {
+    const kidLv = KID.levels[0];
+    state = migrate({
+      version: 5, band: 'adult',
+      cleared: [ADULT.levels[0].id, kidLv.id],
+      awarded: [ADULT.levels[0].id, kidLv.id],
+      cards: { kid: [kidLv.card], adult: [ADULT.levels[0].card] },
+      skills: [kidLv.skill, ADULT.levels[0].skill],
+      shells: 6,
+      decor: [1, 4],
+      seen: { '4-3': ['s1:t1:a1'], 'A4-3': ['s1:t1:a1'] },
+      sideCleared: ['W-1'],
+      settings: { scale: 1.15, motion: true, speak: false, speakTouched: true, autoSpeak: false, contrast: true }
+    });
+    save();
+    const before = clone(state);
+    const exported = JSON.stringify(exportPayload());
+    A(JSON.parse(exported).state.version === SCHEMA_VERSION);
+
+    ACTIONS['clear-progress-confirm']();
+    A(state.cleared.length === 0 && state.cards.kid.length === 0 && state.cards.adult.length === 0,
+      '清空后不应留下进度');
+    A(!localStorage.getItem('mood-island-v4') && !localStorage.getItem('mood-island-v3') && !localStorage.getItem('mood-island-v2'),
+      '清空应连旧键一起删掉');
+
+    previewImport(exported, 'loop.json');
+    A(overlay.textContent.includes('导入前先看一眼'), '应进入导入预览');
+    A(state.cleared.length === 0, '预览阶段不能改当前档');
+    ACTIONS['import-confirm']();
+
+    ['version', 'band', 'cleared', 'awarded', 'cards', 'skills', 'shells', 'decor', 'seen', 'sideCleared', 'settings'].forEach((f) => {
+      A(JSON.stringify(state[f]) === JSON.stringify(before[f]), `字段 ${f} 与导出前不一致`);
+    });
+    A(JSON.stringify(state) === JSON.stringify(before), '整份存档与导出前不一致');
+    A(localStorage.getItem(STORAGE_KEY) === JSON.stringify(state), '导入后应写回本机');
+    ACTIONS['import-finish']();
+    bandTo('a6'); renderMap();
+  });
+
   /* ---------- hash 路由 ---------- */
   test('hash 解析：合法视图 / 关卡 id / 非法地址', () => {
     A(parseHash('#/map').view === 'map');
@@ -1323,6 +1362,58 @@ window.addEventListener('load', function () {
       `急救页 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
     A([...document.querySelectorAll('.help-word')].every(b => b.getBoundingClientRect().height >= 44));
     renderMap();
+  });
+
+  test('360 / 414px 视口无横向溢出', () => {
+    const atWidth = (w, fn) => {
+      const fe = window.frameElement;
+      A(!!fe, '回归页需要跑在 iframe 里才能改视口');
+      const old = fe.style.width;
+      fe.style.width = w + 'px';
+      void fe.getBoundingClientRect();
+      A(window.innerWidth === w, `视口未切到 ${w}px：innerWidth=${window.innerWidth}`);
+      try { fn(); } finally {
+        fe.style.width = old;
+        void fe.getBoundingClientRect();
+        A(window.innerWidth === 390, `恢复视口失败：innerWidth=${window.innerWidth}`);
+      }
+    };
+    [360, 414].forEach((w) => {
+      atWidth(w, () => {
+        bandTo('a6');
+        renderMap();
+        A(document.documentElement.scrollWidth <= w + 1,
+          `${w}px 地图 scrollWidth=${document.documentElement.scrollWidth}`);
+        const hubCols = getComputedStyle(document.querySelector('.hub-grid')).gridTemplateColumns.split(' ').length;
+        A(hubCols === 1, `${w}px 地图入口卡应为单列，实际 ${hubCols} 列`);
+        A([...document.querySelectorAll('.hub-card')].every(c => c.getBoundingClientRect().height >= 44));
+
+        ACTIONS['open-dictionary']();
+        A(document.documentElement.scrollWidth <= w + 1,
+          `${w}px 词典 scrollWidth=${document.documentElement.scrollWidth}`);
+        A(getComputedStyle(document.getElementById('dict-grid')).gridTemplateColumns.split(' ').length === 1,
+          `${w}px 词典应为单列`);
+
+        ACTIONS['open-selfhelp']();
+        A(document.documentElement.scrollWidth <= w + 1,
+          `${w}px 自助 scrollWidth=${document.documentElement.scrollWidth}`);
+        A(getComputedStyle(document.getElementById('sh-grid')).gridTemplateColumns.split(' ').length === 1,
+          `${w}px 自助工具应为单列`);
+
+        ACTIONS['open-slowvars']();
+        A(document.documentElement.scrollWidth <= w + 1,
+          `${w}px 慢变量 scrollWidth=${document.documentElement.scrollWidth}`);
+        A(getComputedStyle(document.getElementById('sv-grid')).gridTemplateColumns.split(' ').length === 1,
+          `${w}px 慢变量卡应为单列`);
+
+        bandTo('adult');
+        ACTIONS['open-help']();
+        A(document.documentElement.scrollWidth <= w + 1,
+          `${w}px 急救 scrollWidth=${document.documentElement.scrollWidth}`);
+        renderMap();
+      });
+    });
+    bandTo('a6'); renderMap();
   });
 
   const pre = document.createElement('pre');
