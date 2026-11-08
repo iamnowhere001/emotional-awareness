@@ -25,6 +25,11 @@ function hasShells() { return band().shells !== false; }
 function clearedInTrack() {
   return state.cleared.filter(id => LEVELS.some(l => l.id === id)).length;
 }
+/* 下一站：已解锁、还没走过。终章也按同一规则；全部走完时返回 -1。
+   首页主按钮与地图「从这里继续」共用这一处判断，避免两处各算一套。 */
+function nextStationIndex() {
+  return LEVELS.findIndex((l, i) => isUnlocked(i) && !state.cleared.includes(l.id));
+}
 function updateTopbar() {
   const vc = viewCfg(session.view);
   const shells = document.getElementById('shell-count');
@@ -232,11 +237,12 @@ function currentLevel() {
   if (play && play.side) return WORK[play.sideIndex] || WORK[0] || {};
   return LEVELS[state.levelIndex] || LEVELS[0] || {};
 }
-/* 工作间四幕线性解锁：走完 A1-4 开放第一幕，之后每一幕要求上一幕已完成。
-   只读 sideCleared，不读主线 cleared（A1-4 是入口条件，不是支线进度）。 */
+/* 工作间四幕线性解锁：走完 A2-4 开放第一幕，之后每一幕要求上一幕已完成。
+   入口放在 A2-4 之后，是因为四幕用到的重评 / 念头链 / 表达分别在第 2、3 岛；
+   只读主线 cleared（A2-4 是入口条件）与 sideCleared（支线进度），两者不混用。 */
 function sideUnlocked(i) {
   if (!isAdultTrack() || i < 0 || i >= WORK.length) return false;
-  if (i === 0) return state.cleared.includes('A1-4');
+  if (i === 0) return state.cleared.includes('A2-4');
   return state.sideCleared.includes(WORK[i - 1].id);
 }
 /* 某一幕能不能进：正常解锁链，或这一幕本身已经走过。

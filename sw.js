@@ -3,7 +3,7 @@
    发版时改下面的 VERSION：缓存名随之变化，install 预缓存新清单，
    activate 清掉所有旧缓存，配合 skipWaiting + clients.claim 立即接管。
    页面里的注册代码只在 http(s) 下执行；file:// 双击不注册，照常可玩。 */
-const VERSION = '0.12.0';
+const VERSION = '0.13.0';
 const CACHE = `mood-island-${VERSION}`;
 const ASSETS = [
   './index.html',
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/actions.js',
   './js/boot.js',
   './content/bands.js',
+  './content/glossary.js',
   './content/levels-kid.js',
   './content/levels-kid-island4.js',
   './content/levels-adult.js',

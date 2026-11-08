@@ -142,11 +142,25 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 24px; }
 
 /* ---------- home ---------- */
-.home-hero { text-align: left; max-width: 600px; }
+.home-hero { text-align: left; }
+.home-grid {
+    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
+    gap: 28px 44px; align-items: start;
+}
+.home-main { min-width: 0; }
+.home-side { min-width: 0; display: grid; gap: 0; }
 .home-hero h2 { margin: 18px 0 12px; font-size: calc(1.85rem * var(--scale)); }
+.home-next {
+    display: grid; gap: 2px; margin: 20px 0 0; padding: 14px 16px;
+    border-radius: 14px; border: 1px solid var(--line-strong);
+    background: var(--surface-2); border-left: 3px solid var(--accent);
+}
+.home-next-kicker { font-size: calc(.72rem * var(--scale)); letter-spacing: .12em; color: var(--accent); font-weight: 600; }
+.home-next b { font-size: calc(1rem * var(--scale)); font-weight: 600; }
+.home-next-meta { font-size: calc(.82rem * var(--scale)); color: var(--ink-3); line-height: 1.6; }
 /* 首页的一小片海：太阳、岛脊、两道浪线，只做气氛，不承载信息 */
 .home-horizon {
-    position: relative; height: 132px; margin: 20px 0 8px;
+    position: relative; height: 118px; margin: 0 0 8px;
     border-radius: 18px; overflow: hidden;
     border: 1px solid var(--line);
     background:
@@ -187,13 +201,15 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 }
 .home-hero .actions .btn-primary { padding-left: 30px; padding-right: 30px; font-size: calc(1rem * var(--scale)); }
 .home-points {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px;
-    margin: 18px 0 24px; padding-top: 4px; border-top: 2px solid var(--accent);
+    display: grid; grid-template-columns: 1fr; gap: 0;
+    margin: 8px 0 16px; padding-top: 4px; border-top: 2px solid var(--accent);
 }
 .home-point {
-    display: flex; gap: 10px; align-items: flex-start; padding: 14px 0 0;
+    display: flex; gap: 10px; align-items: flex-start; padding: 11px 0;
     font-size: calc(.86rem * var(--scale)); line-height: 1.65; color: var(--ink-2);
+    border-bottom: 1px solid var(--line);
 }
+.home-point:last-child { border-bottom: 0; }
 .home-point b { color: var(--ink); font-weight: 600; }
 .home-point .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 8px; }
 .home-note { margin-top: 22px; color: var(--ink-3); font-size: calc(.84rem * var(--scale)); line-height: 1.7; }
@@ -206,8 +222,18 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 /* ---------- map ---------- */
 .map-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .map-head .lead { margin-top: 8px; max-width: 54ch; }
-.map-count { font-size: calc(.84rem * var(--scale)); color: var(--ink-3); white-space: nowrap; }
-.map-count b { color: var(--accent); font-weight: 600; font-size: calc(1.08rem * var(--scale)); }
+.map-next {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin: 0 0 18px; padding: 15px 18px; border-radius: 16px;
+    border: 1px solid var(--line-strong); border-left: 3px solid var(--accent);
+    background: linear-gradient(180deg, rgba(226, 239, 232, .7), rgba(253, 252, 246, .8));
+}
+.map-next.is-done { border-left-color: var(--warm); background: linear-gradient(180deg, rgba(251, 240, 224, .75), rgba(253, 252, 246, .8)); }
+.map-next-copy { display: grid; gap: 2px; flex: 1 1 260px; }
+.map-next-kicker { font-size: calc(.72rem * var(--scale)); letter-spacing: .12em; color: var(--accent); font-weight: 600; }
+.map-next.is-done .map-next-kicker { color: var(--warm); }
+.map-next b { font-size: calc(1rem * var(--scale)); font-weight: 600; }
+.map-next-meta { font-size: calc(.82rem * var(--scale)); color: var(--ink-3); line-height: 1.6; }
 
 /* 图例与罗盘：地图的一角，不抢主线 */
 .map-legend-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 10px; }
@@ -620,6 +646,7 @@ body.modal-open { overflow: hidden; }
 .codex-card.locked { background: var(--surface-2); border-color: var(--line); color: var(--ink-3); }
 .codex-card b { display: block; font-size: calc(.9rem * var(--scale)); margin-bottom: 4px; }
 .codex-card span { font-size: calc(.76rem * var(--scale)); color: var(--ink-2); line-height: 1.5; display: block; }
+.codex-card .codex-alias { margin-bottom: 4px; color: var(--ink-3); }
 .codex-card.locked span { color: var(--ink-3); }
 
 /* ---------- 心理学词典 ---------- */
@@ -668,6 +695,12 @@ body.modal-open { overflow: hidden; }
     color: var(--accent); background: var(--surface); border: 1px solid #c7e2da;
     border-radius: 999px; padding: 2px 8px;
 }
+.dict-rule-badge, .dict-concept-badge {
+    justify-self: start; margin-top: 2px; font-size: calc(.7rem * var(--scale));
+    border-radius: 999px; padding: 2px 8px;
+}
+.dict-rule-badge { color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--line); }
+.dict-concept-badge { color: var(--ink-2); background: var(--warm-soft); border: 1px solid #efd9b9; }
 .dict-detail {
     padding: 12px 16px 16px; border-top: 1px dashed var(--line-strong);
     font-size: calc(.84rem * var(--scale)); color: var(--ink-2); line-height: 1.75;
@@ -682,8 +715,18 @@ body.modal-open { overflow: hidden; }
 }
 .module-foot { display: flex; justify-content: center; margin-top: 26px; }
 
-/* 词典的层级：大组目录 → 从哪里开始（类型）→ 主题按钮 → 卡片分区标题 */
-.dict-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+/* 词典的层级：折叠的组目录 → 类型 → 主题按钮 → 卡片分区标题 */
+.dict-index, .sv-index { margin: 12px 0 2px; }
+.dict-index summary, .sv-index summary {
+    display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px;
+    border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface-2);
+    color: var(--ink-2); font-size: calc(.8rem * var(--scale)); cursor: pointer; list-style: none;
+}
+.dict-index summary::-webkit-details-marker, .sv-index summary::-webkit-details-marker { display: none; }
+.dict-index summary::after, .sv-index summary::after { content: "＋"; margin-left: 8px; color: var(--ink-3); }
+.dict-index[open] summary::after, .sv-index[open] summary::after { content: "−"; color: var(--accent); }
+.dict-index summary:hover, .sv-index summary:hover { border-color: var(--accent); color: var(--accent); }
+.dict-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
 .dict-nav a {
     display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
     padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line-strong);
@@ -694,14 +737,9 @@ body.modal-open { overflow: hidden; }
 .dict-nav a:hover, .dict-nav a:focus-visible { border-color: var(--accent); color: var(--accent); }
 html.high-contrast .dict-nav a { border-width: 2px; }
 .dict-start {
-    margin: 18px 0 4px; padding: 16px; border-radius: 14px;
+    margin: 10px 0 4px; padding: 12px 14px; border-radius: 14px;
     border: 1.5px solid var(--line); background: var(--surface-2);
 }
-.dict-start-title {
-    margin: 0 0 4px; font-size: calc(1rem * var(--scale));
-    font-weight: 600; color: var(--ink-2);
-}
-.dict-start-sub { font-size: calc(.82rem * var(--scale)); line-height: 1.7; margin-bottom: 12px; }
 .dict-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .dict-kind-btn {
     display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
@@ -767,7 +805,6 @@ html.high-contrast .dict-kind-badge { border-width: 2px; }
     }
     .dict-cats::-webkit-scrollbar, .dict-kinds::-webkit-scrollbar { display: none; }
     .dict-cat, .dict-kind-btn { flex: 0 0 auto; }
-    .map-count { display: none; }
 }
 
 /* ---------- 自助工具箱 ---------- */
@@ -965,7 +1002,10 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     .progress-wrap { gap: 8px; margin-top: 2px; }
     #stage { padding: 22px 16px 26px; }
     #disclaimer { padding: 16px 18px; }
+    .home-grid { grid-template-columns: 1fr; gap: 18px; }
     .home-hero h2 { font-size: calc(1.66rem * var(--scale)); }
+    .home-next { margin-top: 16px; padding: 12px 14px; }
+    .home-horizon { height: 104px; }
     .home-points { grid-template-columns: 1fr; gap: 0; }
     .home-point { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: calc(.9rem * var(--scale)); }
     .home-point:last-child { border-bottom: 0; }
@@ -997,6 +1037,8 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     .island-name { font-size: calc(1.16rem * var(--scale)); }
     .map-compass { width: 38px; height: 38px; }
     .map-head { margin-bottom: 14px; }
+    .map-next { padding: 13px 14px; }
+    .map-next .btn { flex: 1 1 100%; }
     .opt-grid.cols-2, .pair-cols, .clue-grid, .baskets, .memory-grid, .codex-grid, .weather-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .baskets { grid-template-columns: 1fr; }
     .hub-grid, .hub-grid.two { grid-template-columns: 1fr; }
@@ -1242,6 +1284,14 @@ html[data-band="a3"] .step { height: 40px; }
 
 .help-view { max-width: 760px; }
 .help-title { margin: 12px 0 8px; }
+/* 急救页最上面先说「现在有危险怎么办」，不让求助信息埋在第三步之后。 */
+.help-crisis {
+    margin: 16px 0 0; padding: 14px 16px; border-radius: 4px 14px 14px 4px;
+    background: #fff4e8; border: 0; border-left: 3px solid var(--warm);
+    text-align: left;
+}
+.help-crisis b { display: block; color: #7c5222; font-size: calc(.94rem * var(--scale)); }
+.help-crisis p { margin-top: 4px; color: #6d4517; font-size: calc(.88rem * var(--scale)); line-height: 1.7; }
 .help-actions { display: grid; gap: 14px; margin-top: 20px; }
 .help-action {
     padding: 18px 20px; border-radius: 14px; background: var(--surface);

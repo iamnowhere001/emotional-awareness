@@ -13,6 +13,7 @@ const root = resolve(here, '..');
 
 const FILES = [
   'bands',
+  'glossary',
   'levels-kid',
   'levels-kid-island4',
   'levels-adult',
@@ -301,9 +302,9 @@ const SH_CATS = ['心力恢复', '认知自助', '行为与身体', '关系与�
 const SH_STATES = SH.states || [];
 const SH_TOOLS = SH.tools || [];
 const SH_DISTS = SH.distortions || [];
-if (!SH.safety) err('自助工具箱：缺 safety 边界说明');
+if (!MI.safety || !MI.safety.text) err('边界说明：缺 MI.safety.text（所有知识库共用一份）');
 if (SH_STATES.length !== 5) err(`自助工具箱：状态应为 5 种，当前 ${SH_STATES.length} 种`);
-if (SH_TOOLS.length !== 32) err(`自助工具箱：工具卡应为 32 张，当前 ${SH_TOOLS.length} 张`);
+if (SH_TOOLS.length !== 31) err(`自助工具箱：工具卡应为 31 张，当前 ${SH_TOOLS.length} 张`);
 if (SH_DISTS.length !== 10) err(`自助工具箱：认知扭曲应为 10 条，当前 ${SH_DISTS.length} 条`);
 const seenShState = new Set();
 SH_STATES.forEach((s, i) => {
@@ -340,7 +341,7 @@ const SV_VARS = SLOW.vars || [];
 const SV_PRACTICES = SLOW.practices || [];
 const SV_TRAPS = SLOW.traps || [];
 const SV_HORIZONS = SLOW.horizons || [];
-if (!SLOW.safety) err('慢变量：缺 safety 边界说明');
+if (!MI.safety || !MI.safety.text) err('边界说明：缺 MI.safety.text（所有知识库共用一份）');
 if (SV_VARS.length !== 6) err(`慢变量：变量应为 6 个，当前 ${SV_VARS.length} 个`);
 if (SV_PRACTICES.length !== 12) err(`慢变量：练习卡应为 12 张，当前 ${SV_PRACTICES.length} 张`);
 if (SV_TRAPS.length !== 10) err(`慢变量：快变量陷阱应为 10 条，当前 ${SV_TRAPS.length} 条`);
@@ -392,6 +393,36 @@ SV_HORIZONS.forEach((h, i) => {
     if (!seenSvPractice.has(c)) err(`${tag}: cards[${ci}]「${c}」不是练习卡标题`);
   });
   if (h.cards && new Set(h.cards).size !== h.cards.length) err(`${tag}: cards 引用重复`);
+});
+
+/* ---------- 概念层 ----------
+   16 个概念是站点 / 工具卡 / 词典 / 慢变量的共同锚点。这里校验：
+   id 唯一、两轨词卡名与 CODEX 一致、stations / tools / dict / slowvars 反链都真实存在。 */
+const GLOSSARY = MI.glossary || [];
+if (GLOSSARY.length !== 16) err(`概念层：应为 16 个概念，当前 ${GLOSSARY.length} 个`);
+const seenConcept = new Set();
+const conceptLevelIds = new Set([
+  ...(KID.levels || []).map(l => l.id),
+  ...(ADULT.levels || []).map(l => l.id),
+  ...((MI.adultWork) || []).map(l => l.id)
+]);
+GLOSSARY.forEach((g, i) => {
+  const tag = `概念#${i} ${g.id || '(无 id)'}`;
+  if (!g.id || !/^[a-z][a-z0-9-]*$/.test(g.id)) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
+  if (seenConcept.has(g.id)) err(`${tag}: id 重复`);
+  seenConcept.add(g.id);
+  ['kid', 'adult', 'line', 'mechanism'].forEach(k => { if (!g[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (!g.dose || !g.dose.time) err(`${tag}: 缺 dose.time`);
+  if (!CODEX[g.kid]) err(`${tag}: kid「${g.kid}」不在 CODEX 里`);
+  if (!CODEX[g.adult]) err(`${tag}: adult「${g.adult}」不在 CODEX 里`);
+  (g.stations || []).forEach(s => { if (!conceptLevelIds.has(s)) err(`${tag}: stations「${s}」不是任何关卡 id`); });
+  (g.tools || []).forEach(t => { if (!SH_TOOLS.some(x => x.t === t)) err(`${tag}: tools「${t}」不在自助工具卡里`); });
+  if (g.dict && !DICT.some(d => d.t === g.dict)) err(`${tag}: dict「${g.dict}」不在词典里`);
+  (g.slowvars || []).forEach(v => { if (!SV_VARS.some(x => x.id === v)) err(`${tag}: slowvars「${v}」不是任何慢变量`); });
+});
+/* 两轨每个站点都应挂到一个概念，避免新站漏配后结果卡没有机制说明。 */
+conceptLevelIds.forEach(id => {
+  if (id && !GLOSSARY.some(g => (g.stations || []).includes(id))) warn(`关卡「${id}」没有挂到任何概念`);
 });
 
 /* ---------- 急救入口 ---------- */

@@ -3,7 +3,26 @@
 
 /* ---------------------------------------------------------------- 动作分发 */
 const ACTIONS = {
-  'start': () => { session.navDir = 'forward'; renderMap(); },
+  /* 首页主按钮不再先绕到地图：直接进入下一处已解锁、未走过的站。
+     全部走完时才回地图，让用户自己挑一站重温。 */
+  'start': () => {
+    const i = nextStationIndex();
+    session.navDir = 'forward';
+    if (i < 0) { renderMap(); return; }
+    state.levelIndex = i;
+    play = {};
+    closeModal();
+    renderLevel();
+  },
+  'continue': () => {
+    const i = nextStationIndex();
+    session.navDir = 'forward';
+    if (i < 0) { renderMap(); return; }
+    state.levelIndex = i;
+    play = {};
+    closeModal();
+    renderLevel();
+  },
   'go-map': () => { stopSpeech(); closeModal(); session.navDir = 'back'; renderMap(); },
   'open-level': (el) => {
     if (session.view === 'map') session.mapScroll = window.scrollY || 0;
@@ -357,21 +376,37 @@ const ACTIONS = {
   /* 2-1 呼吸 */
   'breath-start': () => {
     if (play.running) return;
+    const space = play.v.mode === 'space';
     const rounds = play.v.rounds || 2;
+    const total = space ? 180 : rounds * 10;
     play.running = true; play.elapsed = 0;
     const ring = document.getElementById('breath-ring');
     const word = document.getElementById('breath-word');
     const round = document.getElementById('breath-round');
-    if (ring) ring.classList.add('running');
+    if (ring && !space) ring.classList.add('running');
     const start = document.getElementById('breath-start');
     if (start) { start.disabled = true; start.textContent = '正在跟着做…'; }
     breathTimer = setInterval(() => {
       play.elapsed += 1;
+      if (space) {
+        /* 三段各 60 秒：觉察 → 聚集呼吸 → 扩到全身；不报吸呼节奏，不催呼气变长。 */
+        const stage = Math.min(2, Math.floor(play.elapsed / 60));
+        const words = ['先留意此刻的身体和念头', '把注意力收到呼吸上', '让觉察扩到全身'];
+        const hints = ['不用改变呼吸', '走神了回来就好', '连身体一起留意'];
+        if (word) word.textContent = words[stage];
+        if (round) round.textContent = `第 ${stage + 1} / 3 段 · ${hints[stage]} · 随时可以停`;
+        if (play.elapsed >= total) {
+          clearInterval(breathTimer); breathTimer = null;
+          if (word) word.textContent = '做完了';
+          if (round) round.textContent = '三段走完了。不用评价做得怎么样，也不要求有什么感觉。';
+        }
+        return;
+      }
       const t = play.elapsed % 10;
       const r = Math.min(rounds, Math.floor(play.elapsed / 10) + 1);
       if (word) word.textContent = t < 4 ? '慢慢吸气' : '慢慢呼气';
       if (round) round.textContent = `第 ${r} / ${rounds} 轮 · 呼气比吸气长一点 · 随时可以停`;
-      if (play.elapsed >= rounds * 10) {
+      if (play.elapsed >= total) {
         clearInterval(breathTimer); breathTimer = null;
         if (ring) ring.classList.remove('running');
         if (word) word.textContent = '做完了';
@@ -548,7 +583,7 @@ const ACTIONS = {
     document.getElementById('finale-quote').innerHTML = `<div class="finale-quote">「${esc(play.quotes[i])}」</div>`;
   },
   'quote-reroll': () => {
-    play.quotes = shuffled(QUOTES).slice(0, 3);
+    play.quotes = shuffled(GLOSSARY_LINES).slice(0, 3);
     document.getElementById('quote-picks').innerHTML = play.quotes.map((q, i) =>
       `<button class="opt" data-action="quote-pick" data-i="${i}" aria-keyshortcuts="${i + 1}"><span class="opt-key" aria-hidden="true">${i + 1}</span><span>${esc(q)}</span></button>`).join('');
     document.getElementById('finale-quote').innerHTML = '';

@@ -159,12 +159,12 @@ window.addEventListener('load', function () {
     A(!!document.querySelector('#stage .module-foot [data-action="go-map"]'), '长列表底部应有回到地图');
     renderMap();
   });
-  test('自助工具箱 5 状态 / 32 工具 / 10 条认知扭曲', () => {
+  test('自助工具箱 5 状态 / 31 工具 / 10 条认知扭曲', () => {
     A(SH_STATES.length === 5);
-    A(SH_TOOLS.length === 32);
+    A(SH_TOOLS.length === 31);
     A(SH_DISTORTIONS.length === 10);
     A(SH_TOOLS.every(t => t.t && t.e && t.c && t.when && t.note && Array.isArray(t.how) && t.how.length >= 2));
-    A(new Set(SH_TOOLS.map(t => t.t)).size === 32);
+    A(new Set(SH_TOOLS.map(t => t.t)).size === 31);
     A(SH_STATES.every(s => s.moves.length >= 3 && s.lead && s.avoid));
   });
   test('自助工具箱：状态面板与分类筛选', () => {
@@ -178,7 +178,7 @@ window.addEventListener('load', function () {
     A(panel.querySelectorAll('.sh-move').length === 3);
     A(panel.textContent.includes('先把消耗降下来'));
     const cards = [...document.querySelectorAll('#sh-grid .sh-card')];
-    A(cards.length === 32);
+    A(cards.length === 31);
     const cat = [...document.querySelectorAll('#sh-cats .dict-cat')].find(b => b.dataset.c === '心力恢复');
     A(!!cat);
     cat.click();
@@ -449,7 +449,7 @@ window.addEventListener('load', function () {
     state.cleared = [];
     renderMap();
     const h = document.getElementById('stage').innerHTML;
-    A(!h.includes('先走完上一座岛') && h.includes('先把上一座岛走到头'));
+    A(!h.includes('先走完上一岛') && h.includes('先走过上一岛最后一站'));
   });
   test('地图入口按用途分组，不再是一排等权重按钮', () => {
     state.cleared = [];
@@ -477,6 +477,23 @@ window.addEventListener('load', function () {
     renderHome();
     A(document.querySelectorAll('#stage .actions .btn-primary').length === 1);
     A(document.querySelectorAll('#stage .home-shortcuts .btn-read').length === 3);
+  });
+  test('首页主按钮直达下一处已解锁未走站', () => {
+    bandTo('a6');
+    state.cleared = [KID.levels[0].id];
+    renderHome();
+    A(document.querySelector('.home-next').textContent.includes(KID.levels[1].name));
+    document.querySelector('#stage .actions .btn-primary').click();
+    A(session.view === 'level' && state.levelIndex === 1, '应跳过地图，直接进入第 2 站');
+  });
+  test('地图「从这里继续」与首页走同一处判断', () => {
+    bandTo('a6');
+    state.cleared = [];
+    renderMap();
+    const btn = document.querySelector('#stage .map-next [data-action="continue"]');
+    A(!!btn && document.querySelector('.map-next').textContent.includes(KID.levels[0].name));
+    btn.click();
+    A(session.view === 'level' && state.levelIndex === 0);
   });
 
   /* ---------- 急救入口 ---------- */
@@ -712,7 +729,7 @@ window.addEventListener('load', function () {
     A(state.seen['4-3'].join(',') === before.join(','), 'restart-all 不应清已见组合');
   });
   test('工作间只在成年档出现，儿童轨看不到入口', () => {
-    bandTo('adult'); state.cleared = ['A1-4']; renderMap();
+    bandTo('adult'); state.cleared = ['A2-4']; renderMap();
     A(!!document.querySelector('#stage [data-action="go-work"]'), '成年地图应有工作间入口');
     A(document.getElementById('stage').textContent.includes('工作间'));
     bandTo('a6'); renderMap();
@@ -720,7 +737,7 @@ window.addEventListener('load', function () {
   });
   test('工作间按幕解锁，完成只写 sideCleared 且不加任何奖励', () => {
     bandTo('adult');
-    state.cleared = ['A1-4']; state.awarded = []; state.sideCleared = [];
+    state.cleared = ['A2-4']; state.awarded = []; state.sideCleared = [];
     state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
     save(); applySettings();
     A(sideUnlocked(0) && !sideUnlocked(1), '只开放第一幕');
@@ -731,7 +748,7 @@ window.addEventListener('load', function () {
     A(document.getElementById('progress-text').textContent.includes('支线'), '顶栏应标明支线');
     completeLevel('这一幕走过了');
     A(state.sideCleared.join(',') === 'W-1', '完成应写入 sideCleared');
-    A(state.cleared.join(',') === 'A1-4', '支线不得写进主线 cleared');
+    A(state.cleared.join(',') === 'A2-4', '支线不得写进主线 cleared');
     A(JSON.stringify(state.cards) === beforeCards && JSON.stringify(state.skills) === beforeSkills && state.shells === 0,
       '支线不加词卡 / 本领 / 贝壳');
     A(state.awarded.length === 0);
@@ -744,10 +761,10 @@ window.addEventListener('load', function () {
     A(play.side && currentLevel().id === 'W-2');
     completeLevel('第二幕');
     A(state.sideCleared.join(',') === 'W-1,W-2');
-    A(state.cleared.join(',') === 'A1-4', '连续两幕也不得污染主线');
+    A(state.cleared.join(',') === 'A2-4', '连续两幕也不得污染主线');
   });
   test('工作间 hash 直达、不可达回落、Esc 回地图', () => {
-    bandTo('adult'); state.cleared = ['A1-4']; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
+    bandTo('adult'); state.cleared = ['A2-4']; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
     renderHome();
     routeTo(parseHash('#/level/W-1'));
     A(session.view === 'level' && currentLevel().id === 'W-1' && !!play.side, '应直达第一幕');
@@ -768,7 +785,7 @@ window.addEventListener('load', function () {
 
   test('支线换题保留 side 上下文，通关不写主线', () => {
     bandTo('adult');
-    state.cleared = ['A1-4']; state.awarded = ['A1-4'];
+    state.cleared = ['A2-4']; state.awarded = ['A2-4'];
     state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
     state.sideCleared = [];
     const idx = LEVELS.findIndex(l => l.id === 'A2-1');
@@ -781,13 +798,13 @@ window.addEventListener('load', function () {
     A(currentLevel().id === 'W-1', '换题后仍读支线关卡');
     A(document.getElementById('stage').textContent.includes('工作间 · 09:00 · 支线'));
     completeLevel('这一幕走过了');
-    A(state.cleared.join(',') === 'A1-4', '支线换题后通关不得写主线 cleared');
+    A(state.cleared.join(',') === 'A2-4', '支线换题后通关不得写主线 cleared');
     A(state.sideCleared.join(',') === 'W-1');
     A(state.shells === 0 && state.skills.length === 0 && state.cards.adult.length === 0, '支线不得发奖励');
   });
 
   test('工作间进急救，返回与 Esc 都回到工作间', () => {
-    bandTo('adult'); state.cleared = ['A1-4']; state.sideCleared = []; save(); applySettings();
+    bandTo('adult'); state.cleared = ['A2-4']; state.sideCleared = []; save(); applySettings();
     renderWork();
     ACTIONS['open-help']();
     A(session.view === 'help' && session.helpFrom === 'work');
@@ -800,6 +817,91 @@ window.addEventListener('load', function () {
     A(session.view === 'work', 'Esc 也应回工作间');
   });
 
+  test('工作间解锁点在 A2-4：只走完 A1-4 不够', () => {
+    bandTo('adult');
+    state.cleared = ['A1-1', 'A1-2', 'A1-3', 'A1-4']; state.sideCleared = [];
+    save(); applySettings();
+    A(!sideUnlocked(0), '只到 A1-4 不应解锁第一幕');
+    renderMap();
+    A(document.querySelector('.hub-work .hub-meta').textContent.includes('走完 A2-4 后开放'), '入口应标为未开放');
+    state.cleared.push('A2-4'); save(); renderMap();
+    A(sideUnlocked(0), '走到 A2-4 才解锁第一幕');
+    A(document.querySelector('.hub-work .hub-meta').textContent.includes('个时刻'), '解锁后入口应可用');
+  });
+  test('旧档已完成支线：解锁点后移后 sideCleared 仍可回看', () => {
+    bandTo('adult');
+    state.cleared = ['A1-4']; state.sideCleared = ['W-1', 'W-2'];
+    save(); applySettings();
+    A(!sideUnlocked(0), '未走 A2-4 时第一幕不再自动开放');
+    A(workReachable(0) && workReachable(1), '已完成的两幕必须仍可回看');
+    renderWork();
+    A(document.getElementById('stage').textContent.includes('会前十分钟'), '工作间应列出已完成的幕');
+    routeTo(parseHash('#/level/W-1'));
+    A(session.view === 'level' && currentLevel().id === 'W-1', '旧档已完成的幕仍可直达');
+  });
+  test('A2-1 呼吸空间：约 3 分钟、不引导吸呼节奏', () => {
+    bandTo('adult');
+    play = {};
+    const idx = LEVELS.findIndex(l => l.id === 'A2-1');
+    state.levelIndex = idx; renderLevel();
+    A(play.v.mode === 'space', `A2-1 的变体应是 space 模式（id=${play.id} mode=${play.v.mode}）`);
+    const txt = document.getElementById('stage').textContent;
+    A(txt.includes('约 3 分钟') && !txt.includes('跟着做'), '按钮应写约 3 分钟，不再按轮数');
+    A(!txt.includes('呼气比吸气长'), 'space 模式不得引导吸呼节奏');
+    A(txt.includes('不用调整呼吸'), '应写明不用调整呼吸');
+  });
+  test('概念层 16 条：两轨词卡名与反链都指向真实内容', () => {
+    A(GLOSSARY.length === 16 && new Set(GLOSSARY.map(g => g.id)).size === 16);
+    A(conceptOfLevel('A2-2') && conceptOfLevel('A2-2').id === 'reframe');
+    A(conceptOfLevel('2-2') && conceptOfLevel('2-2').id === 'reframe', '两轨同一概念共用一条');
+    A(conceptOfCard('命名') && conceptOfCard('命名').id === 'granularity');
+    A(conceptOfCard('情绪粒度') && conceptOfCard('情绪粒度').id === 'granularity');
+    A(conceptOfTool('想法检验四问') && conceptOfTool('想法检验四问').id === 'reframe');
+  });
+  test('词卡图鉴按 16 组显示双名，state.cards 键值不变', () => {
+    bandTo('adult');
+    state.cards = { kid: [], adult: ['觉察', '命名', '呼吸空间'] };
+    save(); applySettings();
+    openCodex();
+    const cards = [...document.querySelectorAll('.codex-grid .codex-card')];
+    A(cards.length === 16, `图鉴应显示 16 组，实际 ${cards.length}`);
+    A(document.querySelector('.modal-title').textContent.includes('3 / 16'), '计数应按概念组');
+    A(cards.some(c => c.textContent.includes('也叫「情绪粒度」')), '双名概念应同时标出另一种叫法');
+    A(JSON.stringify(state.cards) === JSON.stringify({ kid: [], adult: ['觉察', '命名', '呼吸空间'] }), '渲染层不得改写存档');
+    closeModal();
+  });
+  test('边界说明只有一份：静修 / 自助 / 慢变量都读 MI.safety', () => {
+    A(!!MI.safety && !!MI.safety.text && SAFETY_TEXT === MI.safety.text);
+    A(RETREAT_SAFETY === SAFETY_TEXT && SH_SAFETY === SAFETY_TEXT && SV_SAFETY === SAFETY_TEXT);
+    A(!('RETREAT_SAFETY' in LIB) && !('safety' in (MI.selfhelp || {})) && !('safety' in (MI.slowvars || {})),
+      '旧的多份安全文案应已删除');
+  });
+  test('自助工具卡 31 张，认知扭曲改为速查呈现', () => {
+    A(SH_TOOLS.length === 31 && SH_DISTORTIONS.length === 10);
+    A(!SH_TOOLS.some(t => t.t === '认知扭曲总览'), '总览卡应已并入速查');
+    bandTo('adult'); ACTIONS['open-selfhelp']();
+    A(document.querySelectorAll('#sh-grid .sh-card').length === 31);
+    A(document.getElementById('stage').textContent.includes('31 张工具卡'));
+    A(document.querySelectorAll('.sh-dist').length === 10, '速查仍应保留 10 条');
+    renderMap();
+  });
+  test('终章三句话来自概念层，独立金句数组已删除', () => {
+    A(!('QUOTES' in LIB));
+    bandTo('adult');
+    const idx = LEVELS.findIndex(l => l.type === 'finale');
+    state.levelIndex = idx; renderLevel();
+    A(play.quotes.length === 3 && play.quotes.every(q => GLOSSARY_LINES.includes(q)));
+  });
+  test('5-4-3-2-1 统一为五步，急救版标注「急诊版」', () => {
+    const tool = SH_TOOLS.find(t => t.t === '5-4-3-2-1 锚定');
+    A(!!tool && tool.how.length === 5, '工具卡应写全五步');
+    const stateWithMove = SH_STATES.find(s => s.moves.some(m => m.t === '5-4-3-2-1 锚定'));
+    const move = stateWithMove.moves.find(m => m.t === '5-4-3-2-1 锚定');
+    ['5 样', '4 样', '3 种', '2 种', '1 种'].forEach(k => A(move.d.includes(k), `状态动作缺「${k}」`));
+    const ground = HELP_ACTIONS.find(a => a.id === 'ground');
+    A(ground && ground.tag === '急诊版', '急救的落地动作应标急诊版');
+    A(ground.lead.includes('精简形态'), '应说明这是精简形态');
+  });
   test('选档页进急救：已有档回首页，无档回选档页', () => {
     bandTo('adult');
     renderAgeGate();

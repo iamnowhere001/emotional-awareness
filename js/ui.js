@@ -257,19 +257,22 @@ function openSettings() {
       <button class="btn btn-ghost" data-action="clear-progress">清空本机进度</button></div>`);
 }
 function openCodex() {
-  /* 图鉴按当前轨展示：成年档有自己的一套卡片，不和儿童档混在一起 */
-  const keys = LEVELS.map(l => l.card).filter(Boolean);
+  /* 图鉴在渲染层按「概念」分组：同一件事在两套站里可能叫不同的名字（如 情绪粒度 / 命名），
+     这里合并成 16 组并同时标出另一种叫法；state.cards 的键仍是原来的显示名，存档与 schema 不动。 */
   const bag = cardsInTrack();
-  const got = keys.filter(k => bag.includes(k)).length;
-  openModal(`<div class="modal-title">词卡图鉴 · ${got} / ${keys.length}</div>
-    <div class="modal-body">每张卡都是从一站里带回来的小工具。没有集齐压力，也没有隐藏奖励。</div>
-    <div class="codex-grid">${keys.map(k => {
-      const has = bag.includes(k);
-      const def = CODEX[k] || { t: '', e: '' };
-      return `<div class="codex-card ${has ? '' : 'locked'}"><b>${has ? esc(k) : '???'}</b>
-        <span>${has ? esc(def.t) : '走到那一站就能遇见'}</span>
-        ${has ? `<span class="codex-eg">${esc(def.e)}</span>` : ''}</div>`;
-    }).join('')}</div>
+  const adult = isAdultTrack();
+  const groups = GLOSSARY.map(g => {
+    const mine = adult ? g.adult : g.kid;
+    const other = adult ? g.kid : g.adult;
+    return { mine, other: other === mine ? '' : other, has: bag.includes(mine), def: CODEX[mine] || { t: '', e: '' } };
+  });
+  const got = groups.filter(x => x.has).length;
+  openModal(`<div class="modal-title">词卡图鉴 · ${got} / ${groups.length}</div>
+    <div class="modal-body">每张卡都是从一站里带回来的小工具。同一件事在两套站里可能有不同叫法，这里并成一组看。没有集齐压力，也没有隐藏奖励。</div>
+    <div class="codex-grid">${groups.map(({ mine, other, has, def }) => `<div class="codex-card ${has ? '' : 'locked'}"><b>${has ? esc(mine) : '???'}</b>
+      ${has && other ? `<span class="codex-alias">也叫「${esc(other)}」</span>` : ''}
+      <span>${has ? esc(def.t) : '走到那一站就能遇见'}</span>
+      ${has ? `<span class="codex-eg">${esc(def.e)}</span>` : ''}</div>`).join('')}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">合上图鉴</button></div>`);
 }
 function openSkills() {

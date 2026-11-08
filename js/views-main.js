@@ -14,7 +14,7 @@ function renderAgeGate() {
   session.view = 'gate';
   session.tip = '';
   stage.innerHTML = `<div class="view">
-    <span class="eyebrow">第一步 · 只选一次，之后随时能改</span>
+    <span class="eyebrow">第一步 · 之后随时能改</span>
     <h2 style="margin:12px 0 10px">先选一下，谁来玩</h2>
     <p class="lead">不同年龄用的是不同题目：选项多少、线索长短、要不要读给你听，都会跟着变。前三档与亲子档共用一套站，成年档是单独的一套；两边进度各自保留，换档不会丢。</p>
     <div class="age-grid">${AGE_BANDS.map(b =>
@@ -32,45 +32,62 @@ function renderHome() {
   clearAsyncTimers();
   session.view = 'home';
   const b = band();
-  const hasAnyProgress = clearedInTrack() > 0;
+  const cleared = clearedInTrack();
+  const hasAnyProgress = cleared > 0;
   const islCount = islands().length;
+  const nextIdx = nextStationIndex();
+  const nextLv = nextIdx >= 0 ? LEVELS[nextIdx] : null;
+  const nextMeta = nextLv
+    ? `<span class="home-next-kicker">${hasAnyProgress ? '接着上次 · 下一站' : '从这里开始'}</span>
+       <b>第 ${nextIdx + 1} / ${TOTAL} 站 · ${esc(nextLv.name)}</b>
+       <span class="home-next-meta">${esc(nextLv.kind)} · 已走过 ${cleared} / ${TOTAL} 站</span>`
+    : `<span class="home-next-kicker">这一轨已经走完</span>
+       <b>${TOTAL} 站都走过了</b>
+       <span class="home-next-meta">可以回地图重温任意一站，或换一个年龄段。</span>`;
   stage.innerHTML = `<div class="view home-hero">
     <div class="toolbar">${bandChip()}<button class="btn-read" data-action="goto-band">换年龄段</button></div>
-    <span class="eyebrow">${islCount} 座岛 · ${TOTAL} 站 · 随时可以离开</span>
-    <h2>不赶走情绪，先认出它</h2>
-    <p class="lead">这是一座关于情绪的小岛。你要做的不是答对，而是把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。</p>
-    ${takeTip()}
-    <div class="home-horizon" aria-hidden="true">
-      <span class="hh-sun"></span>
-      <span class="hh-islet i1"></span><span class="hh-islet i2"></span><span class="hh-islet i3"></span>
-      <span class="hh-route"></span>
-      <span class="hh-land"></span>
-      <span class="hh-wave"></span><span class="hh-wave w2"></span>
-    </div>
-    <div class="actions">
-      <button class="btn btn-primary" data-action="start">${hasAnyProgress ? '继续上岛' : '开始上岛'}</button>
-      ${hasAnyProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
-    </div>
-    <div class="home-points">
-      <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>情绪不分好坏，这一趟不打分、不排名、不比谁快。</span></div>
-      <div class="home-point"><span class="dot"></span><span><b>每一站换一种玩法。</b>拼线索、调刻度、排顺序、翻记忆，动脑也动手。</span></div>
-      <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.desc)} ${esc(b.len)}。</span></div>
-    </div>
-    <div class="help-entry">
-      <div class="help-entry-copy">
-        <span class="help-entry-kicker">不用上岛 · 1 分钟</span>
-        <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
-        <span>先落地、给感受一个词、找一个人。不计进度，也不保存你选了什么。</span>
+    <div class="home-grid">
+      <div class="home-main">
+        <span class="eyebrow">${islCount} 座岛 · ${TOTAL} 站 · 随时可以离开</span>
+        <h2>不赶走情绪，先认出它</h2>
+        <p class="lead">这里不考你答得对不对，只帮你看清此刻的感觉，再带走一个用得上的小工具。</p>
+        ${takeTip()}
+        <div class="home-next">${nextMeta}</div>
+        <div class="actions">
+          <button class="btn btn-primary" data-action="start">${nextLv ? `${hasAnyProgress ? '继续上岛' : '开始上岛'} · 第 ${nextIdx + 1} 站` : '回地图挑一站'}</button>
+          ${hasAnyProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
+        </div>
+        <p class="home-note">全程不联网；天气选择只留在这一次，不会被保存，也没有每日签到。${isAdultTrack() ? '成年档与儿童档的进度分开记。' : ''}</p>
       </div>
-      <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
+      <aside class="home-side">
+        <div class="home-horizon" aria-hidden="true">
+          <span class="hh-sun"></span>
+          <span class="hh-islet i1"></span><span class="hh-islet i2"></span><span class="hh-islet i3"></span>
+          <span class="hh-route"></span>
+          <span class="hh-land"></span>
+          <span class="hh-wave"></span><span class="hh-wave w2"></span>
+        </div>
+        <div class="home-points">
+          <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>不打分、不排名，也不比谁快。</span></div>
+          <div class="home-point"><span class="dot"></span><span><b>一站一个玩法。</b>拼线索、调刻度、排顺序，动脑也动手。</span></div>
+          <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.len)}。</span></div>
+        </div>
+        <div class="help-entry">
+          <div class="help-entry-copy">
+            <span class="help-entry-kicker">不用上岛 · 约 1 分钟</span>
+            <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
+            <span>先落地、给感受一个词、找一个人。不计进度，也不保存。</span>
+          </div>
+          <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
+        </div>
+        <div class="home-shortcuts">
+          <span class="muted">还没准备好上岛？</span>
+          <button class="btn-read" data-action="open-dictionary">心理学词典</button>
+          <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
+          <button class="btn-read" data-action="open-slowvars">慢变量</button>
+        </div>
+      </aside>
     </div>
-    <div class="home-shortcuts">
-      <span class="muted">还没准备好上岛？</span>
-      <button class="btn-read" data-action="open-dictionary">心理学词典</button>
-      <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
-      <button class="btn-read" data-action="open-slowvars">慢变量</button>
-    </div>
-    <p class="home-note">全程不联网、不填写心情文字；天气选择不会被保存。${isAdultTrack() ? '成年档有自己的一套站，和儿童档的进度分开记。' : '适合一个人玩，也适合大人和孩子一起聊。'}</p>
   </div>`;
   updateTopbar();
 }
@@ -102,9 +119,15 @@ function renderHelp() {
     <span class="eyebrow">${esc(HELP.eyebrow)}</span>
     <h2 class="help-title">${esc(HELP.title)}</h2>
     <p class="lead">${esc(HELP.lead)}</p>
+    <div class="help-crisis" role="note">
+      <b>${kid ? '如果还是很难受' : '如果有伤害自己的念头'}</b>
+      <p>${kid
+        ? '先去找身边的大人——爸爸妈妈、老师或任何你信任的大人。不要一个人待着。'
+        : '先联系一个你信任的人，或拨打 12356；如果有立即危险，请拨打 120 / 110，或去最近的急诊。'}</p>
+    </div>
     <div class="help-actions">
       <section class="help-action" aria-labelledby="help-h-ground">
-        <div class="help-head"><span class="help-num" aria-hidden="true">1</span><h3 id="help-h-ground">${esc(ground.name)}</h3><span class="help-len">${esc(ground.len)}</span></div>
+        <div class="help-head"><span class="help-num" aria-hidden="true">1</span><h3 id="help-h-ground">${esc(ground.name)}</h3><span class="help-len">${esc(ground.len)}${ground.tag ? ` · ${esc(ground.tag)}` : ''}</span></div>
         <p class="help-lead">${esc(ground.lead)}</p>
         <ol class="help-steps">${(ground.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol>
         <button class="btn btn-secondary help-do" data-action="help-ground">我跟着做完了</button>
@@ -190,10 +213,24 @@ function renderMap() {
     ${takeTip()}
     <div class="map-head"><div><span class="eyebrow">岛屿地图 · ${esc(band().name)}</span>
       <h2 style="margin-top:10px">想去哪站，就去哪站</h2>
-      <p class="lead">四座岛连成一条航线。同一座岛里的站可以随便进出，走过的还能再走，每次题目会换一批。</p></div>
-      <span class="map-count">已走过 <b>${clearedInTrack()}</b> / ${TOTAL} 站</span></div>
+      <p class="lead">${list.length} 座岛连成一条航线。同一座岛里的站可以随便进出；走过的还能再走，每次题目会换一批。</p></div></div>
     <div class="toolbar">${bandChip()}<span class="muted">${esc(band().len)}</span>
       <button class="btn-read" data-action="goto-band">换年龄段</button></div>
+    ${nextIdx >= 0 ? `<div class="map-next">
+      <div class="map-next-copy">
+        <span class="map-next-kicker">下一站 · ${LEVELS[nextIdx].type === 'finale' ? '终章' : `岛 ${LEVELS[nextIdx].island}`}</span>
+        <b>第 ${nextIdx + 1} / ${TOTAL} 站 · ${esc(LEVELS[nextIdx].name)}</b>
+        <span class="map-next-meta">${esc(LEVELS[nextIdx].kind)} · 已走过 ${clearedInTrack()} / ${TOTAL} 站</span>
+      </div>
+      <button class="btn btn-primary" data-action="continue">从这里继续</button>
+    </div>` : `<div class="map-next is-done">
+      <div class="map-next-copy">
+        <span class="map-next-kicker">这一轨已经走完</span>
+        <b>${TOTAL} 站都走过了</b>
+        <span class="map-next-meta">想重温哪一站，直接点下面的站点就好。</span>
+      </div>
+      <button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>
+    </div>`}
     <div class="map-legend-row" aria-hidden="true">
       <div class="map-legend">
         <span class="map-lg"><i class="lg-dot"></i>还没走</span>
@@ -233,8 +270,8 @@ function renderMap() {
       const unlocked = isUnlocked(idx);
       const isNext = idx === nextIdx;
       const extra = l.card ? `，会留下「${esc(l.card)}」词卡` : '';
-      const lockedHint = itemIdx === firstLocked ? '未解锁 · 先走完上一岛' : '未解锁';
-      html += `<button class="node ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${session.lastCleared === l.id ? 'just-done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-level" data-i="${idx}" ${unlocked ? '' : 'disabled'} aria-label="${esc(l.name)}${done ? '，已走过' : ''}${isNext ? '，可以从这里继续' : ''}${unlocked ? '，' + esc(l.kind) + extra : '，尚未解锁'}"${unlocked ? '' : ' title="先把上一座岛走到头"'}>
+      const lockedHint = itemIdx === firstLocked ? '未解锁 · 先走过上一岛最后一站' : '未解锁';
+      html += `<button class="node ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${session.lastCleared === l.id ? 'just-done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-level" data-i="${idx}" ${unlocked ? '' : 'disabled'} aria-label="${esc(l.name)}${done ? '，已走过' : ''}${isNext ? '，可以从这里继续' : ''}${unlocked ? '，' + esc(l.kind) + extra : '，尚未解锁'}"${unlocked ? '' : ' title="先走过上一座岛的最后一站"'}>
         ${isNext ? '<span class="node-next">下一站</span>' : ''}
         <span class="node-pin" aria-hidden="true">${done ? '✓' : esc(String(l.num || '·'))}</span>
         <span class="node-name">${esc(l.name)}</span>
@@ -295,7 +332,7 @@ function renderMap() {
         <button class="hub-card hub-work" data-action="go-work">
           <span class="hub-name">工作间</span>
           <span class="hub-desc">会前、汇报被否、冲突、下班反刍：四个工作日的时刻。</span>
-          <span class="hub-meta">${sideUnlocked(0) ? `${WORK.length} 个时刻 · 不加奖励` : '走完 A1-4 后开放'}</span>
+          <span class="hub-meta">${sideUnlocked(0) || WORK.some((w, i) => workReachable(i)) ? `${WORK.length} 个时刻 · 不加奖励` : '走完 A2-4 后开放'}</span>
         </button>
       </div>
     </section>` : ''}
@@ -364,7 +401,7 @@ function renderWork() {
   const stops = WORK.map((l, i) => {
     const unlocked = workReachable(i);
     const finished = done.has(l.id);
-    const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? '走完 A1-4 开放' : '先走上一幕');
+    const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? '走完 A2-4 开放' : '先走上一幕');
     return `<button class="work-stop ${finished ? 'done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-work-level" data-i="${i}" ${unlocked ? '' : 'disabled'}>
       <span class="work-time">${esc(l.time)}</span>
       <span class="work-body">
@@ -381,7 +418,7 @@ function renderWork() {
     <span class="eyebrow">成年档 · 专题支线</span>
     <h2 style="margin-top:10px">工作间</h2>
     <p class="lead">四个时刻，沿着一个工作日往下走。它是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领；主线停在哪一站，出来还是那一站。</p>
-    ${!open0 ? '<div class="notice">走完地图上的 A1-4 后开放第一幕。</div>' : ''}
+    ${!open0 ? '<div class="notice">走完地图上的 A2-4 后开放第一幕。</div>' : ''}
     <div class="work-line">${stops}</div>
     <p class="home-note">不用按顺序打卡，也不记录时长。想停就停，进度只留在本机。</p>
   </div>`;

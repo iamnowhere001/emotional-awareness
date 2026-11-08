@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.12.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.13.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
@@ -24,6 +24,27 @@ const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
 const ADULT = MI.adult || { track: 'adult', islands: [], levels: [] };
 const BANK = MI.bankKid || {};
 const BANK_ADULT = MI.bankAdult || {};
+/* 概念层：16 个概念（content/glossary.js）。站点、工具卡、词典、慢变量都通过 id 挂到这里，
+   机制与动作规格只写一份，两轨共用。 */
+const GLOSSARY = Array.isArray(MI.glossary) ? MI.glossary : [];
+const GLOSSARY_BY_ID = GLOSSARY.reduce((m, g) => { m[g.id] = g; return m; }, {});
+const GLOSSARY_LINES = GLOSSARY.map(g => g.line);
+const CONCEPT_OF_LEVEL = {};
+const CONCEPT_OF_TOOL = {};
+const CONCEPT_OF_DICT = {};
+const CONCEPT_OF_SLOWVAR = {};
+GLOSSARY.forEach(g => {
+  (g.stations || []).forEach(id => { CONCEPT_OF_LEVEL[id] = g.id; });
+  (g.tools || []).forEach(t => { CONCEPT_OF_TOOL[t] = g.id; });
+  if (g.dict) CONCEPT_OF_DICT[g.dict] = g.id;
+  (g.slowvars || []).forEach(v => { CONCEPT_OF_SLOWVAR[v] = g.id; });
+});
+const conceptOfLevel = id => GLOSSARY_BY_ID[CONCEPT_OF_LEVEL[id] || ''] || null;
+const conceptOfCard = name => GLOSSARY.find(g => g.kid === name || g.adult === name) || null;
+const conceptOfTool = name => GLOSSARY_BY_ID[CONCEPT_OF_TOOL[name] || ''] || null;
+/* 边界与安全：自助工具箱 / 慢变量 / 静修三页共用同一份（content/glossary.js 顶部的 MI.safety）。 */
+const SAFETY_TEXT = (MI.safety && MI.safety.text) || '';
+
 /* 拼装试点：只有这两个关的题目由 bank-compose.js 组合出来，其余仍是手写变体池。 */
 const BANK_COMPOSE = MI.bankCompose || {};
 /* 成年「工作间」支线：关卡与变体都在 content/levels-adult-work.js。 */
@@ -31,13 +52,12 @@ const WORK = Array.isArray(MI.adultWork) ? MI.adultWork : [];
 const BANK_WORK = MI.bankWork || {};
 const LIB = MI.library || {};
 const CODEX = LIB.CODEX || {};
-const QUOTES = LIB.QUOTES || [];
 const TALK_CARDS = LIB.TALK_CARDS || [];
 const MICRO_ACTIONS = LIB.MICRO_ACTIONS || [];
 const DECOR = LIB.DECOR || [];
 const BOTTLES = LIB.BOTTLES || [];
 const RETREAT = LIB.RETREAT || [];
-const RETREAT_SAFETY = LIB.RETREAT_SAFETY || '';
+const RETREAT_SAFETY = SAFETY_TEXT;
 const DICTIONARY = MI.dictionary || [];
 /* 词典的组织方式也在数据里：主题分组、顺序与概念类型都不在逻辑里另写一份。 */
 const DICT_META = MI.dictionaryMeta || {};
@@ -50,13 +70,13 @@ const SELFHELP = MI.selfhelp || {};
 const SH_STATES = SELFHELP.states || [];
 const SH_TOOLS = SELFHELP.tools || [];
 const SH_DISTORTIONS = SELFHELP.distortions || [];
-const SH_SAFETY = SELFHELP.safety || '';
+const SH_SAFETY = SAFETY_TEXT;
 const SLOWVARS = MI.slowvars || {};
 const SV_VARS = SLOWVARS.vars || [];
 const SV_PRACTICES = SLOWVARS.practices || [];
 const SV_TRAPS = SLOWVARS.traps || [];
 const SV_HORIZONS = SLOWVARS.horizons || [];
-const SV_SAFETY = SLOWVARS.safety || '';
+const SV_SAFETY = SAFETY_TEXT;
 /* 急救入口：3 个 1 分钟动作与本地求助信息，全部是 content/help.js 里的固定数据。
    不联网、不拨号、不做风险判断，也不保存用户在这里的选择。 */
 const HELP = MI.help || {};

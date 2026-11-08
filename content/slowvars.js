@@ -1,6 +1,6 @@
 /* 慢变量 · 在极速变化的时代里养底盘
    纯数据，不含逻辑。字段契约：
-     safety       边界说明，不可删
+     边界说明统一放在 content/glossary.js 的 MI.safety，三页共用一份
      vars[]       6 个慢变量：id / name / sub / lead / why / misuse / move{t,d} / check
      practices[]  12 张练习卡：t / e / v / when / how[] / note
                   v = 所属慢变量的 id，必须在 vars[].id 里；选中变量即按 v 筛练习。
@@ -14,7 +14,7 @@
    加载顺序见 index.html；改字段需同步 scripts/lint-content.mjs 与 README §4.7。 */
 window.MI = window.MI || {};
 MI.slowvars = {
-  safety: '慢变量不是另一套效率系统，也不要求你现在就想清楚一生。它只提醒：有些东西值得慢慢养，不能用短期反馈来衡量。身体或情绪上的持续不适，请找医生或专业支持；这个模块不提供评估或个体化方案。',
+
   vars: [
     {
       id: 'health',

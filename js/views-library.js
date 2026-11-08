@@ -9,13 +9,14 @@
 /* 空态文案与「怎么做 / 提醒」卡片是自助与慢变量共用的，收在这里避免改一处漏一处。 */
 const SH_HINT = '选一个状态，这里会出现三件可以先做的小事。';
 const SV_HINT = '选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。';
-function howCard(item, cls, cat, catLabel) {
+function howCard(item, cls, cat, catLabel, meta) {
   return `<details class="dict-card ${cls}" data-cat="${esc(cat)}">
     <summary>
       <span class="dict-term">${esc(item.t)}</span>
       <span class="dict-en" lang="en">${esc(item.e)}</span>
       <span class="dict-short">${esc(item.when)}</span>
       <span class="dict-cat-badge">${esc(catLabel || cat)}</span>
+      ${meta || ''}
     </summary>
     <div class="dict-detail">
       <div class="sh-how"><b>怎么做</b><ol>${item.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
@@ -131,7 +132,7 @@ function syncDictSelection() {
   document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
   const desc = document.getElementById('dict-kind-desc');
   if (desc) desc.textContent = dictKind === 'all'
-    ? '先按主题翻，或按类型挑一类；两种筛选可以叠在一起。'
+    ? '类型和主题可以叠着筛；也可以直接搜。'
     : (DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '';
   const reset = document.getElementById('dict-reset');
   if (reset) reset.hidden = !dictFiltersActive();
@@ -147,7 +148,7 @@ function dictCountText(n) {
 }
 function dictView() {
   const kindDesc = dictKind === 'all'
-    ? '先按主题翻，或按类型挑一类；两种筛选可以叠在一起。'
+    ? '类型和主题可以叠着筛；也可以直接搜。'
     : ((DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '');
   return {
     view: 'dict',
@@ -156,19 +157,20 @@ function dictView() {
     missingLead: '检查 index.html 是否在 library.js 之后、js/core.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。',
     eyebrow: `心理学词典 · ${DICTIONARY.length} 条 · ${DICT_GROUPS.length} 组`,
     title: '把常用的心理学词，说清楚一点',
-    lead: `${DICT_CATS.length} 个主题收进 ${DICT_GROUPS.length} 组，另有 ${DICT_KINDS.length} 种概念类型可以先挑一类。每张卡先给一句话，点开看展开、常见误解与「接着看」的相关词条。这里只做科普，不提供诊断或个体化建议。`,
-    nav: `<nav class="dict-nav" aria-label="本页目录">
-      ${DICT_GROUPS.map(g => `<a href="#dict-group-${esc(g.id)}">${esc(g.name)}<span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
-    </nav>`,
+    lead: `${DICT_CATS.length} 个主题、${DICT_KINDS.length} 类概念，先搜或先挑一类；点卡片看展开与相关词条。只做科普，不提供诊断或个体化建议。`,
+    nav: `<details class="dict-index">
+      <summary>按组浏览 · ${DICT_GROUPS.length} 组</summary>
+      <nav class="dict-nav" aria-label="本页目录">
+        ${DICT_GROUPS.map(g => `<a href="#dict-group-${esc(g.id)}">${esc(g.name)}<span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
+      </nav>
+    </details>`,
     search: `<div class="dict-controls">
       <label class="dict-search" for="dict-search">
         <span class="visually-hidden">搜索词条</span>
         <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
       </label>
     </div>`,
-    prelude: `<section class="dict-start" aria-labelledby="dict-start-title">
-      <h3 class="dict-start-title" id="dict-start-title">从哪里开始</h3>
-      <p class="muted dict-start-sub">${DICTIONARY.length} 条不必从头翻。先挑一类，或直接搜名词与英文；主题和类型可以叠着筛。</p>
+    prelude: `<section class="dict-start" aria-label="按概念类型筛选">
       <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按概念类型筛选">
         <button class="dict-kind-btn ${dictKind === 'all' ? 'on' : ''}" data-action="dict-kind" data-k="all" aria-pressed="${dictKind === 'all'}">全部<span>${DICTIONARY.length}</span></button>
         ${DICT_KINDS.map(k => `<button class="dict-kind-btn ${dictKind === k.id ? 'on' : ''}" data-action="dict-kind" data-k="${esc(k.id)}" aria-pressed="${dictKind === k.id}" title="${esc(k.desc)}"><b>${esc(k.name)}</b><span>${dictCountBy(d => d.k === k.id)}</span></button>`).join('')}
@@ -261,9 +263,15 @@ function selfHelpView() {
     </section>`,
     items: SH_TOOLS,
     catOf: t => t.c,
-    card(t) { return howCard(t, 'sh-card', t.c); },
+    card(t) {
+      /* 卡头统一带一句边界；有对应概念的工具再标出它属于哪个概念（同一概念两轨共用）。 */
+      const meta = `<span class="dict-rule-badge">自助练习，不是治疗</span>`;
+      const c = conceptOfTool(t.t);
+      const conceptBadge = c ? `<span class="dict-concept-badge">概念 · ${esc(isAdultTrack() ? c.adult : c.kid)}</span>` : '';
+      return howCard(t, 'sh-card', t.c, null, meta + conceptBadge);
+    },
     sectionClass: 'sh-section', sectionTitle: '工具卡',
-    sectionTitleClass: 'sh-section-title', sectionSub: '按主题筛，点开看“怎么做”和“提醒”。',
+    sectionTitleClass: 'sh-section-title', sectionSub: '自助练习，不是治疗。按主题筛，点开看「怎么做」和「提醒」。',
     sectionSubClass: 'sh-section-sub',
     gridId: 'sh-grid', gridClass: 'sh-grid', cardClass: 'sh-card',
     catsId: 'sh-cats', catsClass: 'sh-cats', catsLabel: '按主题筛选自助工具', catsAction: 'sh-cat',
@@ -318,12 +326,15 @@ function slowVarsView() {
     eyebrow: '慢变量 · 在快时代里养底盘',
     title: '有些东西，值得慢慢养',
     lead: `${SV_VARS.length} 个慢变量、${SV_PRACTICES.length} 张练习卡、${SV_TRAPS.length} 个快变量陷阱、${SV_HORIZONS.length} 个时间尺度。选一个慢变量，下面会只留相关的练习。没有打卡，也不问你做到了多少。`,
-    nav: `<nav class="sv-nav" aria-label="本页目录">
-      <a href="#sv-var-section">选一个慢变量</a>
-      <a href="#sv-practices">练习卡</a>
-      <a href="#sv-horizons">三个时间尺度</a>
-      <a href="#sv-traps">快变量陷阱</a>
-    </nav>`,
+    nav: `<details class="sv-index">
+      <summary>本页目录 · ${SV_VARS.length} 个慢变量</summary>
+      <nav class="sv-nav" aria-label="本页目录">
+        <a href="#sv-var-section">选一个慢变量</a>
+        <a href="#sv-practices">练习卡</a>
+        <a href="#sv-horizons">三个时间尺度</a>
+        <a href="#sv-traps">快变量陷阱</a>
+      </nav>
+    </details>`,
     safety: SV_SAFETY,
     prelude: `<section class="sv-section" id="sv-var-section">
       <h3 class="sv-section-title">你现在最想稳住哪一块？</h3>
@@ -336,7 +347,7 @@ function slowVarsView() {
     catName: id => svVarName(id),
     card(p) { return howCard(p, 'sv-card', p.v, svVarName(p.v)); },
     sectionClass: 'sv-section', sectionId: 'sv-practices', sectionTitle: '慢变量练习卡',
-    sectionTitleClass: 'sv-section-title', sectionSub: '选上面的慢变量，会自动筛到相关练习；也可以自己按变量挑。每个变量下的卡数本来就不同，不用凑齐，点开看“怎么做”和“提醒”。',
+    sectionTitleClass: 'sv-section-title', sectionSub: '选上面的慢变量会自动筛到相关练习；也可以自己按变量挑。每个变量下的卡数不同，不用凑齐。',
     sectionSubClass: 'sv-section-sub',
     gridId: 'sv-grid', gridClass: 'sv-grid', cardClass: 'sv-card',
     catsId: 'sv-cats', catsClass: 'sv-cats', catsLabel: '按慢变量筛选练习', catsAction: 'sv-cat',

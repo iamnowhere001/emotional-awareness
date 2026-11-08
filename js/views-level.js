@@ -43,12 +43,15 @@ const RENDERERS = {
       </div>`;
   },
   breath(v) {
+    /* 两种模式：默认 paced（呼气比吸气长一点的慢呼吸）；
+       space 是「三分钟呼吸空间」——只留意呼吸与身体，不引导改变节奏，也不播放吸呼动画。 */
+    const space = v.mode === 'space';
     return `<div class="breath-box">
       <p class="lead">${esc(v.note)}</p>
-      <div class="breath-ring" id="breath-ring"><span class="breath-word" id="breath-word">准备好了再开始</span></div>
-      <div class="breath-round" id="breath-round">做几轮都算数，随时可以停。</div>
+      <div class="breath-ring ${space ? 'space' : ''}" id="breath-ring"><span class="breath-word" id="breath-word">准备好了再开始</span></div>
+      <div class="breath-round" id="breath-round">${space ? '三段各一分钟，不用调整呼吸，走神就回来。' : '做几轮都算数，随时可以停。'}</div>
       <div class="breath-actions">
-        <button class="btn btn-secondary" data-action="breath-start" id="breath-start">跟着做 ${v.rounds} 轮</button>
+        <button class="btn btn-secondary" data-action="breath-start" id="breath-start">${space ? '开始 · 约 3 分钟' : `跟着做 ${v.rounds} 轮`}</button>
         <button class="btn btn-primary" data-action="breath-done">我做完了 / 直接继续</button>
       </div>
       <p class="muted" style="margin-top:14px">头晕、憋气或不想做，就恢复平时呼吸，点右边继续。这里不计分、不计时。</p>
@@ -195,7 +198,8 @@ function makePlay(lv, v) {
       v.pairs.forEach((p, pi) => deck.push({ text: p[0], pair: pi, side: 0 }, { text: p[1], pair: pi, side: 1 }));
       return { ...base, deck: shuffled(deck), open: new Set(), matched: new Set(), first: null, lock: false, found: 0 };
     }
-    case 'finale': return { ...base, quotes: shuffled(QUOTES).slice(0, 3), talk: rand(TALK_CARDS), acts: shuffled(MICRO_ACTIONS).slice(0, 2) };
+    /* 终章的三句话来自概念层的一句话（原来单独的 QUOTES 已并入 glossary）；随机取 3 条。 */
+    case 'finale': return { ...base, quotes: shuffled(GLOSSARY_LINES).slice(0, 3), talk: rand(TALK_CARDS), acts: shuffled(MICRO_ACTIONS).slice(0, 2) };
     default: return base;
   }
 }
@@ -219,6 +223,7 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     ? `<button class="btn-read" data-action="speak-question" aria-label="朗读题目">🔊 读题目</button><button class="btn-read" data-action="speak-options" aria-label="朗读选项">🔊 读选项</button>` : '';
   stage.innerHTML = `<div class="${viewClass()}" data-variant="${v && v.key ? esc(v.key) : ''}">
     <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : side ? `工作间 · ${esc(lv.time || '')} · 支线` : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
+      <button class="btn-read" data-action="${side ? 'go-work' : 'go-map'}">← ${side ? '工作间' : '地图'}</button>
       ${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}
       ${speakBtns}
     </div>
@@ -228,7 +233,7 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     </div>
     <div class="play-area">${RENDERERS[lv.type](v)}</div>
     <div id="feedback-slot" aria-live="polite"></div>
-    <div class="actions" id="level-actions">${lv.type === 'finale' ? '' : '<button class="btn btn-ghost" data-action="go-map">先回地图，进度会留着</button>'}</div>
+    <div class="actions" id="level-actions"></div>
     ${b.adult && lv.adult ? `<div class="adult-tip"><b>给大人：</b>${esc(lv.adult)}</div>` : ''}
   </div>`;
   afterRender(lv);
@@ -296,6 +301,16 @@ function paintMemory() {
 }
 
 /* ---------------------------------------------------------------- 通关 */
+/* 每站对应的概念（glossary）里有一句「为什么可能有用」和一份动作规格；
+   结果卡把它们带出来，避免同一套机制在 34 个变体里各写一遍。 */
+function conceptRows(lv) {
+  const c = conceptOfLevel(lv.id);
+  if (!c) return '';
+  const d = c.dose || {};
+  const spec = [d.time, d.steps ? `${d.steps} 步` : '', d.stop].filter(Boolean).join(' · ');
+  return `<div class="result-row"><b>为什么可能有用</b><span>${esc(c.mechanism)}</span></div>
+    ${spec ? `<div class="result-row"><b>动作规格</b><span>${esc(spec)}</span></div>` : ''}`;
+}
 /* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
    这样以后新增题型时，即使直接把内容变量传进来，也不会执行成 HTML。 */
 function completeLevel(text) { completeLevelHtml(esc(text)); }
@@ -344,6 +359,7 @@ function completeLevelHtml(html) {
       <button class="btn btn-ghost" data-action="reroll">这一幕再玩一次</button>`;
     const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
           ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
+          ${conceptRows(lv)}
           <div class="result-row"><b>说明</b><span>工作间是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领。</span></div>`;
     paintResultCard({ kicker: '这一幕走过了 · 支线', html, rows, buttons });
     return;
@@ -369,6 +385,7 @@ function completeLevelHtml(html) {
       <button class="btn btn-ghost" data-action="reroll">这站再玩一次</button>`;
   const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
+        ${conceptRows(lv)}
         <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;
   paintResultCard({ kicker: '这一站完成了 · 带走了什么', html, rows, extra: micro, buttons });
   session.lastCleared = lv.id;
