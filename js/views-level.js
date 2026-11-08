@@ -230,6 +230,7 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     <div class="level-head">
       <div class="level-kicker"><span class="eyebrow">${esc(lv.kind)}</span></div>
       <h2>${esc(lv.name)}</h2><p class="level-goal">${esc(lv.goal)}</p>
+      ${conceptHeadline(lv)}
     </div>
     <div class="play-area">${RENDERERS[lv.type](v)}</div>
     <div id="feedback-slot" aria-live="polite"></div>
@@ -306,10 +307,31 @@ function paintMemory() {
 function conceptRows(lv) {
   const c = conceptOfLevel(lv.id);
   if (!c) return '';
-  const d = c.dose || {};
-  const spec = [d.time, d.steps ? `${d.steps} 步` : '', d.stop].filter(Boolean).join(' · ');
+  const spec = conceptSpec(c);
+  const req = conceptRequires(c).map(r => `${conceptName(r)}（第 ${LEVELS.find(l => l.id === conceptTeach(r))?.num || '?'} 站）`).join('、');
+  /* 结果卡接词典：只跳已有词条，不在这里重复释义；点击后词典会清空筛选并展开目标卡。 */
+  const dict = (c.dicts || []).length
+    ? `<button class="link-btn" data-action="dict-jump" data-t="${esc(c.dicts[0])}">词典 · ${esc(c.dicts[0])}</button>` : '';
   return `<div class="result-row"><b>为什么可能有用</b><span>${esc(c.mechanism)}</span></div>
-    ${spec ? `<div class="result-row"><b>动作规格</b><span>${esc(spec)}</span></div>` : ''}`;
+    ${spec ? `<div class="result-row"><b>动作规格</b><span>${esc(spec)}</span></div>` : ''}
+    <div class="result-row"><b>对应概念</b><span>${esc(conceptName(c))}${c.review ? ' · 复习，不教新概念' : ''}${req ? `　·　前置：${esc(req)}` : ''}${dict ? `　·　${dict}` : ''}</span></div>`;
+}
+/* 关卡头部把「这一站教什么 / 会用到什么」写出来：
+   复习站明确标成复习，工作间与重复出现的动作则直接指回教学站，避免「用到但没教」的错觉。 */
+function conceptHeadline(lv) {
+  const c = conceptOfLevel(lv.id);
+  if (!c || lv.type === 'finale') return '';
+  const teachId = conceptTeach(c);
+  const tlv = LEVELS.find(l => l.id === teachId);
+  const ti = tlv ? LEVELS.indexOf(tlv) : -1;
+  const canGo = ti >= 0 && ti !== state.levelIndex && isUnlocked(ti);
+  const teachTxt = tlv ? `第 ${tlv.num} 站「${tlv.name}」` : teachId;
+  const teachHtml = canGo
+    ? `<button class="link-btn" data-action="open-level" data-i="${ti}">${esc(teachTxt)}</button>` : esc(teachTxt);
+  const req = conceptRequires(c).map(r => conceptName(r)).join('、');
+  if (c.review) return `<span class="concept-line">复习站 · 不教新概念${req ? `；回看：${esc(req)}` : ''}</span>`;
+  if (lv.id === teachId) return `<span class="concept-line">概念 · ${esc(conceptName(c))}${req ? `　·　会用到：${esc(req)}` : ''}</span>`;
+  return `<span class="concept-line">会用到 · ${esc(conceptName(c))}（在${teachHtml}学过）</span>`;
 }
 /* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
    这样以后新增题型时，即使直接把内容变量传进来，也不会执行成 HTML。 */
@@ -357,9 +379,10 @@ function completeLevelHtml(html) {
     const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一幕 · ${esc(WORK[nextI].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-work">回到工作间</button>
       <button class="btn btn-ghost" data-action="reroll">这一幕再玩一次</button>`;
-    const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+    /* 机制在前、口号在后：先解释「为什么可能有用」，再给这一站的一句话。 */
+    const rows = `${conceptRows(lv)}
+          <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
           ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
-          ${conceptRows(lv)}
           <div class="result-row"><b>说明</b><span>工作间是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领。</span></div>`;
     paintResultCard({ kicker: '这一幕走过了 · 支线', html, rows, buttons });
     return;
@@ -383,9 +406,9 @@ function completeLevelHtml(html) {
   const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一站 · ${esc(LEVELS[next].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-map">回到地图</button>
       <button class="btn btn-ghost" data-action="reroll">这站再玩一次</button>`;
-  const rows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+  const rows = `${conceptRows(lv)}
+        <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
-        ${conceptRows(lv)}
         <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;
   paintResultCard({ kicker: '这一站完成了 · 带走了什么', html, rows, extra: micro, buttons });
   session.lastCleared = lv.id;

@@ -1252,6 +1252,41 @@ html[data-band="a3"] .step { height: 40px; }
 .space-dot.done { background: var(--accent); }
 .space-dot.current { background: var(--warm); }
 
+/* ---------- 概念层：入口、机制与回链 ---------- */
+/* 概念不是新页面，是一层把站点 / 工具卡 / 词典接起来的索引；
+   这里的样式只负责让入口可点、机制块可读、回链不抢正文。 */
+.link-btn {
+    appearance: none; border: 0; background: none; padding: 0; margin: 0 0 0 4px;
+    color: var(--accent); font: inherit; font-size: inherit; line-height: inherit;
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.link-btn:hover { color: var(--warm); }
+.concept-line { display: block; margin-top: 8px; font-size: calc(.8rem * var(--scale)); color: var(--ink-3); line-height: 1.65; }
+.concept-start {
+    margin: 18px 0 8px; padding: 14px 16px; border-radius: 14px;
+    background: var(--surface); border: 1px solid var(--line);
+}
+.concept-start-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.concept-chip {
+    text-align: left; padding: 9px 11px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--surface-2);
+    font: inherit; cursor: pointer;
+}
+.concept-chip b { display: block; font-size: calc(.86rem * var(--scale)); color: var(--ink); }
+.concept-chip span { display: block; margin-top: 2px; font-size: calc(.7rem * var(--scale)); color: var(--ink-3); }
+.concept-chip em { display: block; margin-top: 3px; font-style: normal; font-size: calc(.66rem * var(--scale)); color: var(--ink-3); }
+.concept-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sh-mech { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); border: 1px solid #c7e2da; }
+.sh-mech b { color: var(--accent); font-size: calc(.8rem * var(--scale)); }
+.sh-mech p { margin: 4px 0 0; color: var(--ink-2); font-size: calc(.8rem * var(--scale)); line-height: 1.65; }
+.sh-refs { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.retreat-concept { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); border: 1px solid #c7e2da; }
+.retreat-concept b { color: var(--accent); }
+.retreat-concept p { margin: 5px 0 0; font-size: calc(.82rem * var(--scale)); line-height: 1.65; color: var(--ink-2); }
+.codex-refs { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.codex-card .codex-refs .link-btn, .codex-card .codex-refs .dict-link { font-size: calc(.72rem * var(--scale)); }
+.sv-var em { display: block; margin-top: 2px; font-style: normal; font-size: calc(.7rem * var(--scale)); color: var(--ink-3); }
+
 /* ---------- 状态与选档 ---------- */
 .node.just-done .node-pin { animation: justDone 1.6s ease; }
 @keyframes justDone { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 4px var(--accent-soft); } }

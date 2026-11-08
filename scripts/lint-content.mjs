@@ -397,10 +397,17 @@ SV_HORIZONS.forEach((h, i) => {
 
 /* ---------- 概念层 ----------
    16 个概念是站点 / 工具卡 / 词典 / 慢变量的共同锚点。这里校验：
-   id 唯一、两轨词卡名与 CODEX 一致、stations / tools / dict / slowvars 反链都真实存在。 */
+   id 唯一、两轨词卡名与 CODEX 一致、stations / tools / dict / slowvars 反链都真实存在；
+   teach 覆盖两轨各一站、requires 不成环且教学顺序成立、dicts 只引用已有词条；
+   工作间四幕用到的概念必须早于 MI.workGate 教完（直接拦住「用到但没教」的倒挂）。 */
 const GLOSSARY = MI.glossary || [];
 if (GLOSSARY.length !== 16) err(`概念层：应为 16 个概念，当前 ${GLOSSARY.length} 个`);
 const seenConcept = new Set();
+const CONCEPT_BY_ID = new Map(GLOSSARY.map(g => [g.id, g]));
+const TRACK_ORDER = {
+  kid: new Map((KID.levels || []).map((l, i) => [l.id, i])),
+  adult: new Map((ADULT.levels || []).map((l, i) => [l.id, i]))
+};
 const conceptLevelIds = new Set([
   ...(KID.levels || []).map(l => l.id),
   ...(ADULT.levels || []).map(l => l.id),
@@ -419,6 +426,75 @@ GLOSSARY.forEach((g, i) => {
   (g.tools || []).forEach(t => { if (!SH_TOOLS.some(x => x.t === t)) err(`${tag}: tools「${t}」不在自助工具卡里`); });
   if (g.dict && !DICT.some(d => d.t === g.dict)) err(`${tag}: dict「${g.dict}」不在词典里`);
   (g.slowvars || []).forEach(v => { if (!SV_VARS.some(x => x.id === v)) err(`${tag}: slowvars「${v}」不是任何慢变量`); });
+
+  /* teach：两轨各一个教学站，且必须在本概念的 stations 里。 */
+  if (!Array.isArray(g.teach) || g.teach.length !== 2) err(`${tag}: teach 应为两轨各一个站点，当前 ${JSON.stringify(g.teach || null)}`);
+  const kidTeach = (g.teach || []).find(id => !id.startsWith('A'));
+  const adultTeach = (g.teach || []).find(id => id.startsWith('A'));
+  if (!kidTeach || !TRACK_ORDER.kid.has(kidTeach)) err(`${tag}: teach 缺儿童轨教学站`);
+  if (!adultTeach || !TRACK_ORDER.adult.has(adultTeach)) err(`${tag}: teach 缺成年轨教学站`);
+  if (kidTeach && !(g.stations || []).includes(kidTeach)) err(`${tag}: teach「${kidTeach}」不在 stations 里`);
+  if (adultTeach && !(g.stations || []).includes(adultTeach)) err(`${tag}: teach「${adultTeach}」不在 stations 里`);
+
+  /* requires：只能指向真实概念，不能指向自己，不能重复。 */
+  if (!Array.isArray(g.requires)) err(`${tag}: 缺 requires（可为空数组）`);
+  const seenReq = new Set();
+  (g.requires || []).forEach(id => {
+    if (!CONCEPT_BY_ID.has(id)) err(`${tag}: requires「${id}」不是真实概念`);
+    if (id === g.id) err(`${tag}: requires 不能指向自己`);
+    if (seenReq.has(id)) err(`${tag}: requires「${id}」重复`);
+    seenReq.add(id);
+  });
+
+  /* dicts：只引用已有词条，不新增；主锚点 must 是其中之一。 */
+  if (!Array.isArray(g.dicts) || !g.dicts.length) err(`${tag}: dicts 至少引用 1 条已有词条`);
+  (g.dicts || []).forEach(t => { if (!DICT.some(d => d.t === t)) err(`${tag}: dicts「${t}」不在词典里`); });
+  if (new Set(g.dicts || []).size !== (g.dicts || []).length) err(`${tag}: dicts 重复`);
+  if (g.dict && !(g.dicts || []).includes(g.dict)) err(`${tag}: 主锚点 dict「${g.dict}」不在 dicts 里`);
+});
+/* 先教后用：依赖概念的教学站必须早于本概念，两轨分别检查。 */
+GLOSSARY.forEach(g => {
+  (g.requires || []).forEach(id => {
+    const r = CONCEPT_BY_ID.get(id);
+    if (!r) return;
+    ['kid', 'adult'].forEach(track => {
+      const order = TRACK_ORDER[track];
+      const self = order.get((g.teach || []).find(x => (track === 'adult') === x.startsWith('A')));
+      const req = order.get((r.teach || []).find(x => (track === 'adult') === x.startsWith('A')));
+      if (self == null || req == null) return;
+      if (req >= self) err(`概念「${g.id}」依赖「${id}」，但 ${track} 轨教学站不早于本概念`);
+    });
+  });
+});
+/* 依赖不能成环。 */
+(function checkCycles() {
+  const done = new Set(), visiting = new Set();
+  const walk = (id, path) => {
+    if (done.has(id)) return;
+    if (visiting.has(id)) { err(`概念依赖成环：${path.concat(id).join(' → ')}`); return; }
+    visiting.add(id);
+    (CONCEPT_BY_ID.get(id)?.requires || []).forEach(next => walk(next, path.concat(id)));
+    visiting.delete(id);
+    done.add(id);
+  };
+  GLOSSARY.forEach(g => walk(g.id, []));
+})();
+/* 复习站：全表只应有一个 review 概念，且它对应的站点要标出来。 */
+const REVIEW_CONCEPTS = GLOSSARY.filter(g => g.review);
+if (REVIEW_CONCEPTS.length !== 1) err(`概念层：应有且只有 1 个复习概念，当前 ${REVIEW_CONCEPTS.length} 个`);
+if (REVIEW_CONCEPTS[0] && !(REVIEW_CONCEPTS[0].stations || []).includes('3-4')) err('复习概念应挂在 3-4 / A3-4');
+/* 工作间：四幕用到的概念必须早于解锁点教完。 */
+const WORK_GATE_ID = MI.workGate;
+if (!WORK_GATE_ID) err('工作间：缺 MI.workGate');
+const GATE_INDEX = (ADULT.levels || []).findIndex(l => l.id === WORK_GATE_ID);
+if (GATE_INDEX < 0) err(`工作间：workGate「${WORK_GATE_ID}」不是成年轨关卡 id`);
+(MI.adultWork || []).forEach(w => {
+  const c = GLOSSARY.find(g => (g.stations || []).includes(w.id));
+  if (!c) { err(`工作间「${w.id}」没有挂到任何概念`); return; }
+  const t = (c.teach || []).find(id => id.startsWith('A'));
+  const ti = (ADULT.levels || []).findIndex(l => l.id === t);
+  if (ti < 0) { err(`工作间「${w.id}」的概念「${c.id}」没有成年轨教学站`); return; }
+  if (ti > GATE_INDEX) err(`工作间「${w.id}」用到「${c.id}」，但它教在 ${t}，晚于解锁点 ${WORK_GATE_ID}`);
 });
 /* 两轨每个站点都应挂到一个概念，避免新站漏配后结果卡没有机制说明。 */
 conceptLevelIds.forEach(id => {

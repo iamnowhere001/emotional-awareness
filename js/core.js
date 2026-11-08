@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.13.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.14.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
@@ -36,12 +36,34 @@ const CONCEPT_OF_SLOWVAR = {};
 GLOSSARY.forEach(g => {
   (g.stations || []).forEach(id => { CONCEPT_OF_LEVEL[id] = g.id; });
   (g.tools || []).forEach(t => { CONCEPT_OF_TOOL[t] = g.id; });
-  if (g.dict) CONCEPT_OF_DICT[g.dict] = g.id;
+  /* 词典锚点可以有多个：主锚点仍是 g.dict，g.dicts 是同一概念的延伸阅读。
+     这里只建索引，不复制词条；词典仍是 content/dictionary.js 的单一来源。 */
+  (g.dicts || (g.dict ? [g.dict] : [])).forEach(t => { if (!CONCEPT_OF_DICT[t]) CONCEPT_OF_DICT[t] = g.id; });
   (g.slowvars || []).forEach(v => { CONCEPT_OF_SLOWVAR[v] = g.id; });
 });
 const conceptOfLevel = id => GLOSSARY_BY_ID[CONCEPT_OF_LEVEL[id] || ''] || null;
 const conceptOfCard = name => GLOSSARY.find(g => g.kid === name || g.adult === name) || null;
 const conceptOfTool = name => GLOSSARY_BY_ID[CONCEPT_OF_TOOL[name] || ''] || null;
+const conceptOfDict = term => GLOSSARY_BY_ID[CONCEPT_OF_DICT[term] || ''] || null;
+/* 概念在两轨里的显示名、教学站与动作规格：结果卡、工具卡、静修页共用同一套读法。 */
+const conceptName = c => (c ? (isAdultTrack() ? c.adult : c.kid) : '');
+const conceptTeach = c => {
+  if (!c) return '';
+  const teach = c.teach || [];
+  return isAdultTrack() ? (teach.find(id => id.startsWith('A')) || teach[0] || '')
+    : (teach.find(id => !id.startsWith('A')) || teach[0] || '');
+};
+const conceptRequires = c => ((c && c.requires) || []).map(id => GLOSSARY_BY_ID[id]).filter(Boolean);
+const conceptSpec = c => {
+  const d = (c && c.dose) || {};
+  return [d.time, d.steps ? `${d.steps} 步` : '', d.stop].filter(Boolean).join(' · ');
+};
+/* 静修练习没有自己的概念字段：三种题型分别对到身体信号 / 念头链 / 慢呼吸，
+   不新增第四种概念，也不给每个练习各写一段机制。 */
+const RETREAT_CONCEPT_BY_TYPE = { ground: 'body', defuse: 'chain', space: 'breath' };
+const conceptOfRetreat = r => GLOSSARY_BY_ID[RETREAT_CONCEPT_BY_TYPE[(r && r.type) || ''] || ''] || null;
+/* 工作间解锁点由内容层给出（content/levels-adult-work.js 的 MI.workGate），逻辑不另写一份。 */
+const WORK_GATE = MI.workGate || 'A3-4';
 /* 边界与安全：自助工具箱 / 慢变量 / 静修三页共用同一份（content/glossary.js 顶部的 MI.safety）。 */
 const SAFETY_TEXT = (MI.safety && MI.safety.text) || '';
 

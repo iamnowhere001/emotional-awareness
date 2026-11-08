@@ -729,7 +729,7 @@ window.addEventListener('load', function () {
     A(state.seen['4-3'].join(',') === before.join(','), 'restart-all 不应清已见组合');
   });
   test('工作间只在成年档出现，儿童轨看不到入口', () => {
-    bandTo('adult'); state.cleared = ['A2-4']; renderMap();
+    bandTo('adult'); state.cleared = [WORK_GATE]; renderMap();
     A(!!document.querySelector('#stage [data-action="go-work"]'), '成年地图应有工作间入口');
     A(document.getElementById('stage').textContent.includes('工作间'));
     bandTo('a6'); renderMap();
@@ -737,7 +737,7 @@ window.addEventListener('load', function () {
   });
   test('工作间按幕解锁，完成只写 sideCleared 且不加任何奖励', () => {
     bandTo('adult');
-    state.cleared = ['A2-4']; state.awarded = []; state.sideCleared = [];
+    state.cleared = [WORK_GATE]; state.awarded = []; state.sideCleared = [];
     state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
     save(); applySettings();
     A(sideUnlocked(0) && !sideUnlocked(1), '只开放第一幕');
@@ -748,7 +748,7 @@ window.addEventListener('load', function () {
     A(document.getElementById('progress-text').textContent.includes('支线'), '顶栏应标明支线');
     completeLevel('这一幕走过了');
     A(state.sideCleared.join(',') === 'W-1', '完成应写入 sideCleared');
-    A(state.cleared.join(',') === 'A2-4', '支线不得写进主线 cleared');
+    A(state.cleared.join(',') === WORK_GATE, '支线不得写进主线 cleared');
     A(JSON.stringify(state.cards) === beforeCards && JSON.stringify(state.skills) === beforeSkills && state.shells === 0,
       '支线不加词卡 / 本领 / 贝壳');
     A(state.awarded.length === 0);
@@ -761,10 +761,10 @@ window.addEventListener('load', function () {
     A(play.side && currentLevel().id === 'W-2');
     completeLevel('第二幕');
     A(state.sideCleared.join(',') === 'W-1,W-2');
-    A(state.cleared.join(',') === 'A2-4', '连续两幕也不得污染主线');
+    A(state.cleared.join(',') === WORK_GATE, '连续两幕也不得污染主线');
   });
   test('工作间 hash 直达、不可达回落、Esc 回地图', () => {
-    bandTo('adult'); state.cleared = ['A2-4']; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
+    bandTo('adult'); state.cleared = [WORK_GATE]; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
     renderHome();
     routeTo(parseHash('#/level/W-1'));
     A(session.view === 'level' && currentLevel().id === 'W-1' && !!play.side, '应直达第一幕');
@@ -785,7 +785,7 @@ window.addEventListener('load', function () {
 
   test('支线换题保留 side 上下文，通关不写主线', () => {
     bandTo('adult');
-    state.cleared = ['A2-4']; state.awarded = ['A2-4'];
+    state.cleared = [WORK_GATE]; state.awarded = [WORK_GATE];
     state.cards = { kid: [], adult: [] }; state.skills = []; state.shells = 0;
     state.sideCleared = [];
     const idx = LEVELS.findIndex(l => l.id === 'A2-1');
@@ -798,13 +798,13 @@ window.addEventListener('load', function () {
     A(currentLevel().id === 'W-1', '换题后仍读支线关卡');
     A(document.getElementById('stage').textContent.includes('工作间 · 09:00 · 支线'));
     completeLevel('这一幕走过了');
-    A(state.cleared.join(',') === 'A2-4', '支线换题后通关不得写主线 cleared');
+    A(state.cleared.join(',') === WORK_GATE, '支线换题后通关不得写主线 cleared');
     A(state.sideCleared.join(',') === 'W-1');
     A(state.shells === 0 && state.skills.length === 0 && state.cards.adult.length === 0, '支线不得发奖励');
   });
 
   test('工作间进急救，返回与 Esc 都回到工作间', () => {
-    bandTo('adult'); state.cleared = ['A2-4']; state.sideCleared = []; save(); applySettings();
+    bandTo('adult'); state.cleared = [WORK_GATE]; state.sideCleared = []; save(); applySettings();
     renderWork();
     ACTIONS['open-help']();
     A(session.view === 'help' && session.helpFrom === 'work');
@@ -817,22 +817,22 @@ window.addEventListener('load', function () {
     A(session.view === 'work', 'Esc 也应回工作间');
   });
 
-  test('工作间解锁点在 A2-4：只走完 A1-4 不够', () => {
+  test('工作间解锁点在 A3-4：只走完 A2-4 不够', () => {
     bandTo('adult');
-    state.cleared = ['A1-1', 'A1-2', 'A1-3', 'A1-4']; state.sideCleared = [];
+    state.cleared = ['A1-1', 'A1-2', 'A1-3', 'A1-4', 'A2-1', 'A2-2', 'A2-3', 'A2-4']; state.sideCleared = [];
     save(); applySettings();
-    A(!sideUnlocked(0), '只到 A1-4 不应解锁第一幕');
+    A(!sideUnlocked(0), '只到 A2-4 不应解锁第一幕（表达还没教）');
     renderMap();
-    A(document.querySelector('.hub-work .hub-meta').textContent.includes('走完 A2-4 后开放'), '入口应标为未开放');
-    state.cleared.push('A2-4'); save(); renderMap();
-    A(sideUnlocked(0), '走到 A2-4 才解锁第一幕');
+    A(document.querySelector('.hub-work .hub-meta').textContent.includes(`走完 ${WORK_GATE} 后开放`), '入口应标为未开放');
+    state.cleared.push(WORK_GATE); save(); renderMap();
+    A(sideUnlocked(0), '走到 A3-4 才解锁第一幕');
     A(document.querySelector('.hub-work .hub-meta').textContent.includes('个时刻'), '解锁后入口应可用');
   });
   test('旧档已完成支线：解锁点后移后 sideCleared 仍可回看', () => {
     bandTo('adult');
     state.cleared = ['A1-4']; state.sideCleared = ['W-1', 'W-2'];
     save(); applySettings();
-    A(!sideUnlocked(0), '未走 A2-4 时第一幕不再自动开放');
+    A(!sideUnlocked(0), '未走解锁点时第一幕不再自动开放');
     A(workReachable(0) && workReachable(1), '已完成的两幕必须仍可回看');
     renderWork();
     A(document.getElementById('stage').textContent.includes('会前十分钟'), '工作间应列出已完成的幕');
@@ -857,6 +857,60 @@ window.addEventListener('load', function () {
     A(conceptOfCard('命名') && conceptOfCard('命名').id === 'granularity');
     A(conceptOfCard('情绪粒度') && conceptOfCard('情绪粒度').id === 'granularity');
     A(conceptOfTool('想法检验四问') && conceptOfTool('想法检验四问').id === 'reframe');
+  });
+  test('概念依赖先教后用：两轨教学站顺序成立，工作间不再倒挂', () => {
+    bandTo('adult');
+    const order = LEVELS.map(l => l.id);
+    const kidOrder = MI.kid.levels.map(l => l.id);
+    GLOSSARY.forEach(g => {
+      A(Array.isArray(g.teach) && g.teach.length === 2, `${g.id} 应有两条教学站`);
+      A(g.teach.every(id => (g.stations || []).includes(id)), `${g.id} 的教学站应在 stations 里`);
+      A((g.requires || []).every(id => GLOSSARY.some(x => x.id === id)), `${g.id} 的依赖应真实存在`);
+      A(!(g.requires || []).includes(g.id), `${g.id} 不能依赖自己`);
+      const adultSelf = order.indexOf(g.teach.find(id => id.startsWith('A')));
+      const kidSelf = kidOrder.indexOf(g.teach.find(id => !id.startsWith('A')));
+      A(adultSelf >= 0 && kidSelf >= 0, `${g.id} 两轨都应有教学站`);
+      (g.requires || []).forEach(id => {
+        const r = GLOSSARY.find(x => x.id === id);
+        const adultReq = order.indexOf(r.teach.find(x => x.startsWith('A')));
+        const kidReq = kidOrder.indexOf(r.teach.find(x => !x.startsWith('A')));
+        A(adultReq < adultSelf && kidReq < kidSelf, `${g.id} 依赖 ${id}，教学站必须更早`);
+      });
+    });
+    const gate = order.indexOf(WORK_GATE);
+    A(gate > 0, '工作间解锁点应在成年轨里');
+    WORK.forEach(w => {
+      const c = conceptOfLevel(w.id);
+      A(!!c, `${w.id} 应挂到概念`);
+      const ti = order.indexOf(conceptTeach(c));
+      A(ti >= 0 && ti <= gate, `${w.id} 用的 ${c.id} 必须早于解锁点教过`);
+    });
+  });
+  test('关卡页标出概念关系：复习站 / 工作间回指教学站', () => {
+    bandTo('adult');
+    state.cleared = ['A2-4', WORK_GATE]; state.sideCleared = ['W-1', 'W-2'];
+    state.levelIndex = LEVELS.findIndex(l => l.id === 'A3-4');
+    renderLevel();
+    const line = document.querySelector('.concept-line');
+    A(!!line && line.textContent.includes('复习'), 'A3-4 应标为复习站');
+    renderLevel(null, WORK[2], 2);
+    const wline = document.querySelector('.concept-line');
+    A(!!wline && wline.textContent.includes('会用到') && wline.textContent.includes('表达'), 'W-3 应回指表达');
+    const back = wline.querySelector('[data-action="open-level"]');
+    A(!!back && LEVELS[Number(back.dataset.i)].id === 'A3-3', '应能回到 A3-3 教学站');
+    play = {}; state.levelIndex = 0; renderMap();
+  });
+  test('结果卡先给机制与规格，并接词典', () => {
+    bandTo('adult');
+    state.cleared = ['A1-1']; state.awarded = []; state.sideCleared = [];
+    state.levelIndex = LEVELS.findIndex(l => l.id === 'A1-2');
+    renderLevel();
+    completeLevel('走过了');
+    const txt = document.getElementById('stage').textContent;
+    A(txt.includes('为什么可能有用'), '结果卡应先给机制');
+    A(txt.includes(conceptOfLevel('A1-2').mechanism.slice(0, 12)), '结果卡应显示概念机制原文');
+    A(txt.includes('动作规格'), '结果卡应显示统一规格');
+    A(!!document.querySelector('#stage [data-action="dict-jump"][data-t="内感受"]'), '结果卡应接词典');
   });
   test('词卡图鉴按 16 组显示双名，state.cards 键值不变', () => {
     bandTo('adult');
@@ -883,6 +937,57 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('#sh-grid .sh-card').length === 31);
     A(document.getElementById('stage').textContent.includes('31 张工具卡'));
     A(document.querySelectorAll('.sh-dist').length === 10, '速查仍应保留 10 条');
+    renderMap();
+  });
+  test('工具箱给出按概念的入口，31 张卡按主题分区', () => {
+    bandTo('adult'); ACTIONS['open-selfhelp']();
+    const chips = [...document.querySelectorAll('#stage .concept-start .concept-chip')];
+    A(chips.length === GLOSSARY.filter(g => (g.tools || []).length).length, '概念入口应覆盖所有有工具的概念');
+    A(document.querySelectorAll('#sh-grid .dict-group-title').length === 5, '31 张卡应按 5 个主题分区');
+    const reframeChip = chips.find(c => c.dataset.id === 'reframe');
+    A(!!reframeChip); reframeChip.click();
+    const target = [...document.querySelectorAll('#sh-grid .dict-card')].find(c => c.dataset.term === '认知模型');
+    A(!!target && target.open, '点概念应跳到并展开对应工具卡');
+    renderMap();
+  });
+  test('工具卡显示概念机制，并回链教学站与词典', () => {
+    bandTo('adult'); state.cleared = ['A1-4']; ACTIONS['open-selfhelp']();
+    const card = [...document.querySelectorAll('#sh-grid .dict-card')].find(c => c.dataset.term === '想法检验四问');
+    A(!!card && !!card.querySelector('.sh-mech'), '工具卡应带机制块');
+    const mech = card.querySelector('.sh-mech').textContent;
+    A(mech.includes(conceptOfTool('想法检验四问').mechanism.slice(0, 10)), '应显示所属概念的机制');
+    A(mech.includes('动作规格'), '应显示统一规格');
+    const back = card.querySelector('.sh-mech [data-action="open-level"]');
+    A(!!back && LEVELS[Number(back.dataset.i)].id === 'A2-2', '应回链到第 2 站');
+    A(!!card.querySelector('.sh-mech [data-action="dict-jump"][data-t="认知重评"]'), '应接词典');
+    renderMap();
+  });
+  test('慢变量 12 张按 6 个变量分区，入口按钮带张数', () => {
+    bandTo('adult'); ACTIONS['open-slowvars']();
+    A(document.querySelectorAll('#sv-vars .sv-var').length === 6);
+    A(document.querySelectorAll('#sv-vars .sv-var em').length === 6, '每个入口应标出练习张数');
+    A(document.querySelectorAll('#sv-practices .dict-group-title').length === 6, '12 张卡应按 6 个变量分区');
+    A(document.querySelectorAll('#sv-practices .dict-card').length === 12);
+    renderMap();
+  });
+  test('词典按概念读：16 个概念都能跳到已有词条', () => {
+    bandTo('adult'); ACTIONS['open-dictionary']();
+    const chips = [...document.querySelectorAll('#stage .concept-start .concept-chip')];
+    A(chips.length === 16, `概念入口应有 16 个，实际 ${chips.length}`);
+    const chip = chips.find(c => c.dataset.id === 'reframe');
+    A(!!chip); chip.click();
+    const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === '认知重评');
+    A(!!card && card.open, '点概念应展开对应词条');
+    A(card.textContent.includes('概念 · 观察与推测'), '词条卡应标出概念名');
+    renderMap();
+  });
+  test('两份 10 条清单互链，各管一层', () => {
+    bandTo('adult'); ACTIONS['open-selfhelp']();
+    A(document.querySelectorAll('#stage .sh-dist').length === 10);
+    A(!!document.querySelector('#stage [data-action="open-slowvars"]'), '想法层应指向节奏层');
+    ACTIONS['open-slowvars']();
+    A(document.querySelectorAll('#stage .sv-trap').length === 10);
+    A(!!document.querySelector('#sv-traps [data-action="open-selfhelp"]'), '节奏层应指向想法层');
     renderMap();
   });
   test('终章三句话来自概念层，独立金句数组已删除', () => {
@@ -1104,6 +1209,16 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('#stage .retreat-group-title').length === 4);
     A(document.querySelectorAll('#stage .retreat-card').length === RETREAT.length);
     A(document.getElementById('stage').innerHTML.includes(`${RETREAT.length} 个可以随时停下的小练习`));
+  });
+  test('静修练习页显示对应概念、机制与规格', () => {
+    bandTo('adult');
+    const i = RETREAT.findIndex(r => r.type === 'ground');
+    renderRetreatPractice(i);
+    const block = document.querySelector('.retreat-concept');
+    A(!!block, '静修页应显示概念块');
+    A(block.textContent.includes('身体信号'));
+    A(block.textContent.includes(conceptOfRetreat(RETREAT[i]).mechanism.slice(0, 10)));
+    A(block.textContent.includes('动作规格'));
   });
   test('10 个练习都能进入，且各自索引正确', () => {
     for (let i = 0; i < RETREAT.length; i++) {

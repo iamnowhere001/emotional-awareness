@@ -2,6 +2,19 @@
    经典脚本顺序加载，与 js/core.js 共享全局词法作用域；不要在此重复声明已有的顶层名字。 */
 
 /* ---------------------------------------------------------------- 动作分发 */
+/* 词典跳转的唯一实现：清空筛选、重建词典页、展开并聚焦目标卡。
+   结果卡、概念入口、工具卡、图鉴都走这里，避免多处各写一遍「点了没反应」。 */
+function jumpToDictTerm(term) {
+  if (!DICTIONARY.some(d => d.t === term)) return;
+  dictCat = 'all'; dictQuery = ''; dictKind = 'all';
+  renderDictionary();
+  const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === term);
+  if (!card) return;
+  card.open = true;
+  card.scrollIntoView({ block: 'center' });
+  const summary = card.querySelector('summary');
+  if (summary) summary.focus({ preventScroll: true });
+}
 const ACTIONS = {
   /* 首页主按钮不再先绕到地图：直接进入下一处已解锁、未走过的站。
      全部走完时才回地图，让用户自己挑一站重温。 */
@@ -217,19 +230,15 @@ const ACTIONS = {
     dictCat = 'all'; dictQuery = ''; dictKind = 'all';
     renderDictionary();
   },
-  'dict-jump': (el) => {
-    const t = el.dataset.t;
-    if (!DICTIONARY.some(d => d.t === t)) return;
-    /* 关联词条可能被当前筛选挡住：先清干净再跳，避免「点了没反应」 */
-    dictCat = 'all'; dictQuery = ''; dictKind = 'all';
-    renderDictionary();
-    const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === t);
-    if (!card) return;
-    card.open = true;
-    card.scrollIntoView({ block: 'center' });
-    const summary = card.querySelector('summary');
-    if (summary) summary.focus({ preventScroll: true });
+  'dict-jump': (el) => jumpToDictTerm(el.dataset.t),
+  /* 概念入口：一个概念可能对应多条已有词条，先打开主锚点。 */
+  'dict-concept': (el) => {
+    const g = GLOSSARY_BY_ID[el.dataset.id];
+    if (!g || !(g.dicts || []).length) return;
+    jumpToDictTerm(g.dicts[0]);
   },
+  /* 图鉴是弹窗：先关掉再进词典，避免词典渲染在遮罩后面。 */
+  'open-dict-term': (el) => { closeModal(); jumpToDictTerm(el.dataset.t); },
   'open-selfhelp': () => { session.navDir = 'forward'; renderSelfHelp(); },
   'sh-state': (el) => {
     shState = el.dataset.id || null;
@@ -247,6 +256,20 @@ const ACTIONS = {
     shCat = el.dataset.c || 'all';
     document.querySelectorAll('#sh-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === shCat));
     applyShFilter();
+  },
+  /* 按概念找工具：跳到该概念的第一张卡并展开；不改筛选，只是导航。 */
+  'sh-concept': (el) => {
+    const g = GLOSSARY_BY_ID[el.dataset.id];
+    if (!g || !(g.tools || []).length) return;
+    const term = g.tools[0];
+    shState = null; shCat = 'all';
+    renderSelfHelp();
+    const card = [...document.querySelectorAll('#sh-grid .dict-card')].find(c => c.dataset.term === term);
+    if (!card) return;
+    card.open = true;
+    card.scrollIntoView({ block: 'center' });
+    const summary = card.querySelector('summary');
+    if (summary) summary.focus({ preventScroll: true });
   },
   'open-slowvars': () => {
     /* 每次进入都是干净状态：选择与筛选不跨视图保留，也不落盘 */

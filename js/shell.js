@@ -237,12 +237,13 @@ function currentLevel() {
   if (play && play.side) return WORK[play.sideIndex] || WORK[0] || {};
   return LEVELS[state.levelIndex] || LEVELS[0] || {};
 }
-/* 工作间四幕线性解锁：走完 A2-4 开放第一幕，之后每一幕要求上一幕已完成。
-   入口放在 A2-4 之后，是因为四幕用到的重评 / 念头链 / 表达分别在第 2、3 岛；
-   只读主线 cleared（A2-4 是入口条件）与 sideCleared（支线进度），两者不混用。 */
+/* 工作间四幕线性解锁：走完 WORK_GATE（A3-4）开放第一幕，之后每一幕要求上一幕已完成。
+   入口放在第 3 岛收尾之后，是因为四幕用到的身体信号 / 重评 / 念头链 / 表达
+   分别在第 1、2、3 岛；最早也要等 A3-3 教完表达，取整到 A3-4。
+   只读主线 cleared（WORK_GATE 是入口条件）与 sideCleared（支线进度），两者不混用。 */
 function sideUnlocked(i) {
   if (!isAdultTrack() || i < 0 || i >= WORK.length) return false;
-  if (i === 0) return state.cleared.includes('A2-4');
+  if (i === 0) return state.cleared.includes(WORK_GATE);
   return state.sideCleared.includes(WORK[i - 1].id);
 }
 /* 某一幕能不能进：正常解锁链，或这一幕本身已经走过。

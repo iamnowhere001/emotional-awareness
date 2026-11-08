@@ -332,7 +332,7 @@ function renderMap() {
         <button class="hub-card hub-work" data-action="go-work">
           <span class="hub-name">工作间</span>
           <span class="hub-desc">会前、汇报被否、冲突、下班反刍：四个工作日的时刻。</span>
-          <span class="hub-meta">${sideUnlocked(0) || WORK.some((w, i) => workReachable(i)) ? `${WORK.length} 个时刻 · 不加奖励` : '走完 A2-4 后开放'}</span>
+          <span class="hub-meta">${sideUnlocked(0) || WORK.some((w, i) => workReachable(i)) ? `${WORK.length} 个时刻 · 不加奖励` : `走完 ${WORK_GATE} 后开放`}</span>
         </button>
       </div>
     </section>` : ''}
@@ -401,7 +401,7 @@ function renderWork() {
   const stops = WORK.map((l, i) => {
     const unlocked = workReachable(i);
     const finished = done.has(l.id);
-    const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? '走完 A2-4 开放' : '先走上一幕');
+    const stateText = finished ? '✓ 走过' : unlocked ? '去这一幕' : (i === 0 ? `走完 ${WORK_GATE} 开放` : '先走上一幕');
     return `<button class="work-stop ${finished ? 'done' : ''} ${unlocked ? '' : 'locked'}" data-action="open-work-level" data-i="${i}" ${unlocked ? '' : 'disabled'}>
       <span class="work-time">${esc(l.time)}</span>
       <span class="work-body">
@@ -418,7 +418,7 @@ function renderWork() {
     <span class="eyebrow">成年档 · 专题支线</span>
     <h2 style="margin-top:10px">工作间</h2>
     <p class="lead">四个时刻，沿着一个工作日往下走。它是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领；主线停在哪一站，出来还是那一站。</p>
-    ${!open0 ? '<div class="notice">走完地图上的 A2-4 后开放第一幕。</div>' : ''}
+    ${!open0 ? `<div class="notice">走完地图上的 ${WORK_GATE} 后开放第一幕。</div>` : ''}
     <div class="work-line">${stops}</div>
     <p class="home-note">不用按顺序打卡，也不记录时长。想停就停，进度只留在本机。</p>
   </div>`;

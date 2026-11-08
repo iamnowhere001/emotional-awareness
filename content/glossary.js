@@ -139,3 +139,34 @@ MI.glossary = [
     stations: ['4-4', 'A4-4']
   }
 ];
+
+/* 概念关系层：每个概念依赖哪些更早的概念、在哪一站被教、在词典里能接着读哪几条。
+   这些字段不写进上面每一条，是为了让「内容」与「关系」分开看；
+   运行时由 js/core.js 建反向索引，scripts/lint-content.mjs 会校验：
+   - requires 必须是真实概念，且不能成环；
+   - teach 必须正好覆盖两轨各一站，并落在该概念的 stations 里；
+   - 依赖概念的教学点必须早于本概念的教学点（先教后用）；
+   - dicts 里每一条都必须是词典里已有的词条（不新增词条）。
+   工作间解锁点由 levels-adult-work.js 的 MI.workGate 给出，lint 会校验四幕用到的概念
+   都在解锁点之前教过，避免再次出现「用到但没教」。 */
+(() => {
+  const links = {
+    notice:      { teach: ['1-1', 'A1-1'], requires: [], dicts: ['注意'] },
+    body:        { teach: ['1-2', 'A1-2'], requires: ['notice'], dicts: ['内感受', '具身认知'] },
+    intensity:   { teach: ['1-3', 'A1-3'], requires: ['notice', 'body'], dicts: ['情绪', '情绪调节'] },
+    granularity: { teach: ['1-4', 'A1-4'], requires: ['notice', 'intensity'], dicts: ['情绪粒度', '情绪'] },
+    breath:      { teach: ['2-1', 'A2-1'], requires: ['body', 'intensity'], dicts: ['正念', '情绪调节'] },
+    reframe:     { teach: ['2-2', 'A2-2'], requires: ['notice', 'granularity'], dicts: ['认知重评', '情绪调节'] },
+    chain:       { teach: ['2-3', 'A2-3'], requires: ['reframe', 'body'], dicts: ['反刍', '认知解离', '情绪ABC理论'] },
+    need:        { teach: ['2-4', 'A2-4'], requires: ['granularity', 'body'], dicts: ['马斯洛需求层次', '自我决定理论'] },
+    perspective: { teach: ['3-1', 'A3-1'], requires: ['notice', 'granularity'], dicts: ['观点采择', '心理理论'] },
+    evidence:    { teach: ['3-2', 'A3-2'], requires: ['perspective', 'notice'], dicts: ['确认偏差', '认知偏差'] },
+    express:     { teach: ['3-3', 'A3-3'], requires: ['need', 'perspective', 'evidence'], dicts: ['非暴力沟通', '我信息', '主动倾听'] },
+    review:      { teach: ['3-4', 'A3-4'], requires: ['notice', 'body', 'granularity'], dicts: ['提取练习', '间隔效应'], review: true },
+    control:     { teach: ['4-1', 'A4-1'], requires: ['reframe', 'need'], dicts: ['担忧', '焦虑'] },
+    anger:       { teach: ['4-2', 'A4-2'], requires: ['intensity', 'body'], dicts: ['情绪调节', '压力'] },
+    counter:     { teach: ['4-3', 'A4-3'], requires: ['reframe', 'perspective'], dicts: ['自我关怀', '接纳'] },
+    boundary:    { teach: ['4-4', 'A4-4'], requires: ['express', 'need'], dicts: ['边界', '非暴力沟通'] }
+  };
+  MI.glossary.forEach(g => Object.assign(g, links[g.id] || {}));
+})();

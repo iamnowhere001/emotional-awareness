@@ -9,8 +9,10 @@
 /* 空态文案与「怎么做 / 提醒」卡片是自助与慢变量共用的，收在这里避免改一处漏一处。 */
 const SH_HINT = '选一个状态，这里会出现三件可以先做的小事。';
 const SV_HINT = '选一个慢变量，这里会出现它的长期逻辑和一个可以开始的小动作。';
-function howCard(item, cls, cat, catLabel, meta) {
-  return `<details class="dict-card ${cls}" data-cat="${esc(cat)}">
+/* 工具卡 / 慢变量卡共用外壳。detail 是可选块：本轮用它把概念层的机制与规格
+   带进工具卡，不改卡片数据结构，也不给每张卡各写一段解释。 */
+function howCard(item, cls, cat, catLabel, meta, detail) {
+  return `<details class="dict-card ${cls}" data-term="${esc(item.t)}" data-cat="${esc(cat)}">
     <summary>
       <span class="dict-term">${esc(item.t)}</span>
       <span class="dict-en" lang="en">${esc(item.e)}</span>
@@ -21,8 +23,50 @@ function howCard(item, cls, cat, catLabel, meta) {
     <div class="dict-detail">
       <div class="sh-how"><b>怎么做</b><ol>${item.how.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
       <p class="dict-mis"><b>提醒</b>${esc(item.note)}</p>
+      ${detail || ''}
     </div>
   </details>`;
+}
+/* 概念回链：指回教学站（已解锁时可点）与 concept.dicts 里的已有词条。
+   工具卡、静修页、结果卡共用，避免每处各拼一遍「第几站 / 哪个词」。 */
+function conceptRefLinks(c) {
+  if (!c) return '';
+  const teachId = conceptTeach(c);
+  const tlv = LEVELS.find(l => l.id === teachId);
+  const ti = tlv ? LEVELS.indexOf(tlv) : -1;
+  const parts = [];
+  if (tlv) {
+    parts.push(ti >= 0 && isUnlocked(ti)
+      ? `<button class="link-btn" data-action="open-level" data-i="${ti}">对应第 ${tlv.num} 站「${esc(tlv.name)}」</button>`
+      : `对应第 ${tlv.num} 站「${esc(tlv.name)}」`);
+  }
+  (c.dicts || []).slice(0, 1).forEach(t => {
+    parts.push(`<button class="dict-link" data-action="dict-jump" data-t="${esc(t)}">词典 · ${esc(t)}</button>`);
+  });
+  return parts.join('　·　');
+}
+/* 「按概念找」入口面板：只列有对应内容的既有概念，不新增条目。
+   jump 是页面内的动作名（自助 / 词典各自一套），不改变现有筛选结构。 */
+function conceptStartPanel(title, sub, ids, action) {
+  const list = ids.map(id => GLOSSARY_BY_ID[id]).filter(g => g);
+  const chips = list.map(g => {
+    const tlv = LEVELS.find(l => l.id === conceptTeach(g));
+    const uses = [
+      (g.tools || []).length ? `${g.tools.length} 工具` : '',
+      (g.dicts || []).length ? `${g.dicts.length} 词条` : '',
+      (g.slowvars || []).length ? `${g.slowvars.length} 长期` : ''
+    ].filter(Boolean).join(' · ');
+    /* 每个概念直接标出：先依赖谁、教在第几站、被几处内容用到。 */
+    return `<button class="concept-chip" data-action="${action}" data-id="${esc(g.id)}">
+      <b>${esc(conceptName(g))}</b>
+      <span>${esc(conceptRequires(g).map(r => conceptName(r)).join('、') || '起点')}</span>
+      <em>${tlv ? `教在第 ${tlv.num} 站` : ''}${uses ? `　·　${uses}` : ''}</em></button>`;
+  }).join('');
+  return `<section class="concept-start" aria-label="${esc(title)}">
+    <h3 class="sh-section-title">${esc(title)}</h3>
+    <p class="muted sh-section-sub">${esc(sub)}</p>
+    <div class="concept-start-grid">${chips}</div>
+  </section>`;
 }
 function renderLibraryView(cfg) {
   clearAsyncTimers(); stopSpeech();
@@ -170,7 +214,13 @@ function dictView() {
         <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
       </label>
     </div>`,
-    prelude: `<section class="dict-start" aria-label="按概念类型筛选">
+    prelude: `${conceptStartPanel(
+      '按概念读',
+      '16 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。',
+      GLOSSARY.map(g => g.id),
+      'dict-concept'
+    )}
+    <section class="dict-start" aria-label="按概念类型筛选">
       <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按概念类型筛选">
         <button class="dict-kind-btn ${dictKind === 'all' ? 'on' : ''}" data-action="dict-kind" data-k="all" aria-pressed="${dictKind === 'all'}">全部<span>${DICTIONARY.length}</span></button>
         ${DICT_KINDS.map(k => `<button class="dict-kind-btn ${dictKind === k.id ? 'on' : ''}" data-action="dict-kind" data-k="${esc(k.id)}" aria-pressed="${dictKind === k.id}" title="${esc(k.desc)}"><b>${esc(k.name)}</b><span>${dictCountBy(d => d.k === k.id)}</span></button>`).join('')}
@@ -197,6 +247,9 @@ function dictView() {
     },
     card(d) {
       const hay = [d.t, d.e, d.c, dictKindName(d.k), d.s, d.d, d.m || ''].join(' ').toLowerCase();
+      /* 词条若挂到概念层，就在卡头标出概念名；不改变词条内容，只是多一条回链。 */
+      const cc = conceptOfDict(d.t);
+      const conceptBadge = cc ? `<span class="dict-concept-badge">概念 · ${esc(conceptName(cc))}</span>` : '';
       return `<details class="dict-card" data-term="${esc(d.t)}" data-cat="${esc(d.c)}" data-kind="${esc(d.k)}" data-search="${esc(hay)}">
         <summary>
           <span class="dict-term">${esc(d.t)}</span>
@@ -205,6 +258,7 @@ function dictView() {
           <div class="dict-badges">
             <span class="dict-cat-badge">${esc(d.c)}</span>
             <span class="dict-kind-badge k-${esc(d.k)}">${esc(dictKindName(d.k))}</span>
+            ${conceptBadge}
           </div>
         </summary>
         <div class="dict-detail">
@@ -260,18 +314,35 @@ function selfHelpView() {
       <p class="muted sh-section-sub">不用选得很准，挑一个最接近的就好。选完只看这一组建议，不做测试，也不打分。</p>
       ${states}
       <div id="sh-state-panel" aria-live="polite">${shState ? shStatePanel(shState) : `<p class="sh-hint">${esc(SH_HINT)}</p>`}</div>
-    </section>`,
+    </section>
+    ${conceptStartPanel(
+      '按概念找工具',
+      '如果你已经知道自己要练哪一个动作，直接从概念进：点一个概念，跳到它对应的第一张工具卡。',
+      GLOSSARY.filter(g => g.tools.length).map(g => g.id),
+      'sh-concept'
+    )}`,
     items: SH_TOOLS,
     catOf: t => t.c,
+    /* 卡片按主题分区显示：31 张不再是一堵平铺的墙，分区标题在筛选时一起收起。 */
+    groupTitle(c) {
+      return `<h3 class="dict-group-title" data-group="${esc(c)}">
+        <span class="dict-group-name">${esc(c)}</span>
+        <span class="dict-group-count">${SH_TOOLS.filter(t => t.c === c).length} 张</span>
+      </h3>`;
+    },
     card(t) {
       /* 卡头统一带一句边界；有对应概念的工具再标出它属于哪个概念（同一概念两轨共用）。 */
       const meta = `<span class="dict-rule-badge">自助练习，不是治疗</span>`;
       const c = conceptOfTool(t.t);
       const conceptBadge = c ? `<span class="dict-concept-badge">概念 · ${esc(isAdultTrack() ? c.adult : c.kid)}</span>` : '';
-      return howCard(t, 'sh-card', t.c, null, meta + conceptBadge);
+      /* 机制与规格来自概念层：同一动作在多张卡里只解释一次。 */
+      const mech = c ? `<div class="sh-mech"><b>为什么可能有用</b><p>${esc(c.mechanism)}</p>
+        <p class="muted">动作规格 · ${esc(conceptSpec(c))}</p>
+        <p class="sh-refs">${conceptRefLinks(c)}</p></div>` : '';
+      return howCard(t, 'sh-card', t.c, null, meta + conceptBadge, mech);
     },
     sectionClass: 'sh-section', sectionTitle: '工具卡',
-    sectionTitleClass: 'sh-section-title', sectionSub: '自助练习，不是治疗。按主题筛，点开看「怎么做」和「提醒」。',
+    sectionTitleClass: 'sh-section-title', sectionSub: '自助练习，不是治疗。按主题分区，点开看「怎么做」「提醒」和「为什么可能有用」。',
     sectionSubClass: 'sh-section-sub',
     gridId: 'sh-grid', gridClass: 'sh-grid', cardClass: 'sh-card',
     catsId: 'sh-cats', catsClass: 'sh-cats', catsLabel: '按主题筛选自助工具', catsAction: 'sh-cat',
@@ -280,7 +351,7 @@ function selfHelpView() {
     emptyId: 'sh-empty', emptyText: '这一类暂时没有卡片。点「全部」看看。',
     epilogue: `<section class="sh-section">
       <h3 class="sh-section-title">认知扭曲速查</h3>
-      <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。</p>
+      <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。这 10 条是想法层的；节奏层的 10 条「快变量陷阱」在慢变量页。<button class="link-btn" data-action="open-slowvars">去慢变量页</button></p>
       <div class="sh-dist-grid">${SH_DISTORTIONS.map(d => `<div class="sh-dist">
         <b>${esc(d.t)}</b><span>${esc(d.d)}</span><em>${esc(d.eg)}</em></div>`).join('')}</div>
     </section>`,
@@ -316,7 +387,7 @@ function svVarName(id) {
 function slowVarsView() {
   const vars = `<div class="sv-vars" id="sv-vars">
     ${SV_VARS.map(v => `<button class="sv-var ${svVar === v.id ? 'on' : ''}" data-action="sv-var" data-id="${esc(v.id)}">
-      <b>${esc(v.name)}</b><span>${esc(v.sub)}</span></button>`).join('')}
+      <b>${esc(v.name)}</b><span>${esc(v.sub)}</span><em>${SV_PRACTICES.filter(p => p.v === v.id).length} 张练习</em></button>`).join('')}
   </div>`;
   return {
     view: 'slowvars',
@@ -345,9 +416,16 @@ function slowVarsView() {
     items: SV_PRACTICES,
     catOf: p => p.v,
     catName: id => svVarName(id),
+    /* 练习卡按变量分区：12 张不再平铺，选变量后只留下对应分区。 */
+    groupTitle(c) {
+      return `<h3 class="dict-group-title" data-group="${esc(c)}">
+        <span class="dict-group-name">${esc(svVarName(c))}</span>
+        <span class="dict-group-count">${SV_PRACTICES.filter(p => p.v === c).length} 张</span>
+      </h3>`;
+    },
     card(p) { return howCard(p, 'sv-card', p.v, svVarName(p.v)); },
     sectionClass: 'sv-section', sectionId: 'sv-practices', sectionTitle: '慢变量练习卡',
-    sectionTitleClass: 'sv-section-title', sectionSub: '选上面的慢变量会自动筛到相关练习；也可以自己按变量挑。每个变量下的卡数不同，不用凑齐。',
+    sectionTitleClass: 'sv-section-title', sectionSub: '12 张练习按 6 个变量分区；选上面的慢变量会自动筛到相关分区，也可以自己按变量挑。每个变量下的卡数不同，不用凑齐。',
     sectionSubClass: 'sv-section-sub',
     gridId: 'sv-grid', gridClass: 'sv-grid', cardClass: 'sv-card',
     catsId: 'sv-cats', catsClass: 'sv-cats', catsLabel: '按慢变量筛选练习', catsAction: 'sv-cat',
@@ -364,7 +442,7 @@ function slowVarsView() {
     </section>
     <section class="sv-section" id="sv-traps">
       <h3 class="sv-section-title">快变量陷阱速查</h3>
-      <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。</p>
+      <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。这 10 条是节奏层的；想法层的 10 条认知扭曲在自助工具箱。<button class="link-btn" data-action="open-selfhelp">去工具箱</button></p>
       <div class="sv-traps">${SV_TRAPS.map(t => `<div class="sv-trap">
         <b>${esc(t.t)}</b><span>${esc(t.d)}</span><em>${esc(t.eg)}</em></div>`).join('')}</div>
     </section>`,
@@ -414,6 +492,14 @@ function renderRetreatPractice(i) {
     play.step = 0;
     body = `<div id="space-body"></div><div id="retreat-result"></div>`;
   }
+  /* 静修练习复用概念层的机制与规格：三种题型各对到一个概念，不新增解释文本。 */
+  const rc = conceptOfRetreat(r);
+  const conceptBlock = rc ? `<div class="retreat-concept">
+    <b>对应概念 · ${esc(conceptName(rc))}</b>
+    <p>${esc(rc.mechanism)}</p>
+    <p class="muted">动作规格 · ${esc(conceptSpec(rc))}</p>
+    <p class="sh-refs">${conceptRefLinks(rc)}</p>
+  </div>` : '';
   stage.innerHTML = `<div class="view">
     <div class="toolbar">${bandChip('<span class="muted">静修间</span>')}
       <button class="btn-read" data-action="open-retreat">换一个练习</button>
@@ -421,6 +507,7 @@ function renderRetreatPractice(i) {
     <h2>${esc(r.name)}</h2>
     <p class="level-goal">${esc(r.sub)}　·　${esc(r.intro)}</p>
     ${retreatSafety()}
+    ${conceptBlock}
     <div class="play-area" style="margin-top:20px">${body}</div>
     <div id="feedback-slot" aria-live="polite"></div>
   </div>`;

@@ -269,10 +269,14 @@ function openCodex() {
   const got = groups.filter(x => x.has).length;
   openModal(`<div class="modal-title">词卡图鉴 · ${got} / ${groups.length}</div>
     <div class="modal-body">每张卡都是从一站里带回来的小工具。同一件事在两套站里可能有不同叫法，这里并成一组看。没有集齐压力，也没有隐藏奖励。</div>
-    <div class="codex-grid">${groups.map(({ mine, other, has, def }) => `<div class="codex-card ${has ? '' : 'locked'}"><b>${has ? esc(mine) : '???'}</b>
+    <div class="codex-grid">${groups.map(({ mine, other, has, def }, i) => {
+      const g = GLOSSARY[i];
+      return `<div class="codex-card ${has ? '' : 'locked'}"><b>${has ? esc(mine) : '???'}</b>
       ${has && other ? `<span class="codex-alias">也叫「${esc(other)}」</span>` : ''}
       <span>${has ? esc(def.t) : '走到那一站就能遇见'}</span>
-      ${has ? `<span class="codex-eg">${esc(def.e)}</span>` : ''}</div>`).join('')}</div>
+      ${has ? `<span class="codex-eg">${esc(def.e)}</span>` : ''}
+      ${has ? `<span class="codex-refs">${conceptRefLinks(g)}</span>` : ''}</div>`;
+    }).join('')}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">合上图鉴</button></div>`);
 }
 function openSkills() {
