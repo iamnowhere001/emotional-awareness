@@ -122,6 +122,13 @@ function optBtn(i, title, desc, action, orig) {
 function sliderLabels(v) {
   return v.replies.length === 3 ? ['一点点', '中等', '很大很大'] : ['很轻', '有一点', '中等', '挺明显', '很满'];
 }
+/* 夜间使用：只随系统深浅色切一层 CSS 变量，不新增存档字段、不发请求。
+   高对比模式由 CSS 自己优先，不让两套覆盖打架。 */
+function applyColorScheme() {
+  if (!window.matchMedia) return;
+  document.documentElement.dataset.theme =
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 function applySettings() {
   syncTrack();
   const b = band();
@@ -129,4 +136,5 @@ function applySettings() {
   document.documentElement.classList.toggle('reduce-motion', !!state.settings.motion);
   document.documentElement.classList.toggle('high-contrast', !!state.settings.contrast);
   document.documentElement.dataset.band = state.band || 'a6';
+  applyColorScheme();
 }

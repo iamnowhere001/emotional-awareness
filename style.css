@@ -47,7 +47,10 @@ body {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 22px;
+    /* clip 只裁剪圆角、不创建滚动容器，顶栏的 sticky 才能相对视口生效；
+       老浏览器读不到 clip 时退回 hidden，只是不吸顶，功能不丢。 */
     overflow: hidden;
+    overflow: clip;
     box-shadow: 0 30px 70px -52px rgba(24, 40, 34, .55);
 }
 
@@ -59,6 +62,10 @@ button:disabled { cursor: default; }
 
 /* ---------- top bar ---------- */
 #topbar {
+    /* 常驻可见：急救是安全出口，用户滚到词典第 100 条时也必须一键够得到。
+       z-index 低于弹窗遮罩，弹窗内另有「先缓一缓」出口。 */
+    position: sticky; top: 0; z-index: 12;
+    border-radius: 22px 22px 0 0;
     padding: 20px 28px 16px;
     border-bottom: 1px solid var(--line);
     background: var(--surface-2);
@@ -621,6 +628,15 @@ body.modal-open { overflow: hidden; }
     color: var(--ink-2); font-size: calc(1.16rem * var(--scale)); line-height: 1;
 }
 .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+/* 弹窗打开时遮罩盖住顶栏，键盘焦点又被 trapTab 锁在弹窗里：
+   把安全出口放进弹窗本身，任何弹窗里都能一键到急救页。 */
+.modal-help {
+    display: block; width: 100%; margin-top: 18px; padding: 10px 12px;
+    border: 1px solid var(--line-strong); border-radius: 10px;
+    background: var(--surface-2); color: var(--ink-2);
+    font-size: calc(.84rem * var(--scale)); text-align: left;
+}
+.modal-help:hover { border-color: var(--warm); color: var(--warm); background: var(--warm-soft); }
 .modal-body { color: var(--ink-2); font-size: calc(.92rem * var(--scale)); line-height: 1.75; }
 .modal-body p + p { margin-top: 12px; }
 .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
@@ -1220,6 +1236,19 @@ html[data-band="a3"] .step { height: 40px; }
 .result-row b { flex: none; min-width: 74px; color: var(--accent); font-weight: 600; }
 .result-row span { color: var(--ink-2); }
 .result-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #c7e2da; }
+/* 低龄档结果卡：给大人的机制说明默认收起，孩子不需要读六段字。 */
+.result-more > summary {
+    cursor: pointer; list-style: none; padding: 9px 12px; border-radius: 10px;
+    border: 1px dashed var(--line-strong); color: var(--ink-2);
+    font-size: calc(.84rem * var(--scale));
+}
+.result-more > summary::-webkit-details-marker { display: none; }
+.result-more > summary::before { content: "＋ "; color: var(--accent); }
+.result-more[open] > summary::before { content: "－ "; }
+/* 不能只靠 details 的原生折叠：Chrome 新版在 grid 容器里会给收起内容留出布局高度。
+   显式关掉，确保低龄档结果卡真的只剩两行 + 一条 summary。 */
+.result-more > .result-more-rows { display: none; }
+.result-more[open] > .result-more-rows { display: grid; gap: 8px; margin-top: 8px; }
 .tried { outline: 2px dashed var(--warm); outline-offset: 2px; transform: scale(.99); }
 
 /* ---------- 静修间 ---------- */
@@ -1267,6 +1296,19 @@ html[data-band="a3"] .step { height: 40px; }
     background: var(--surface); border: 1px solid var(--line);
 }
 .concept-start-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.concept-start-folded > summary {
+    display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none;
+    font-size: calc(1.04rem * var(--scale));
+}
+.concept-start-folded > summary::-webkit-details-marker { display: none; }
+.concept-start-folded > summary::before { content: "＋"; color: var(--accent); }
+.concept-start-folded[open] > summary::before { content: "－"; }
+.concept-start-folded > summary b { font-weight: 600; }
+.concept-start-folded > summary .muted { margin-left: auto; }
+.concept-start-folded .sh-section-sub { margin-top: 10px; }
+.concept-start-folded:not([open]) > .sh-section-sub,
+.concept-start-folded:not([open]) > .concept-start-grid { display: none; }
+.concept-start-folded[open] > .concept-start-grid { display: grid; }
 .concept-chip {
     text-align: left; padding: 9px 11px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--surface-2);
@@ -1435,4 +1477,120 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
     .work-body { flex-basis: calc(100% - 74px); }
     .work-state { margin-left: 76px; }
 }
+
+/* 顶栏吸顶后，页内目录跳转要给目标留一条不被盖住的上边距。 */
+.dict-group-title, .sv-section { scroll-margin-top: 76px; }
+
+/* ---------- 深色：跟随系统偏好 ----------
+   只换一层变量，再把插画与卡片里写死的浅底压下去；不新增存档字段，不请求任何资源。
+   高对比模式优先，避免两套覆盖互相打架。夜间用「睡不着」那组练习时尤其需要。 */
+:root[data-theme="dark"]:not(.high-contrast) {
+    --bg: #141b19;
+    --surface: #1e2724;
+    --surface-2: #26312d;
+    --ink: #e9efea;
+    --ink-2: #c2cec6;
+    --ink-3: #9caea4;
+    --line: #38473f;
+    --line-strong: #556a5e;
+    --accent: #8fd2b7;
+    --accent-soft: #243c34;
+    --blue: #98c8e4;
+    --blue-soft: #213744;
+    --warm: #e8bd85;
+    --warm-soft: #3a2e20;
+    --sand: #6d5c43;
+    color-scheme: dark;
+}
+/* 装饰层：夜间收起手绘渐变，统一沉到次级表面，文字交回变量。 */
+:root[data-theme="dark"]:not(.high-contrast) .home-horizon,
+:root[data-theme="dark"]:not(.high-contrast) .hh-land,
+:root[data-theme="dark"]:not(.high-contrast) .hh-islet,
+:root[data-theme="dark"]:not(.high-contrast) .hh-wave,
+:root[data-theme="dark"]:not(.high-contrast) .map-board,
+:root[data-theme="dark"]:not(.high-contrast) .map-next,
+:root[data-theme="dark"]:not(.high-contrast) .map-next.is-done,
+:root[data-theme="dark"]:not(.high-contrast) .finale-entry,
+:root[data-theme="dark"]:not(.high-contrast) .finale-entry.locked,
+:root[data-theme="dark"]:not(.high-contrast) .island,
+:root[data-theme="dark"]:not(.high-contrast) .island-count,
+:root[data-theme="dark"]:not(.high-contrast) .node,
+:root[data-theme="dark"]:not(.high-contrast) .node-pin,
+:root[data-theme="dark"]:not(.high-contrast) .help-entry,
+:root[data-theme="dark"]:not(.high-contrast) .hub-help,
+:root[data-theme="dark"]:not(.high-contrast) .help-action,
+:root[data-theme="dark"]:not(.high-contrast) .help-lines,
+:root[data-theme="dark"]:not(.high-contrast) .help-kid,
+:root[data-theme="dark"]:not(.high-contrast) .help-crisis,
+:root[data-theme="dark"]:not(.high-contrast) .shell-count,
+:root[data-theme="dark"]:not(.high-contrast) .age-card,
+:root[data-theme="dark"]:not(.high-contrast) .age-card.adult-card,
+:root[data-theme="dark"]:not(.high-contrast) .result-row,
+:root[data-theme="dark"]:not(.high-contrast) .micro-card,
+:root[data-theme="dark"]:not(.high-contrast) .talk-card,
+:root[data-theme="dark"]:not(.high-contrast) .space-card,
+:root[data-theme="dark"]:not(.high-contrast) .sh-mech,
+:root[data-theme="dark"]:not(.high-contrast) .retreat-concept,
+:root[data-theme="dark"]:not(.high-contrast) .dict-mis,
+:root[data-theme="dark"]:not(.high-contrast) .dict-card[open],
+:root[data-theme="dark"]:not(.high-contrast) .codex-card,
+:root[data-theme="dark"]:not(.high-contrast) .feedback.good,
+:root[data-theme="dark"]:not(.high-contrast) .feedback.gentle,
+:root[data-theme="dark"]:not(.high-contrast) .retreat-safety,
+:root[data-theme="dark"]:not(.high-contrast) .adult-tip,
+:root[data-theme="dark"]:not(.high-contrast) .storage-warning,
+:root[data-theme="dark"]:not(.high-contrast) .slot,
+:root[data-theme="dark"]:not(.high-contrast) .basket {
+    background-image: none;
+    background-color: var(--surface-2);
+    border-color: var(--line);
+    color: var(--ink-2);
+}
+/* 亮色底上原本是深字的几处，夜里一起换成变量色。 */
+:root[data-theme="dark"]:not(.high-contrast) .help-crisis b,
+:root[data-theme="dark"]:not(.high-contrast) .help-crisis p,
+:root[data-theme="dark"]:not(.high-contrast) .help-entry-copy span:last-child,
+:root[data-theme="dark"]:not(.high-contrast) .dict-mis,
+:root[data-theme="dark"]:not(.high-contrast) .retreat-safety,
+:root[data-theme="dark"]:not(.high-contrast) .adult-tip,
+:root[data-theme="dark"]:not(.high-contrast) .storage-warning,
+:root[data-theme="dark"]:not(.high-contrast) .feedback.good,
+:root[data-theme="dark"]:not(.high-contrast) .feedback.gentle { color: var(--ink-2); }
+/* accent / blue 在深色里是亮色，按钮上的白字要反过来才读得清。 */
+:root[data-theme="dark"]:not(.high-contrast) .btn-primary,
+:root[data-theme="dark"]:not(.high-contrast) .result-check,
+:root[data-theme="dark"]:not(.high-contrast) .node-next,
+:root[data-theme="dark"]:not(.high-contrast) .node.done .node-pin,
+:root[data-theme="dark"]:not(.high-contrast) .opt.selected .opt-key,
+:root[data-theme="dark"]:not(.high-contrast) .help-num,
+:root[data-theme="dark"]:not(.high-contrast) .dict-cat.on,
+:root[data-theme="dark"]:not(.high-contrast) .seg button.on { color: #10221c; }
+:root[data-theme="dark"]:not(.high-contrast) .btn-primary:hover:not(:disabled) { background: #a8e2c9; }
+/* 首站未选天气时主按钮是禁用的：亮度降一档即可，别让它变成看不清的深色块。 */
+:root[data-theme="dark"]:not(.high-contrast) .btn-primary:disabled {
+    background: #33564a; color: #cfe8db; opacity: 1;
+}
+:root[data-theme="dark"]:not(.high-contrast) .node.done .node-pin { background: var(--accent); }
+/* 顶栏急救按钮保留暖色，别被次级表面吞掉。 */
+:root[data-theme="dark"]:not(.high-contrast) .help-btn {
+    background: var(--warm-soft); border-color: var(--warm); color: var(--warm);
+}
+:root[data-theme="dark"]:not(.high-contrast) .dict-concept-badge {
+    background: var(--warm-soft); border-color: var(--line-strong); color: var(--warm);
+}
+/* 岛屿与首页插画：保留轮廓，只把颜色沉下来。 */
+:root[data-theme="dark"]:not(.high-contrast) .island {
+    --isle-land: #2c443a; --isle-sand: #3a4b3e; --isle-line: #4e6b5c; --isle-edge: #56786a;
+}
+:root[data-theme="dark"]:not(.high-contrast) .isle-water { stroke: #22352d; }
+:root[data-theme="dark"]:not(.high-contrast) .hh-islet { background: #355244; border-color: #4a6c5b; }
+:root[data-theme="dark"]:not(.high-contrast) .hh-wave {
+    background-image: linear-gradient(90deg, transparent, #4d6b5c 14%, #4d6b5c 86%, transparent);
+}
+:root[data-theme="dark"]:not(.high-contrast) .hh-sun { background: #d9ac66; box-shadow: 0 0 0 9px rgba(217, 172, 102, .18); }
+/* 17 个进度格与滚动条也跟着沉下来。 */
+:root[data-theme="dark"]:not(.high-contrast) .step::before { background: #34463e; border-color: #4a5e54; }
+:root[data-theme="dark"]:not(.high-contrast) .step.current::before { background: var(--surface); }
+:root[data-theme="dark"]:not(.high-contrast) .step.done::before { background: var(--accent); border-color: var(--accent); }
+:root[data-theme="dark"]:not(.high-contrast) .step:hover:not(:disabled)::before { background: #3f5a4e; }
 

@@ -238,9 +238,15 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     ${b.adult && lv.adult ? `<div class="adult-tip"><b>给大人：</b>${esc(lv.adult)}</div>` : ''}
   </div>`;
   afterRender(lv);
+  /* 完成态也可能从急救返回：把结果卡原样重画，保住「去下一站 / 回地图」两条路。
+     卡片自己会滚到可见位置，这时就不再拉回页面顶部。 */
+  const restoredResult = !!(play.done && play.result);
+  if (restoredResult) paintResultCard(play.result);
   updateTopbar();
   stage.focus({ preventScroll: true });
-  try { window.scrollTo({ top: 0, behavior: state.settings.motion ? 'auto' : 'smooth' }); } catch (e) { /* noop */ }
+  if (!restoredResult) {
+    try { window.scrollTo({ top: 0, behavior: state.settings.motion ? 'auto' : 'smooth' }); } catch (e) { /* noop */ }
+  }
   if (state.settings.autoSpeak && state.settings.speak && lv.type !== 'finale') {
     setTimeout(() => speakTexts(questionTexts()), 350);
   }
@@ -338,7 +344,10 @@ function conceptHeadline(lv) {
 function completeLevel(text) { completeLevelHtml(esc(text)); }
 /* 主线与支线共用的结果卡外壳：只负责渲染反馈槽、滚动到可见、清空底部动作。
    奖励 / 存档 / 文案的差异仍留在两个完成分支里，不在这里合流。 */
-function paintResultCard({ kicker, html, rows, extra, buttons }) {
+function paintResultCard(payload) {
+  const { kicker, html, rows, extra, buttons } = payload;
+  /* 记在 play 上而不是模块级变量：换站 / 重抽会重建 play，不会把上一站的结果卡带过去。 */
+  if (play) play.result = payload;
   const slot = document.getElementById('feedback-slot');
   if (slot) {
     slot.innerHTML = `<div class="feedback good result-card">
@@ -357,6 +366,8 @@ function completeLevelHtml(html) {
   if (play.done) return;
   play.done = true;
   stopSpeech();
+  /* 这一站已经收尾，「刚才呼吸被打断」的提示不再成立，别带进地图。 */
+  session.interrupted = false;
   /* 呼吸练习中途点「我做完了」时，计时器要立刻收掉；
      这里手动清而不是走 clearAsyncTimers，免得被标成「被打断」。 */
   if (breathTimer) { clearInterval(breathTimer); breathTimer = null; }
@@ -387,6 +398,8 @@ function completeLevelHtml(html) {
     paintResultCard({ kicker: '这一幕走过了 · 支线', html, rows, buttons });
     return;
   }
+  /* 复玩同一站不再计入「一轮走了几站」：休息提醒的节奏只跟着首次通关走。 */
+  const firstClear = !state.cleared.includes(lv.id);
   if (!state.cleared.includes(lv.id)) state.cleared.push(lv.id);
   if (!state.awarded.includes(lv.id)) {
     state.awarded.push(lv.id);
@@ -406,12 +419,30 @@ function completeLevelHtml(html) {
   const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一站 · ${esc(LEVELS[next].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-map">回到地图</button>
       <button class="btn btn-ghost" data-action="reroll">这站再玩一次</button>`;
-  const rows = `${conceptRows(lv)}
+  /* 3-6 / 6-9 档不一次读六段说明：机制、规格与「生活里试试」折进「给大人看」，
+     孩子只看到一句话、收集与下一步；其余档位保持原来的完整顺序，一字不变。 */
+  const lightResult = band().id === 'a3' || band().id === 'a6';
+  const adultRows = `${conceptRows(lv)}${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}`;
+  const shortRows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
+        <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;
+  const rows = lightResult
+    ? `${shortRows}${adultRows.trim() ? `<details class="result-more"><summary>给大人看 · 这一站在练什么</summary><div class="result-more-rows">${adultRows}</div></details>` : ''}`
+    : `${conceptRows(lv)}
         <div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         ${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}
         <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;
   paintResultCard({ kicker: '这一站完成了 · 带走了什么', html, rows, extra: micro, buttons });
   session.lastCleared = lv.id;
-  session.clearedThisRun += 1;
-  if (session.clearedThisRun % band().rest === 0) setTimeout(openRest, 900);
+  if (firstClear) {
+    session.clearedThisRun += 1;
+    if (session.clearedThisRun % band().rest === 0) {
+      restTimer = setTimeout(() => {
+        restTimer = null;
+        /* 900ms 里可能已经翻到下一站 / 回地图 / 打开别的弹窗：
+           只在还停在关卡且无弹窗时提醒，免得盖住新页面。 */
+        if (session.view !== 'level' || overlay.classList.contains('open')) return;
+        openRest();
+      }, 900);
+    }
+  }
 }

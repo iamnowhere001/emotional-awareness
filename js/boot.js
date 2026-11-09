@@ -3,6 +3,22 @@
 
 /* ---------------------------------------------------------------- 事件绑定 */
 document.addEventListener('click', (e) => {
+  /* 页内目录锚点不能进 hash 路由：#/xxx 是视图地址，#xxx 只是本页里的滚动目标。
+     不拦下来的话 location.hash 变化会触发 hashchange → parseHash 判定 bad → 整屏重建回首页。
+     即使目标暂时被筛选隐藏，也要吞掉这次点击，绝不让用户被踢出当前功能。 */
+  const anchor = e.target.closest && e.target.closest('a[href^="#"]');
+  if (anchor && !anchor.getAttribute('href').startsWith('#/')) {
+    e.preventDefault();
+    const id = decodeURIComponent(anchor.getAttribute('href').slice(1));
+    const target = id ? document.getElementById(id) : null;
+    if (target) {
+      /* 词典单页可长达 2.8 万像素，平滑滚动会走上好几秒；目录跳转用瞬时定位。 */
+      target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+      try { target.focus({ preventScroll: true }); } catch (err) { /* noop */ }
+    }
+    return;
+  }
   if (e.target.classList && e.target.classList.contains('modal-backdrop')) { closeModal(); return; }
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
@@ -88,10 +104,28 @@ function registerOffline() {
 
 /* ---------------------------------------------------------------- 启动 */
 applySettings();
+/* 系统切到深色 / 浅色时不用刷新页面，跟着换一层变量即可。 */
+if (window.matchMedia) {
+  const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+  const onSchemeChange = () => applyColorScheme();
+  if (scheme.addEventListener) scheme.addEventListener('change', onSchemeChange);
+  else if (scheme.addListener) scheme.addListener(onSchemeChange);
+}
 registerOffline();
 /* 地址栏里带了 hash 就按它直达；没有则落到默认首屏，并由 syncHash 写入合法地址。
    hashchange 覆盖手动改地址、刷新后同页跳转，以及少数浏览器 replaceState 失败时的回落。 */
 window.addEventListener('hashchange', () => routeTo(parseHash(location.hash)));
+/* 系统返回：http(s) 下每次换屏都会 pushState，浏览器后退 / 物理返回键 / 侧滑
+   在这里映射回上一屏。与 hashchange 可能同时触发，atRoute 拦掉重复渲染。
+   弹窗打开时先收掉遮罩，避免返回后留一个盖住新页面的对话框。 */
+window.addEventListener('popstate', () => {
+  /* 弹窗不占地址：第一次返回只收掉弹窗，再把地址同步回当前屏，
+     不要让「关弹窗」顺带把用户推回上一页。 */
+  if (overlay.classList.contains('open')) { closeModal(); syncHash(); return; }
+  const r = parseHash(location.hash);
+  if (routeReady && atRoute(r)) return;
+  routeTo(r);
+});
 if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>

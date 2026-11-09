@@ -79,6 +79,8 @@ const ACTIONS = {
     }
     renderHelp();
   },
+  /* 弹窗里的安全出口：先收掉遮罩再进急救页，helpFrom 仍是弹窗背后那一屏。 */
+  'modal-help': () => { closeModal(); ACTIONS['open-help'](); },
   'help-close': () => {
     stopSpeech(); closeModal(); session.navDir = 'back';
     const from = session.helpFrom;
@@ -399,6 +401,8 @@ const ACTIONS = {
   /* 2-1 呼吸 */
   'breath-start': () => {
     if (play.running) return;
+    /* 重新开始一轮呼吸，就说明上一轮的打断已经翻篇，别再在地图上报「被打断」。 */
+    session.interrupted = false;
     const space = play.v.mode === 'space';
     const rounds = play.v.rounds || 2;
     const total = space ? 180 : rounds * 10;

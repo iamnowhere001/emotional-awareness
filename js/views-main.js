@@ -25,6 +25,7 @@ function renderAgeGate() {
     <p class="home-note">前四档面向孩子与亲子共玩；最后一项是给自己的，另有一间不打卡的静修间。拿不准就选中间那档，随时可以在「设置」里换。不会记录年龄，也不会上传任何信息。</p>
   </div>`;
   updateTopbar();
+  resetViewScroll();
 }
 
 /* ---------------------------------------------------------------- 视图：首页 */
@@ -57,6 +58,14 @@ function renderHome() {
           <button class="btn btn-primary" data-action="start">${nextLv ? `${hasAnyProgress ? '继续上岛' : '开始上岛'} · 第 ${nextIdx + 1} 站` : '回地图挑一站'}</button>
           ${hasAnyProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
         </div>
+        <div class="help-entry">
+          <div class="help-entry-copy">
+            <span class="help-entry-kicker">不用上岛 · 约 1 分钟</span>
+            <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
+            <span>先落地、给感受一个词、找一个人。不计进度，也不保存。</span>
+          </div>
+          <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
+        </div>
         <p class="home-note">全程不联网；天气选择只留在这一次，不会被保存，也没有每日签到。${isAdultTrack() ? '成年档与儿童档的进度分开记。' : ''}</p>
       </div>
       <aside class="home-side">
@@ -72,14 +81,6 @@ function renderHome() {
           <div class="home-point"><span class="dot"></span><span><b>一站一个玩法。</b>拼线索、调刻度、排顺序，动脑也动手。</span></div>
           <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.len)}。</span></div>
         </div>
-        <div class="help-entry">
-          <div class="help-entry-copy">
-            <span class="help-entry-kicker">不用上岛 · 约 1 分钟</span>
-            <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
-            <span>先落地、给感受一个词、找一个人。不计进度，也不保存。</span>
-          </div>
-          <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
-        </div>
         <div class="home-shortcuts">
           <span class="muted">还没准备好上岛？</span>
           <button class="btn-read" data-action="open-dictionary">心理学词典</button>
@@ -90,6 +91,7 @@ function renderHome() {
     </div>
   </div>`;
   updateTopbar();
+  resetViewScroll();
 }
 
 /* ---------------------------------------------------------------- 视图：急救入口
@@ -163,6 +165,7 @@ function renderHelp() {
     <p class="home-note help-foot">不用做完，也不用变好。随时可以离开，什么都不用留下。</p>
   </div>`;
   updateTopbar();
+  resetViewScroll();
 }
 
 /* ---------------------------------------------------------------- 视图：地图
@@ -377,6 +380,7 @@ function renderMap() {
   </div>`;
   stage.innerHTML = html;
   updateTopbar();
+  resetViewScroll();   /* 之后若 session.mapScroll 有值，rAF 会再恢复到那一站 */
   const justDone = session.lastCleared;
   session.lastCleared = '';
   if (session.mapScroll) {
@@ -423,6 +427,7 @@ function renderWork() {
     <p class="home-note">不用按顺序打卡，也不记录时长。想停就停，进度只留在本机。</p>
   </div>`;
   updateTopbar();
+  resetViewScroll();
 }
 
 /* ---------------------------------------------------------------- 静修间（成年档支线） */
@@ -457,4 +462,5 @@ function renderRetreatList() {
     <p class="home-note">这些练习参考了正念与认知取向里常见的通用思路，经过简化，只是一般性的放松方式，不是治疗，也不能代替专业帮助。</p>
   </div>`;
   updateTopbar();
+  resetViewScroll();
 }

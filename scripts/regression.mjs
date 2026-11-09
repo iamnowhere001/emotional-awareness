@@ -143,8 +143,26 @@ S('导入确认前不改当前档，确认后可撤销一次',
 S('hash 路由：解析、同步、回落齐全',
   /function parseHash/.test(src) && /function syncHash/.test(src) &&
   /routeReady/.test(src) && /#\/level\//.test(src));
-S('hash 写地址优先 replaceState，file:// 下有回落',
-  /history\.replaceState/.test(src) && /location\.hash = want/.test(src));
+S('http(s) 换屏入栈、popstate 接住系统返回；file:// 仍 replaceState 并可回落',
+  /history\.pushState/.test(src) && /history\.replaceState/.test(src) &&
+  /location\.hash = want/.test(src) && /addEventListener\('popstate'/.test(src));
+/* 1.0.0 体验收口：以下断言锁住实测过的四处断点，防止改回去。 */
+S('页内目录锚点只滚动本页、不改写 hash',
+  /closest\('a\[href\^="#"\]'\)/.test(src) && /e\.preventDefault\(\)/.test(src));
+S('顶栏吸顶，弹窗内另有急救出口',
+  /position: sticky; top: 0/.test(css) && /data-action="modal-help"/.test(src));
+S('朗读题干兜底读 .lead，空内容不 cancel 正在播的语音',
+  /\.scenario p, #stage \.lead/.test(src) && /if \(!list\.length\) return;/.test(src));
+S('整屏渲染统一归零滚动',
+  /function resetViewScroll/.test(src) && (src.match(/resetViewScroll\(\)/g) || []).length >= 6);
+S('低龄档结果卡把机制说明折进「给大人看」',
+  /lightResult/.test(src) && /result-more/.test(src) && /concept-start-folded/.test(src));
+S('折叠内容显式 display:none，不靠 details 原生占位',
+  /\.result-more > \.result-more-rows \{ display: none; \}/.test(css) &&
+  /concept-start-folded:not\(\[open\]\)/.test(css));
+S('深色跟随系统偏好，只切变量不写存档',
+  /applyColorScheme/.test(src) && /prefers-color-scheme: dark/.test(src) &&
+  /:root\[data-theme="dark"\]/.test(css) && /color-scheme" content="light dark"/.test(html));
 /* 0.11.0：拼装试点 / 工作间支线 / 复玩不重复 */
 S('存档 v5：storage key 升级，旧键 v4/v3/v2 仍在 LEGACY_KEYS',
   /const SCHEMA_VERSION = 5;/.test(src) &&

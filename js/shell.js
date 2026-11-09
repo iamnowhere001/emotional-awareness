@@ -73,12 +73,18 @@ function viewClass() {
   return session.navDir === 'back' ? 'view enter-back'
     : session.navDir === 'forward' ? 'view enter-forward' : 'view';
 }
+/* 整屏重建时统一回到顶部：否则从 28533px 的词典回地图，会停在上一屏的 Y 坐标，
+   把「从这里继续」埋在视口上方。地图自己会用 session.mapScroll 恢复指定位置。 */
+function resetViewScroll() {
+  try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch (e) { /* noop */ }
+}
 
 /* ---------------------------------------------------------------- hash 路由
    地址形如 #/map、#/level/4-2、#/help：刷新、收藏、分享都能回到同一屏。
    - 只认下面这张固定表，其余一律回落，不把用户留在坏地址上。
-   - 写地址用 history.replaceState：不往历史栈里塞每一步，Esc / 浏览器返回仍是原来的语义。
-     file:// 下个别浏览器会拒绝 replaceState，此时退回 location.hash（多一条历史，功能不丢）。
+   - http(s) 下每次视图切换用 pushState 入栈，浏览器后退 / Android 物理返回 / iOS 侧滑
+     才有落点，由 boot.js 的 popstate 映射回上一屏；file:// 下 pushState 常被拒，
+     保持原来的 replaceState + location.hash 回落，双击打开的行为一字不变。
    - hash 里的 id 只查当前轨的关卡表：另一条轨的站视为「不可达」，回落地图。 */
 const ROUTE_VIEWS = new Set(['gate', 'home', 'map', 'help', 'retreat', 'dict', 'selfhelp', 'slowvars', 'work']);
 /* 首次路由前 session.view 只是占位值，不能拿它做「已在目标屏」的判断 */
@@ -109,8 +115,14 @@ function hashFor(view) {
 function syncHash() {
   const want = hashFor(session.view);
   if (location.hash === want) return;
-  try { history.replaceState(null, '', want); }
-  catch (e) { try { location.hash = want; } catch (e2) { /* 极端环境只影响地址栏 */ } }
+  /* 只在「一条合法视图地址换成另一条」时入栈；首次写入、坏地址纠正仍用 replaceState，
+     避免刷新一次就多一条历史。file:// 一律走原来的写法。 */
+  const canStack = location.protocol === 'http:' || location.protocol === 'https:';
+  const switching = canStack && /^#\//.test(location.hash) && /^#\//.test(want);
+  try {
+    if (switching) history.pushState(null, '', want);
+    else history.replaceState(null, '', want);
+  } catch (e) { try { location.hash = want; } catch (e2) { /* 极端环境只影响地址栏 */ } }
 }
 
 /* 当前地址是否已经就是这一屏：避免 hashchange 把同一屏重新渲染一遍
@@ -258,13 +270,17 @@ function clearAsyncTimers() {
     if (play && play.running) session.interrupted = true;
   }
   if (memoTimer) { clearTimeout(memoTimer); memoTimer = null; }
+  if (restTimer) { clearTimeout(restTimer); restTimer = null; }
 }
 function stopSpeech() { try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) { /* noop */ } }
 function speakTexts(texts) {
   if (!state.settings.speak || !('speechSynthesis' in window)) return;
+  /* 空内容直接返回：cancel() 会把正在播的「读选项」掐掉，造成「点了读题目反而没声」。 */
+  const list = (texts || []).filter(Boolean);
+  if (!list.length) return;
   try {
     window.speechSynthesis.cancel();
-    texts.filter(Boolean).forEach(t => {
+    list.forEach(t => {
       const u = new SpeechSynthesisUtterance(t);
       u.lang = 'zh-CN'; u.rate = 0.88; u.pitch = 1.05;
       window.speechSynthesis.speak(u);
@@ -272,12 +288,14 @@ function speakTexts(texts) {
   } catch (e) { /* noop */ }
 }
 function questionTexts() {
-  const sc = document.querySelector('#stage .scenario p');
+  /* weather / breath 两关没有 .scenario 与 .prompt，题干写在 .lead 里；
+     兜底后「读题目」在首站与呼吸站不再静音。 */
+  const sc = document.querySelector('#stage .scenario p, #stage .lead');
   const pr = document.querySelector('#stage .prompt');
   return [sc?.textContent, pr?.textContent].filter(Boolean);
 }
 function optionTexts() {
-  const sel = '#stage .opt, #stage .pair-item:not(:disabled), #stage .chip:not(:disabled), #stage .word-chip, #stage .weather-btn, #stage .clue-card.flipped .clue-text';
+  const sel = '#stage .opt, #stage .pair-item:not(:disabled), #stage .chip:not(:disabled), #stage .word-chip, #stage .weather-btn, #stage .breath-actions .btn, #stage .clue-card.flipped .clue-text';
   return Array.from(document.querySelectorAll(sel)).map(e => e.textContent.trim()).filter(Boolean).slice(0, 10);
 }
 function bandChip(extra) {

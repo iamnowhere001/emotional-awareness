@@ -47,7 +47,7 @@ function conceptRefLinks(c) {
 }
 /* 「按概念找」入口面板：只列有对应内容的既有概念，不新增条目。
    jump 是页面内的动作名（自助 / 词典各自一套），不改变现有筛选结构。 */
-function conceptStartPanel(title, sub, ids, action) {
+function conceptStartPanel(title, sub, ids, action, collapsed) {
   const list = ids.map(id => GLOSSARY_BY_ID[id]).filter(g => g);
   const chips = list.map(g => {
     const tlv = LEVELS.find(l => l.id === conceptTeach(g));
@@ -62,6 +62,15 @@ function conceptStartPanel(title, sub, ids, action) {
       <span>${esc(conceptRequires(g).map(r => conceptName(r)).join('、') || '起点')}</span>
       <em>${tlv ? `教在第 ${tlv.num} 站` : ''}${uses ? `　·　${uses}` : ''}</em></button>`;
   }).join('');
+  /* 词典的 16 张概念卡曾把首屏占满，真正的 162 条词条被推到一屏之外：
+     词典默认收起成一行的入口，工具箱 / 慢变量仍按原样平铺。 */
+  if (collapsed) {
+    return `<details class="concept-start concept-start-folded" aria-label="${esc(title)}">
+      <summary><b>${esc(title)}</b><span class="muted">${list.length} 个概念 · 展开挑选</span></summary>
+      <p class="muted sh-section-sub">${esc(sub)}</p>
+      <div class="concept-start-grid">${chips}</div>
+    </details>`;
+  }
   return `<section class="concept-start" aria-label="${esc(title)}">
     <h3 class="sh-section-title">${esc(title)}</h3>
     <p class="muted sh-section-sub">${esc(sub)}</p>
@@ -78,6 +87,7 @@ function renderLibraryView(cfg) {
       <p class="lead">${esc(cfg.missingLead)}</p>
     </div>`;
     updateTopbar();
+    resetViewScroll();
     return;
   }
   const cats = [...new Set(cfg.items.map(cfg.catOf))];
@@ -120,6 +130,7 @@ function renderLibraryView(cfg) {
     <div class="module-foot"><button class="btn btn-secondary" data-action="go-map">回到地图</button></div>
   </div>`;
   updateTopbar();
+  resetViewScroll();
   applyLibraryFilter(cfg);
   stage.focus({ preventScroll: true });
 }
@@ -218,7 +229,8 @@ function dictView() {
       '按概念读',
       '16 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。',
       GLOSSARY.map(g => g.id),
-      'dict-concept'
+      'dict-concept',
+      true
     )}
     <section class="dict-start" aria-label="按概念类型筛选">
       <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按概念类型筛选">

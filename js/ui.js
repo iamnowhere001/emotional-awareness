@@ -4,7 +4,7 @@
 /* ---------------------------------------------------------------- 弹窗 */
 function openModal(html) {
   lastFocus = document.activeElement;
-  overlay.innerHTML = `<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true">${html}<button class="modal-close" data-action="close-modal" aria-label="关闭弹窗">×</button></div></div>`;
+  overlay.innerHTML = `<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true">${html}<button class="modal-help" data-action="modal-help" aria-label="打开 1 分钟安抚与求助">现在很难受？先缓一缓 · 约 1 分钟</button><button class="modal-close" data-action="close-modal" aria-label="关闭弹窗">×</button></div></div>`;
   /* 弹窗打开时锁住背后的页面滚动：小屏上滑到弹窗底部不会把地图也带着滚。 */
   document.body.classList.add('modal-open');
   /* 用 DOM 取标题，避免正则漏掉带属性的标题；有标题就走 aria-labelledby，
@@ -222,6 +222,14 @@ function pickImportFile() {
 
 function openSettings() {
   const s = state.settings;
+  /* 切换开关会整块重建弹窗；先记下滚动位置与当前控件，重建后放回去，
+     避免每次点开关都把视线和焦点甩回顶部。 */
+  const oldModal = overlay.querySelector('.modal');
+  const keepScroll = oldModal ? oldModal.scrollTop : 0;
+  const active = document.activeElement;
+  const keepKey = (active && overlay.contains(active) && active.dataset && active.dataset.action)
+    ? { action: active.dataset.action, k: active.dataset.k || '', b: active.dataset.b || '', v: active.dataset.v || '' }
+    : null;
   openModal(`<div class="modal-title">显示、朗读与数据</div>
     <div class="modal-body">
       <div class="setting-row"><strong>年龄段</strong><div class="seg">
@@ -255,6 +263,16 @@ function openSettings() {
     </div>
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">完成</button>
       <button class="btn btn-ghost" data-action="clear-progress">清空本机进度</button></div>`);
+  /* 重建后按 data-action / data-k / data-b 找同一个控件；
+     值会翻转的开关（自动朗读、高对比）先找同值，找不到再退回同组第一个。 */
+  const modal = overlay.querySelector('.modal');
+  if (modal) modal.scrollTop = keepScroll;
+  if (keepKey) {
+    const sameGroup = [...overlay.querySelectorAll('[data-action]')].filter(b =>
+      b.dataset.action === keepKey.action && (b.dataset.k || '') === keepKey.k && (b.dataset.b || '') === keepKey.b);
+    const btn = sameGroup.find(b => (b.dataset.v || '') === keepKey.v) || sameGroup[0];
+    if (btn) { try { btn.focus(); } catch (e) { /* noop */ } }
+  }
 }
 function openCodex() {
   /* 图鉴在渲染层按「概念」分组：同一件事在两套站里可能叫不同的名字（如 情绪粒度 / 命名），

@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.14.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.14.1 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
@@ -200,6 +200,9 @@ let svVar = null;
 let svCat = 'all';
 let breathTimer = null;
 let memoTimer = null;
+/* 「歇一下」的延迟提醒：切视图时要随 breathTimer / memoTimer 一起清掉，
+   否则 900ms 后弹出的休息弹窗会盖在新页面上。 */
+let restTimer = null;
 let lastFocus = null;
 let lastClicked = null;
 

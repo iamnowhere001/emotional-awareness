@@ -1315,6 +1315,111 @@ window.addEventListener('load', function () {
     storageWritable = true;
   });
 
+  /* ---------- 0.14.1 修复回归 ---------- */
+  /* 下面几条会通关 / 改计数，跑完后按快照还原，避免污染后面的布局断言。 */
+  const snapshotProgress = () => ({
+    cleared: state.cleared.slice(), awarded: state.awarded.slice(), skills: state.skills.slice(),
+    cards: JSON.parse(JSON.stringify(state.cards)), shells: state.shells, run: session.clearedThisRun,
+    idx: state.levelIndex, play, interrupted: session.interrupted
+  });
+  const restoreProgress = (snap) => {
+    state.cleared = snap.cleared; state.awarded = snap.awarded; state.skills = snap.skills;
+    state.cards = snap.cards; state.shells = snap.shells; session.clearedThisRun = snap.run;
+    state.levelIndex = snap.idx; play = snap.play; session.interrupted = snap.interrupted;
+    if (restTimer) { clearTimeout(restTimer); restTimer = null; }
+    closeModal(); save();
+  };
+
+  test('B1 通关后开急救再返回，结果卡与「去下一站 / 回地图」仍在', () => {
+    bandTo('a6');
+    const snap = snapshotProgress();
+    try {
+      state.levelIndex = 0; play = {}; renderLevel();
+      completeLevel('测试');
+      A(!!document.querySelector('#feedback-slot .result-card'), '通关后应有结果卡');
+      A(!!document.querySelector('#feedback-slot [data-action="next-level"]'), '结果卡应有「去下一站」');
+      A(!!document.querySelector('#feedback-slot [data-action="go-map"]'), '结果卡应有「回地图」');
+      ACTIONS['open-help']();
+      A(session.view === 'help' && !!helpResume && helpResume.done === true, '急救应暂存已完成的进行态');
+      ACTIONS['help-close']();
+      A(session.view === 'level');
+      A(document.querySelectorAll('#feedback-slot .result-card').length === 1, '返回后结果卡应重画一次');
+      A(!!document.querySelector('#feedback-slot [data-action="next-level"]'), '返回后「去下一站」仍可达');
+      A(!!document.querySelector('#feedback-slot [data-action="go-map"]'), '返回后「回地图」仍可达');
+    } finally { restoreProgress(snap); renderMap(); }
+  });
+
+  test('B2 休息弹窗随换页取消，复玩同一站不再计数', () => {
+    bandTo('a6');
+    const snap = snapshotProgress();
+    const rest = band().rest;
+    try {
+      session.clearedThisRun = rest - 1;
+      state.cleared = state.cleared.filter(id => id !== LEVELS[0].id);
+      state.awarded = state.awarded.filter(id => id !== LEVELS[0].id);
+      state.levelIndex = 0; play = {}; renderLevel();
+      completeLevel('测试');
+      A(session.clearedThisRun === rest, `首次通关后本轮计数应为 ${rest}，实际 ${session.clearedThisRun}`);
+      A(restTimer !== null, '到点后应排一次休息提醒');
+      state.levelIndex = 1; play = {}; renderLevel();
+      A(restTimer === null, '换到下一站时应取消休息提醒');
+      const before = session.clearedThisRun;
+      state.levelIndex = 0; play = {}; renderLevel();
+      completeLevel('测试');
+      A(session.clearedThisRun === before, '复玩同一站不应再自增');
+      A(restTimer === null, '复玩不应重新排休息提醒');
+    } finally { restoreProgress(snap); renderMap(); }
+  });
+
+  test('B3 设置里切换开关保留滚动位置与焦点', () => {
+    bandTo('a6');
+    const snapSpeak = state.settings.speak;
+    openSettings();
+    const modal = overlay.querySelector('.modal');
+    A(!!modal, '设置弹窗应打开');
+    modal.scrollTop = 300;
+    const scrolled = modal.scrollTop;
+    A(scrolled > 0, `设置弹窗应可滚动，实际 scrollTop=${scrolled}`);
+    const btn = modal.querySelector('[data-action="toggle-flag"][data-k="speak"][data-v="0"]');
+    A(!!btn, '设置里应有朗读开关');
+    btn.focus();
+    btn.click();
+    const next = overlay.querySelector('.modal');
+    A(next.scrollTop === scrolled, `重建后滚动位置应保留，实际 ${next.scrollTop}`);
+    const back = next.querySelector('[data-action="toggle-flag"][data-k="speak"][data-v="0"]');
+    A(document.activeElement === back, '焦点应回到同一个开关按钮');
+    state.settings.speak = snapSpeak; save(); applySettings();
+    closeModal();
+  });
+
+  test('B4 完成呼吸后不再残留「呼吸被打断」', () => {
+    bandTo('a6');
+    const snap = snapshotProgress();
+    try {
+      const i = byType('breath');
+      A(i >= 0, '应能找到呼吸站');
+      state.levelIndex = i; play = {}; renderLevel();
+      ACTIONS['breath-start']();
+      A(breathTimer !== null && play.running === true, '呼吸应开始计时');
+      ACTIONS['open-help']();
+      A(session.interrupted === true, '中途离开应记为被打断');
+      ACTIONS['help-close']();
+      ACTIONS['breath-done']();
+      A(session.interrupted === false, '完成这一站后提示状态应清掉');
+      ACTIONS['go-map']();
+      A(![...document.querySelectorAll('.notice')].some(n => n.textContent.includes('呼吸练习被打断')),
+        '地图上不应再出现被打断提示');
+    } finally { restoreProgress(snap); renderMap(); }
+  });
+
+  test('B5 首页 meta description 的词典条数与实际一致', () => {
+    const meta = document.querySelector('meta[name="description"]');
+    A(!!meta, '首页应有 meta description');
+    A(meta.content.includes(`${DICTIONARY.length} 条心理学词典`), `meta 应写 ${DICTIONARY.length} 条，实际：${meta.content}`);
+    A(!meta.content.includes('159 条'), '不应残留旧条数');
+    A(meta.content.includes('4 座岛 17 站'), '站点数应仍准确');
+  });
+
   /* ---------- 红线与布局 ---------- */
   test('关卡页没有自由文本输入框（滑杆除外）', () => {
     bandTo('a6');
