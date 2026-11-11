@@ -101,7 +101,15 @@ function pickVariant(id, opts) {
     return r;
   }
   const all = (BANK[id] || []).concat(BANK_ADULT[id] || []).concat(BANK_WORK[id] || []);
-  const pool = all.filter(v => !v.b || v.b.includes(state.band));
+  let pool = all.filter(v => !v.b || v.b.includes(state.band));
+  /* 6-12 岁合并档按深度层抽题：第一次来走基础层，走过一次或自己切换后走「多想一步」。
+     拼装关（BANK_COMPOSE）有独立的复玩选道，前面已经返回，不会走到这里。
+     某一层恰好没题时回落到该档全部题，绝不出现空题。 */
+  if (band().tiers && !BANK_COMPOSE[id]) {
+    const depth = (opts && opts.depth) || 1;
+    const layered = pool.filter(v => (v.tier || 1) === depth);
+    if (layered.length) pool = layered;
+  }
   const arr = pool.length ? pool : all;
   if (!arr.length) return {};
   let i = Math.floor(Math.random() * arr.length);

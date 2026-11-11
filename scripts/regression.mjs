@@ -44,7 +44,7 @@ const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
   'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4',
-  'bank-compose', 'levels-adult-work', 'library', 'dictionary', 'selfhelp', 'slowvars', 'help'
+  'bank-compose', 'levels-adult-work', 'library', 'meditate', 'dictionary', 'selfhelp', 'slowvars', 'help'
 ];
 const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
 /* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
@@ -82,6 +82,7 @@ S('content/*.js 全部被 index.html 引入', contentFiles.every(n => html.inclu
 const firstJs = html.indexOf(`src="${JS_FILES[0]}"`);
 S('逻辑脚本全部在 content 之后加载', firstJs > html.lastIndexOf('content/library.js'));
 S('心理学词典在 library 之后、逻辑脚本之前', html.indexOf('content/dictionary.js') > html.indexOf('content/library.js') && html.indexOf('content/dictionary.js') < firstJs);
+S('冥想数据在 library 之后、dictionary 之前', html.indexOf('content/meditate.js') > html.indexOf('content/library.js') && html.indexOf('content/meditate.js') < html.indexOf('content/dictionary.js'));
 S('自助工具箱在 dictionary 之后、逻辑脚本之前', html.indexOf('content/selfhelp.js') > html.indexOf('content/dictionary.js') && html.indexOf('content/selfhelp.js') < firstJs);
 S('慢变量在 selfhelp 之后、逻辑脚本之前', html.indexOf('content/slowvars.js') > html.indexOf('content/selfhelp.js') && html.indexOf('content/slowvars.js') < firstJs);
 S('急救入口文案在 slowvars 之后、逻辑脚本之前', html.indexOf('content/help.js') > html.indexOf('content/slowvars.js') && html.indexOf('content/help.js') < firstJs);
@@ -227,6 +228,17 @@ S('已完成的幕可重玩 / 直达（workReachable）',
   /if \(!workReachable\(wi\)\)/.test(src));
 S('文档不显示拼装组合计数 / 打卡压力',
   !/本轮已换过几组题|已换过.{0,4}组/.test(roadmap) && !/本轮已换过几组题/.test(readme));
+/* 0.15.0：冥想练习完全不记录历史，也不收集输入 / 联网 */
+const mdSrc = readFileSync(join(root, 'content/meditate.js'), 'utf8');
+const mdData = mdSrc.replace(/\/\*[\s\S]*?\*\//g, '');
+S('冥想数据不含输入 / 网络 / 存档调用',
+  !/<input|<textarea|fetch\s*\(|XMLHttpRequest|localStorage/.test(mdData));
+S('冥想练习视图不写存档，只改 session / play', (() => {
+  const at = src.indexOf('function renderMeditatePractice');
+  const end = src.indexOf('/* js/views-level.js', at);
+  const block = at !== -1 && end > at ? src.slice(at, end) : '';
+  return block.length > 0 && !/save\s*\(|localStorage|state\.(cleared|cards|skills|shells|sideCleared)/.test(block);
+})());
 
 const viewAssigns = [...new Set([...src.matchAll(/session\.view\s*=\s*'([a-z]+)'/g)].map(m => m[1]))];
 const viewBlock = src.slice(src.indexOf('const VIEW_CONFIG'), src.indexOf('function viewCfg'));
@@ -252,6 +264,40 @@ S('词典有分区标题、类型筛选与关联跳转入口',
 const stateInitAt = src.indexOf('let state = load();');
 const remapAt = src.indexOf('const remapIds');
 S('存档迁移常量在 let state = load() 之前初始化', remapAt !== -1 && stateInitAt !== -1 && remapAt < stateInitAt);
+
+/* ---------- 档位合并 / 深度层 / 学习闭环 ---------- */
+const bandsSrc = readFileSync(join(root, 'content/bands.js'), 'utf8');
+const glossarySrc = readFileSync(join(root, 'content/glossary.js'), 'utf8');
+const kidBankSrc = ['bank-kid-1-3', 'bank-kid-island4', 'bank-compose']
+  .map(f => readFileSync(join(root, `content/${f}.js`), 'utf8')).join('\n');
+S('年龄档压到 4 档，6-12 岁合并档带 tiers',
+  (bandsSrc.match(/"id":\s*"/g) || []).length === 4 &&
+  /"name": "6-12 岁"/.test(bandsSrc) && /"tiers": true/.test(bandsSrc));
+S('题库不再写死 a9，深度改由 tier 标记',
+  !/['"]a9['"]/.test(kidBankSrc) && /tier/.test(kidBankSrc) && /v\.tier/.test(lint));
+S('旧档 a9 由 BAND_REMAP 落到 a6，老字号 1.06 仍合法',
+  /const BAND_REMAP = \{ 'a9': 'a6' \}/.test(src) && /remapBand\(s\.band\)/.test(src) &&
+  /1\.06/.test(src) && /SCALE_VALUES/.test(src));
+S('按深度层抽题，结果卡详细度绑当前题而不是绑年龄',
+  /band\(\)\.tiers/.test(src) && /\(v\.tier \|\| 1\) === depth/.test(src) &&
+  /lightResult = band\(\)\.id === 'a3' \|\| \(band\(\)\.tiers/.test(src));
+S('概念层 16 条各有承接句与实践卡，且只写一份',
+  (glossarySrc.match(/bridge:/g) || []).length === 16 &&
+  (glossarySrc.match(/practice:/g) || []).length === 16 &&
+  /function bridgeLine/.test(src) && /cDone\.practice/.test(src));
+S('实践卡与双人对照只在内存，不进存档',
+  /session\.pocket = \{/.test(src) && /session\.duo = \{/.test(src) &&
+  /session\.pocket = null/.test(src) &&
+  !/localStorage[^\n]*\b(pocket|duo)\b/.test(src) &&
+  !/state\.settings\.[a-zA-Z]*\s*=.*\b(pocket|duo)\b/.test(src));
+S('首站天气主按钮不再禁用',
+  !/id="weather-go" disabled/.test(src) && /就这样出发/.test(src));
+S('两个人的选择不判对错、不触发通关',
+  /function paintDuo/.test(src) && /d\.first === d\.second/.test(src) &&
+  /'duo-open'/.test(src) && !/completeLevel\([^\n]*duo/.test(src));
+S('新增样式类都在视图里有对应渲染',
+  ['level-bridge', 'level-depth', 'practice-card', 'duo-panel', 'weather-hint']
+    .every(c => css.includes('.' + c) && src.includes(c)));
 
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();

@@ -1,6 +1,6 @@
 {
   "name": "mood-island",
-  "version": "0.14.1",
+  "version": "0.16.0",
   "private": true,
   "description": "心情闯关岛 · 按年龄分级的情绪启蒙小游戏（纯前端、零依赖、不联网）",
   "type": "module",

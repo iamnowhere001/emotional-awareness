@@ -17,7 +17,12 @@ window.addEventListener('load', function () {
 
   /* ---------- 内容与加载 ---------- */
   test('内容文件全部加载（CONTENT_OK）', () => A(CONTENT_OK === true));
-  test('5 个年龄段', () => A(AGE_BANDS.length === 5));
+  test('4 个年龄段，6-12 岁合并档带深度层', () => {
+    A(AGE_BANDS.length === 4);
+    const b = AGE_BANDS.find(x => x.id === 'a6');
+    A(b && b.name === '6-12 岁' && b.tiers === true);
+    A(!AGE_BANDS.some(x => x.id === 'a9'));
+  });
   test('两条轨各 17 站 / 4 岛', () => {
     A(KID.levels.length === 17 && ADULT.levels.length === 17);
     A(KID.islands.length === 4 && ADULT.islands.length === 4);
@@ -157,6 +162,78 @@ window.addEventListener('load', function () {
     A(inputs[0].getAttribute('autocomplete') === 'off');
     A(inputs[0].getAttribute('aria-controls') === 'dict-grid');
     A(!!document.querySelector('#stage .module-foot [data-action="go-map"]'), '长列表底部应有回到地图');
+    renderMap();
+  });
+  test('词典按 4 组递进排列，词条顺序与分组元数据一致', () => {
+    const groups = MI.dictionaryMeta.groups;
+    A(groups.length === 4, `应为 4 组，实际 ${groups.length}`);
+    A(groups[0].cats[0] === '情绪与动机' && groups[1].cats[0] === '基础与神经');
+    A(groups[3].cats.join('|') === '数字生活与注意力|方法与科学素养');
+    const cats = groups.flatMap(g => g.cats);
+    const seen = [...new Set(DICTIONARY.map(d => d.c))];
+    A(seen.length === cats.length && seen.every((c, i) => c === cats[i]), '词条数组里的主题顺序应等于 groups.cats 展开');
+    A(DICTIONARY[0].t === '情绪', '首条应是「情绪」');
+    ['科学方法', '双盲实验', '生态瞬时评估'].forEach(t => {
+      A((DICTIONARY.find(d => d.t === t) || {}).c === '方法与科学素养', `${t} 应归位到方法与科学素养`);
+    });
+  });
+  test('词典显示大组导语、主题导语、概念簇与起步路径', () => {
+    bandTo('a6');
+    ACTIONS['open-dictionary']();
+    const meta = MI.dictionaryMeta.catMeta;
+    const cats = MI.dictionaryMeta.groups.flatMap(g => g.cats);
+    A(document.querySelectorAll('#dict-grid .dict-group-lead').length === MI.dictionaryMeta.groups.length);
+    A(document.querySelectorAll('#dict-grid .dict-cat-lead').length === cats.length, '每个主题都要有一句导语');
+    const clusterCount = cats.reduce((s, c) => s + (meta[c].clusters || []).length, 0);
+    const heads = [...document.querySelectorAll('#dict-grid .dict-cluster-title')];
+    A(heads.length === clusterCount, `概念簇标题应有 ${clusterCount} 个，实际 ${heads.length}`);
+    A(heads.every(h => h.dataset.cluster && h.querySelector('.dict-cluster-count')));
+    const cards = [...document.querySelectorAll('#dict-grid .dict-card')];
+    A(cards.filter(c => c.dataset.cluster).length === DICTIONARY.length, '每张卡都应归属一个概念簇');
+    A(heads.every(h => cards.some(c => c.dataset.cluster === h.dataset.cluster)), '每个簇都要有卡片');
+    const navs = [...document.querySelectorAll('.dict-nav-group')];
+    A(navs.length === MI.dictionaryMeta.groups.length && navs.every(a => a.querySelector('b') && a.querySelector('em')));
+    const steps = [...document.querySelectorAll('.dict-start-path .dict-path-btn')];
+    A(steps.length === 5 && steps.every(b => b.dataset.action === 'dict-jump' && DICTIONARY.some(d => d.t === b.dataset.t)));
+    renderMap();
+  });
+  test('概念簇标题与大组导语随筛选一起收起', () => {
+    bandTo('a6');
+    ACTIONS['open-dictionary']();
+    [...document.querySelectorAll('#dict-kinds .dict-kind-btn')].find(b => b.dataset.k === 'method').click();
+    const cards = [...document.querySelectorAll('#dict-grid .dict-card')].filter(c => !c.hidden);
+    A(cards.length > 0 && cards.every(c => c.dataset.cat === '方法与科学素养'), '方法与证据词条应全部归位到第四组');
+    const byCluster = {};
+    cards.forEach(c => { byCluster[c.dataset.cluster] = (byCluster[c.dataset.cluster] || 0) + 1; });
+    const heads = [...document.querySelectorAll('#dict-grid .dict-cluster-title')];
+    A(heads.every(h => {
+      const n = byCluster[h.dataset.cluster] || 0;
+      return h.hidden === (n === 0) && h.querySelector('.dict-cluster-count').textContent === `${n} 条`;
+    }), '簇标题的显隐与条数要跟着可见卡片走');
+    const leads = [...document.querySelectorAll('#dict-grid .dict-group-lead')];
+    A(leads.slice(0, 3).every(el => el.hidden), '前三组没有可见词条时组导语应收起');
+    A(!leads[3].hidden, '第四组仍可见时组导语应保留');
+    document.getElementById('dict-reset').click();
+    renderMap();
+  });
+  test('五分钟起步路径能跳到已有词条并清掉筛选', () => {
+    bandTo('a6');
+    ACTIONS['open-dictionary']();
+    const steps = [...document.querySelectorAll('.dict-start-path .dict-path-btn')];
+    [...document.querySelectorAll('#dict-cats .dict-cat')].find(b => b.dataset.c === '关系与沟通').click();
+    steps[1].click();
+    const target = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === '相关不等于因果');
+    A(!!target && target.open && !target.hidden, '第 2 步应展开「相关不等于因果」');
+    A(dictCat === 'all' && dictKind === 'all' && dictQuery === '');
+    renderMap();
+  });
+  test('跨主题的「接着看」标出目标主题', () => {
+    bandTo('a6');
+    ACTIONS['open-dictionary']();
+    const cross = [...document.querySelectorAll('#dict-grid .dict-link-cross')];
+    A(cross.length > 0);
+    const cats = new Set(MI.dictionaryMeta.groups.flatMap(g => g.cats));
+    A(cross.every(b => b.title.startsWith('在「') && cats.has(b.title.slice(2, -2))));
     renderMap();
   });
   test('自助工具箱 5 状态 / 31 工具 / 10 条认知扭曲', () => {
@@ -501,8 +578,8 @@ window.addEventListener('load', function () {
     const btn = document.getElementById('help-entry');
     A(!!btn && btn.dataset.action === 'open-help', '顶栏需要有常驻入口');
     bandTo('a6'); renderHome();
-    A(btn.textContent === '现在有点难受', `6-9 档应显示「现在有点难受」，实际「${btn.textContent}」`);
-    ['a3', 'a9'].forEach(id => {
+    A(btn.textContent === '现在有点难受', `6-12 档应显示「现在有点难受」，实际「${btn.textContent}」`);
+    ['a3', 'a6'].forEach(id => {
       bandTo(id); renderHome();
       A(btn.textContent === '现在有点难受');
     });
@@ -1217,24 +1294,28 @@ window.addEventListener('load', function () {
     A([...document.querySelectorAll('#sv-grid .dict-en')].every(e => e.getAttribute('lang') === 'en'));
     renderMap();
   });
-  test('两轨岛末站都发放今日微行动，终章不发放', () => {
+  test('两轨岛末站都发放与概念绑定的实践卡，终章不发放', () => {
     bandTo('a6');
     state.levelIndex = KID.levels.findIndex(l => l.id === '4-4');
     renderLevel();
     session.clearedThisRun = 0;
     completeLevel('测试');
-    A(document.getElementById('feedback-slot').textContent.includes('今日微行动'));
+    const kidCard = document.querySelector('.practice-card');
+    A(kidCard && kidCard.textContent.includes('这一站带走一个动作'));
+    A(kidCard.textContent.includes(conceptOfLevel('4-4').practice));
+    A(kidCard.querySelector('[data-action="pocket-add"]'));
     bandTo('adult');
     state.levelIndex = ADULT.levels.findIndex(l => l.id === 'A4-4');
     renderLevel();
     session.clearedThisRun = 0;
     completeLevel('测试');
-    A(document.getElementById('feedback-slot').textContent.includes('今日微行动'));
+    const adultCard = document.querySelector('.practice-card');
+    A(adultCard && adultCard.textContent.includes(conceptOfLevel('A4-4').practice));
     bandTo('a6');
     goLevel(16);
     session.clearedThisRun = 0;
     completeLevel('测试');
-    A(!document.getElementById('feedback-slot').textContent.includes('今日微行动'));
+    A(!document.querySelector('.practice-card'));
   });
   test('进度格点击区不小于 30px', () => {
     bandTo('a6'); renderMap();
@@ -1242,12 +1323,80 @@ window.addEventListener('load', function () {
     A(!!s && s.getBoundingClientRect().height >= 30);
   });
 
-  /* ---------- 静修间扩容 ---------- */
-  test('静修列表按 4 个状态分组，共 10 张卡', () => {
-    bandTo('adult'); renderRetreatList();
-    A(document.querySelectorAll('#stage .retreat-group-title').length === 4);
-    A(document.querySelectorAll('#stage .retreat-card').length === RETREAT.length);
-    A(document.getElementById('stage').innerHTML.includes(`${RETREAT.length} 个可以随时停下的小练习`));
+  /* ---------- 静修间扩容 / 2.0 ---------- */
+  test('静修列表：此刻 3 张 / 5 族 / 更多 10 张', () => {
+    bandTo('adult'); mdScene = 'all'; renderRetreatList();
+    A(document.querySelectorAll('#stage .md-now-grid .md-card').length === 3);
+    A(document.querySelectorAll('#stage .md-family').length === MD_FAMILIES.length);
+    A(document.querySelectorAll('#stage .md-more .retreat-group-title').length === 4);
+    A(document.querySelectorAll('#stage .md-more .retreat-card').length === RETREAT.length);
+    A(document.getElementById('stage').innerHTML.includes(`${MD_PRACTICES.length} 条引导`));
+  });
+  test('冥想练习 5 族 × 2 档 / 6 场景 / 8 句 if-then', () => {
+    A(MD_FAMILIES.length === 5 && MD_PRACTICES.length === 10);
+    A(MD_SCENES.length === 6 && MD_INTENTS.length === 8);
+    A(MD_FAMILIES.every(f =>
+      MD_PRACTICES.some(p => p.family === f.id && p.dose === 1)
+      && MD_PRACTICES.some(p => p.family === f.id && p.dose === 3)));
+  });
+  test('静修场景筛选只显示匹配的短版', () => {
+    bandTo('adult'); mdScene = 'all'; renderRetreatList();
+    const btn = [...document.querySelectorAll('.md-scene')].find(b => b.dataset.s === 'sleep');
+    A(!!btn); btn.click();
+    const cards = [...document.querySelectorAll('.md-now-grid .md-card')];
+    A(cards.length >= 2 && cards.length <= 3, `睡前应 2–3 张，实际 ${cards.length}`);
+    A(cards.every(c => MD_PRACTICE_BY_ID[c.dataset.id].scenes.includes('sleep')));
+    const active = [...document.querySelectorAll('.md-scene')].find(b => b.dataset.s === 'sleep');
+    A(active.classList.contains('on') && active.getAttribute('aria-pressed') === 'true');
+    mdScene = 'all'; renderRetreatList();
+  });
+  test('从「此刻」卡片点击进入 sit', () => {
+    bandTo('adult'); mdScene = 'all'; renderRetreatList();
+    const card = document.querySelector('.md-now-grid .md-card');
+    A(!!card); card.click();
+    A(session.view === 'retreat' && play.type === 'sit');
+    A(!!document.getElementById('sit-body'));
+  });
+  test('sit 练习逐步前进、先停在这儿，且不写存档', () => {
+    bandTo('adult');
+    const before = localStorage.getItem('mood-island-v5');
+    renderMeditatePractice('breath-1');
+    A(play.type === 'sit' && play.step === 0);
+    A(!!document.querySelector('.md-step') && !!document.querySelector('[data-action="md-next"]'));
+    ACTIONS['md-next']();
+    A(play.step === 1);
+    ACTIONS['md-stop']();
+    A(play.stopped === true);
+    A(document.getElementById('retreat-result').textContent.includes('停在这里也可以'));
+    A(localStorage.getItem('mood-island-v5') === before, '静修练习不应写 localStorage');
+  });
+  test('sit 做完显示机制与 if-then，可换一句', () => {
+    bandTo('adult'); renderMeditatePractice('fist-1');
+    play.step = play.data.steps.length; paintSit();
+    const text = document.getElementById('retreat-result').textContent;
+    A(text.includes('你刚刚做的是') && text.includes('带回一句'));
+    const idx = MD_INTENTS.findIndex(x => x.family === 'fist');
+    A(idx >= 0);
+    A(document.getElementById('md-intent-text').textContent === MD_INTENTS[idx].t);
+    ACTIONS['md-intent']();
+    A(document.getElementById('md-intent-text').textContent === MD_INTENTS[(idx + 1) % MD_INTENTS.length].t);
+    A(!document.body.textContent.includes('连续天数'));
+  });
+  test('首页 1 分钟练习快捷入口只在成年轨', () => {
+    bandTo('adult'); renderHome();
+    A(!!document.querySelector('.home-shortcuts [data-action="open-retreat"]'));
+    bandTo('a6'); renderHome();
+    A(!document.querySelector('.home-shortcuts [data-action="open-retreat"]'));
+  });
+  test('静修 2.0 在 390px 无横向溢出且为单列', () => {
+    bandTo('adult'); mdScene = 'all'; renderRetreatList();
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `静修列表 scrollWidth=${document.documentElement.scrollWidth}`);
+    A(getComputedStyle(document.querySelector('.md-now-grid')).gridTemplateColumns.split(' ').length === 1);
+    A(getComputedStyle(document.querySelector('.md-family-grid')).gridTemplateColumns.split(' ').length === 1);
+    renderMeditatePractice('breath-1');
+    A(document.documentElement.scrollWidth <= window.innerWidth + 1,
+      `sit 练习页 scrollWidth=${document.documentElement.scrollWidth}`);
   });
   test('静修练习页显示对应概念、机制与规格', () => {
     bandTo('adult');
@@ -1520,6 +1669,128 @@ window.addEventListener('load', function () {
     });
     bandTo('a6'); renderMap();
   });
+
+  /* ---------- 档位合并 / 深度层 / 学习闭环 / 两个人一起选 ---------- */
+  test('旧档 a9 迁到 a6，进度 / 词卡 / 贝壳 / 字号都不丢', () => {
+    const raw = {
+      version: 5, band: 'a9', cleared: ['1-1'], awarded: ['1-1'],
+      cards: { kid: ['觉察'], adult: [] }, skills: ['注意到自己有感觉'], shells: 4,
+      settings: { scale: 1.06 }
+    };
+    const m = migrate(JSON.parse(JSON.stringify(raw)));
+    A(m.band === 'a6');
+    A(m.cleared.includes('1-1') && m.awarded.includes('1-1'));
+    A(m.cards.kid.includes('觉察') && m.skills.includes('注意到自己有感觉'));
+    A(m.shells === 4 && m.settings.scale === 1.06);
+  });
+  test('题库不再引用 a9，a6 档每关两层都有题', () => {
+    const ids = KID.levels.filter(l => l.type !== 'finale').map(l => l.id);
+    A(ids.every(id => {
+      const pool = (BANK[id] || []).filter(v => v.b.includes('a6'));
+      return pool.filter(v => (v.tier || 1) === 1).length >= 2 && pool.filter(v => v.tier === 2).length >= 1;
+    }));
+    A(Object.values(BANK).flat().every(v => !v.b.includes('a9')));
+  });
+  test('首次进站抽基础层，走过一次自动进「多想一步」', () => {
+    bandTo('a6'); session.depth = null; state.cleared = [];
+    state.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
+    renderLevel();
+    A(play.depth === 1 && (play.v.tier || 1) === 1);
+    state.cleared.push('2-3');
+    renderLevel();
+    A(play.depth === 2 && play.v.tier === 2);
+    state.cleared = []; session.depth = null;
+  });
+  test('手动切层不写存档，换档后回到自动决定', () => {
+    bandTo('a6'); session.depth = null;
+    state.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
+    renderLevel();
+    const before = localStorage.getItem('mood-island-v5');
+    ACTIONS['set-depth']({ dataset: { d: '2' } });
+    A(session.depth === 2 && play.v.tier === 2);
+    A(localStorage.getItem('mood-island-v5') === before, '切层不应写存档');
+    ACTIONS['set-band']({ dataset: { b: 'all', next: 'home' } });
+    A(session.depth === null && session.pocket === null);
+    bandTo('a6');
+  });
+  test('结果卡详细度跟着当前题的深度走，不再绑年龄段', () => {
+    bandTo('a6'); session.depth = 1;
+    state.levelIndex = 0; renderLevel();
+    session.clearedThisRun = 0; completeLevel('测试');
+    A(!!document.querySelector('.result-more'), '基础层应折叠成人说明');
+    session.depth = 2; renderLevel();
+    session.clearedThisRun = 0; completeLevel('测试');
+    A(!document.querySelector('.result-more'), '进阶层应显示完整六行');
+    session.depth = null;
+  });
+  test('关卡页有站间承接句，概念层 16 条都有桥与实践卡', () => {
+    bandTo('a6'); session.depth = null;
+    state.levelIndex = KID.levels.findIndex(l => l.id === '1-2');
+    renderLevel();
+    const bridge = document.querySelector('.level-bridge');
+    A(bridge && bridge.textContent.includes('这一站接着'));
+    A(bridge.textContent.includes(conceptOfLevel('1-2').bridge));
+    A(GLOSSARY.length === 16 && GLOSSARY.every(g => g.bridge && g.practice));
+  });
+  test('带回下一站的实践卡只出现一次，不写存档', () => {
+    bandTo('a6'); session.depth = null; session.pocket = null;
+    state.levelIndex = KID.levels.findIndex(l => l.id === '1-4');
+    renderLevel();
+    session.clearedThisRun = 0; completeLevel('测试');
+    const btn = document.querySelector('[data-action="pocket-add"]');
+    A(btn);
+    const before = localStorage.getItem('mood-island-v5');
+    ACTIONS['pocket-add'](btn);
+    A(session.pocket && session.pocket.from === '1-4');
+    A(localStorage.getItem('mood-island-v5') === before, '口袋不该落盘');
+    state.levelIndex = KID.levels.findIndex(l => l.id === '2-1');
+    renderLevel();
+    A(document.querySelector('.level-bridge').textContent.includes('上一站带走的'));
+    A(session.pocket === null, '取用后应清掉');
+    state.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
+    renderLevel();
+    A(!document.querySelector('.level-bridge').textContent.includes('上一站带走的'), '不该重复出现');
+  });
+  test('两个人一起选：两轮后并排看，不推进进度、不写存档', () => {
+    bandTo('a6'); session.depth = null; state.cleared = [];
+    state.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
+    renderLevel();
+    const before = localStorage.getItem('mood-island-v5');
+    const clearedBefore = state.cleared.length;
+    ACTIONS['duo-open']();
+    A(session.duo && session.duo.step === 1 && session.duo.opts.length >= 2);
+    ACTIONS['duo-pick']({ dataset: { i: '0' } });
+    A(session.duo.step === 2 && session.duo.first === 0);
+    ACTIONS['duo-pick']({ dataset: { i: '1' } });
+    A(session.duo.step === 3);
+    const panel = document.querySelector('.duo-panel');
+    A(panel && panel.textContent.includes('第一个人') && panel.textContent.includes('第二个人'));
+    A(!play.done && state.cleared.length === clearedBefore, '双人选择不该通关');
+    A(localStorage.getItem('mood-island-v5') === before, '双人选择不该写存档');
+    ACTIONS['duo-close']();
+    A(session.duo === null && !document.querySelector('.duo-panel'));
+  });
+  test('首站天气主按钮默认可用，选过之后换文案', () => {
+    bandTo('a6'); session.depth = null;
+    state.levelIndex = 0; renderLevel();
+    const go = document.getElementById('weather-go');
+    A(go && !go.disabled, '首站主按钮不该禁用');
+    A(go.textContent.includes('就这样出发'));
+    ACTIONS['weather-pick']({ dataset: { i: '0' } });
+    A(document.getElementById('weather-go').textContent.includes('带着'));
+  });
+  test('亲子档保留、成年档仍走独立轨，两者都不按深度层抽题', () => {
+    A(AGE_BANDS.some(b => b.id === 'all' && b.track === 'kid'));
+    A(AGE_BANDS.some(b => b.id === 'adult' && b.track === 'adult'));
+    bandTo('all'); A(!band().tiers);
+    bandTo('adult'); A(!band().tiers);
+    bandTo('a6');
+  });
+
+  bandTo('a6');
+  session.depth = null; session.pocket = null; session.duo = null;
+  state.cleared = [];
+  renderMap();
 
   const pre = document.createElement('pre');
   pre.id = '__e2e_result__';

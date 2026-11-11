@@ -68,6 +68,43 @@ const ACTIONS = {
     else renderLevel();
     showFeedback('gentle', '换了一道题，进度还留着。慢慢来。');
   },
+  /* 6-12 岁档切换深度层：只改内存偏好并重抽同一站，不写存档、不计次数。
+     拼装关与终章按钮不显示，这里也兜一层，避免误触后抽出空题。 */
+  'set-depth': (el) => {
+    if (!band().tiers || play.type === 'finale' || play.side) return;
+    const d = el.dataset.d === '2' ? 2 : 1;
+    session.depth = d;
+    session.navDir = 'forward';
+    renderLevel();
+    showFeedback('gentle', d === 2 ? '换成长一点的题目了，随时可以切回来。' : '回到基础题，慢慢来。');
+  },
+  /* 把岛末站的动作收进「口袋」：只在本次打开的内存里，下一站显示一次就清掉。
+     不写 localStorage、不记次数、不提示回来看，避免变成打卡。 */
+  'pocket-add': (el) => {
+    if (session.pocket) return;
+    session.pocket = { text: el.dataset.t || '', from: session.lastCleared || '' };
+    el.textContent = '已带上 · 下一站见';
+    el.disabled = true;
+    showFeedback('gentle', '这张卡只在本次打开里跟着你，不会留下记录。');
+  },
+  /* 两个人各挑一次再并排看：只用当前题的选项，不碰 play 的完成判定，也不写存档。 */
+  'duo-open': () => {
+    const opts = duoOptions(play.v);
+    if (opts.length < 2 || play.done) return;
+    session.duo = { step: 1, first: null, second: null, opts };
+    paintDuo();
+    showFeedback('gentle', '先请第一个人挑一个，选完换另一个人。');
+  },
+  'duo-pick': (el) => {
+    const d = session.duo;
+    if (!d || d.step === 3) return;
+    const i = Number(el.dataset.i);
+    if (!Number.isInteger(i) || i < 0 || i >= d.opts.length) return;
+    if (d.step === 1) { d.first = i; d.step = 2; }
+    else { d.second = i; d.step = 3; }
+    paintDuo();
+  },
+  'duo-close': () => { session.duo = null; paintDuo(); },
   'goto-band': () => { stopSpeech(); session.navDir = ''; renderAgeGate(); },
   /* 急救入口：记下进入前那一屏，Esc 与「回到…」都回到那里。
      入口本身不改 session.view 之外的状态，也不写存档。 */
@@ -136,6 +173,9 @@ const ACTIONS = {
     const prev = band();
     const customScale = state.settings.scale !== prev.scale;
     state.band = b.id;
+    /* 换档回到按通关记录自动决定深度层；「带回下一站」的卡也只属于刚才那一趟。 */
+    session.depth = null;
+    session.pocket = null;
     if (firstPick || !customScale) state.settings.scale = b.scale;
     if (firstPick || !state.settings.speakTouched) state.settings.speak = b.speak;
     save(); applySettings(); closeModal();
@@ -305,7 +345,7 @@ const ACTIONS = {
   'close-modal': () => closeModal(),
 
   /* 静修间：不计进度、不打卡、不判对错 */
-  'open-retreat': () => { session.navDir = 'forward'; renderRetreatList(); },
+  'open-retreat': () => { mdScene = 'all'; session.navDir = 'forward'; renderRetreatList(); },
   'retreat-start': (el) => { session.navDir = 'forward'; renderRetreatPractice(Number(el.dataset.i)); },
   'ground-pick': (el) => {
     const r = Number(el.dataset.row), i = Number(el.dataset.i);
@@ -337,6 +377,39 @@ const ACTIONS = {
   'defuse-reroll': () => renderRetreatPractice(session.retreatStep),
   'space-next': () => { play.step += 1; paintSpace(); },
 
+  /* 静修间 2.0：场景筛选与 sit 引导；全部只在内存 */
+  'md-list': () => { renderRetreatList(); },
+  'md-scene': (el) => {
+    const s = el.dataset.s || 'all';
+    if (s !== 'all' && !MD_SCENES.some(x => x.id === s)) return;
+    const y = window.scrollY;
+    mdScene = s;
+    renderRetreatList();
+    /* 筛选不把人送回页首：重渲染后回到原来的滚动位置 */
+    requestAnimationFrame(() => { try { window.scrollTo(0, y); } catch (e) { /* noop */ } });
+  },
+  'md-start': (el) => {
+    const id = el.dataset.id;
+    if (!MD_PRACTICE_BY_ID[id]) return;
+    session.navDir = 'forward';
+    renderMeditatePractice(id);
+  },
+  'md-next': () => {
+    if (!play || play.type !== 'sit') return;
+    play.step += 1;
+    paintSit();
+  },
+  'md-stop': () => {
+    if (!play || play.type !== 'sit') return;
+    finishSit(true);
+  },
+  'md-intent': () => {
+    if (!play || play.type !== 'sit' || !MD_INTENTS.length) return;
+    play.intent = (play.intent + 1) % MD_INTENTS.length;
+    const t = document.getElementById('md-intent-text');
+    if (t) t.textContent = (MD_INTENTS[play.intent] || {}).t || '';
+  },
+
   'speak-question': () => speakTexts(questionTexts()),
   'speak-options': () => speakTexts(optionTexts()),
 
@@ -344,7 +417,9 @@ const ACTIONS = {
   'weather-pick': (el) => {
     play.picked = Number(el.dataset.i);
     document.querySelectorAll('.weather-btn').forEach((b, i) => b.classList.toggle('selected', i === play.picked));
-    document.getElementById('weather-go').disabled = false;
+    /* 首站不再把主按钮锁住：没选也能一次点走，选了就把按钮改成带着它出发。 */
+    const go = document.getElementById('weather-go');
+    if (go) go.textContent = `带着「${play.v.items[play.picked] ? play.v.items[play.picked].n : ''}」上岛`;
     showFeedback('gentle', '选好了就出发。这个选择不会被保存，也不会被拿去分析。');
   },
   'weather-go': () => completeLevel('天气没有好坏，也不需要向谁解释。出发吧。'),

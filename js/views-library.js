@@ -98,8 +98,11 @@ function renderLibraryView(cfg) {
   const cards = cfg.items.map((item) => {
     const c = cfg.catOf(item);
     const head = cfg.groupTitle && c !== lastCat ? cfg.groupTitle(c) : '';
+    /* 可选钩子：只有词典传。概念簇把长分区切成几个可见的小台阶，
+       标题由词条的簇起点派生，筛选时和分区标题一起收起。 */
+    const cluster = cfg.clusterTitle ? cfg.clusterTitle(item) : '';
     lastCat = c;
-    return head + cfg.card(item);
+    return head + cluster + cfg.card(item);
   }).join('');
   const catalog = `
     <div class="${cfg.catsClass}" id="${cfg.catsId}" role="group" aria-label="${esc(cfg.catsLabel)}">
@@ -141,6 +144,7 @@ function applyLibraryFilter(cfg) {
   /* 第三维筛选只有词典传；其余两个知识库保持「分类 + 搜索」两维，行为不变。 */
   const kind = cfg.queryKind ? cfg.queryKind() : 'all';
   const visibleByCat = new Map();
+  const visibleByCluster = new Map();
   let n = 0;
   document.querySelectorAll(`#${cfg.gridId} .${cfg.cardClass}`).forEach((card) => {
     const catOk = cat === 'all' || card.dataset.cat === cat;
@@ -151,6 +155,9 @@ function applyLibraryFilter(cfg) {
     if (show) {
       n += 1;
       visibleByCat.set(card.dataset.cat, (visibleByCat.get(card.dataset.cat) || 0) + 1);
+      if (card.dataset.cluster) {
+        visibleByCluster.set(card.dataset.cluster, (visibleByCluster.get(card.dataset.cluster) || 0) + 1);
+      }
     }
   });
   /* 词典的分区标题跟着可见卡片走：某主题被筛空，标题也一起收起。 */
@@ -159,6 +166,18 @@ function applyLibraryFilter(cfg) {
     h.hidden = shown === 0;
     const badge = h.querySelector('.dict-group-count');
     if (badge) badge.textContent = `${shown} 条`;
+  });
+  /* 概念簇标题按簇内可见卡片收起；大组导语按整组可见数收起。
+     两个库没有这两类元素，querySelectorAll 为空时行为完全不变。 */
+  document.querySelectorAll(`#${cfg.gridId} .dict-cluster-title`).forEach((h) => {
+    const shown = visibleByCluster.get(h.dataset.cluster) || 0;
+    h.hidden = shown === 0;
+    const badge = h.querySelector('.dict-cluster-count');
+    if (badge) badge.textContent = `${shown} 条`;
+  });
+  document.querySelectorAll(`#${cfg.gridId} .dict-group-lead`).forEach((h) => {
+    const shown = (h.dataset.groupLead || '').split('|').reduce((s, c) => s + (visibleByCat.get(c) || 0), 0);
+    h.hidden = shown === 0;
   });
   const active = cfg.active ? cfg.active() : (q || cat !== 'all');
   const count = document.getElementById(cfg.countId);
@@ -174,7 +193,48 @@ function applyLibraryFilter(cfg) {
 
 /* ---------------------------------------------------------------- 心理学词典
    纯科普，不计进度、不落盘；主题 / 类型 / 搜索三个维度只在内存里，重新进入会清空。
-   主题分组与概念类型定义在 content/dictionary.js 的 MI.dictionaryMeta，逻辑不另存一份。 */
+   大组、主题、概念簇与类型全部定义在 content/dictionary.js 的 MI.dictionaryMeta，逻辑不另存一份。 */
+/* 概念簇只声明「这一簇从哪条开始」，边界随词条数组顺序自动派生，
+   数据里不重复存一份 162 条的名单；选簇起点时同时算出簇内条数。 */
+const DICT_CAT_META = (DICT_META.catMeta) || {};
+function dictClusterMap() {
+  const map = new Map();
+  DICT_CATS.forEach(c => {
+    const starts = (DICT_CAT_META[c] || {}).clusters || [];
+    const terms = DICTIONARY.filter(d => d.c === c).map(d => d.t);
+    const groups = [];
+    let cur = null;
+    terms.forEach(t => {
+      const hit = starts.find(x => x.start === t);
+      if (hit) {
+        cur = { name: hit.name, id: `${c}::${hit.name}`, terms: [] };
+        groups.push(cur);
+      }
+      if (cur) cur.terms.push(t);
+    });
+    groups.forEach(g => g.terms.forEach((t, i) => map.set(t, {
+      id: g.id, name: g.name, isStart: i === 0, count: g.terms.length
+    })));
+  });
+  return map;
+}
+/* 五分钟起步路径：不新增筛选维度、不新增词条，只把已有词条按「先能判断 → 再能叫出感受 → 再能行动」串起来。 */
+const DICT_START_PATH = [
+  { t: '心理学', why: '这门学科在说什么' },
+  { t: '相关不等于因果', why: '看到「研究发现」先问一句' },
+  { t: '情绪', why: '先能叫出自己的感受' },
+  { t: '情绪调节', why: '再说能做什么' },
+  { t: '心理灵活性', why: '带着不舒服也能往前' }
+];
+function dictStartPathHtml() {
+  return `<section class="dict-start-path" aria-label="五分钟起步路径">
+    <h3 class="sh-section-title">第一次来？按这 5 条读</h3>
+    <p class="muted sh-section-sub">从「这门学科在说什么」走到「带着不舒服也能往前」。点一条直接展开它，不用从头翻 162 条。</p>
+    <ol class="dict-path-list">
+      ${DICT_START_PATH.map((x, i) => `<li><button class="dict-path-btn" data-action="dict-jump" data-t="${esc(x.t)}" title="${esc(x.why)}"><span class="dict-path-num">${i + 1}</span><b>${esc(x.t)}</b></button></li>`).join('')}
+    </ol>
+  </section>`;
+}
 function dictFiltersActive() {
   return !!(dictQuery.trim() || dictCat !== 'all' || dictKind !== 'all');
 }
@@ -202,6 +262,7 @@ function dictCountText(n) {
     : `${DICTIONARY.length} 条 · 点卡片展开释义，底部可以接着看相关词条`;
 }
 function dictView() {
+  const clusterMap = dictClusterMap();
   const kindDesc = dictKind === 'all'
     ? '类型和主题可以叠着筛；也可以直接搜。'
     : ((DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '');
@@ -210,13 +271,13 @@ function dictView() {
     ready: () => DICTIONARY.length > 0 && DICT_CATS.length > 0 && DICT_KINDS.length > 0,
     missingTitle: '词典内容没有加载出来',
     missingLead: '检查 index.html 是否在 library.js 之后、js/core.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。',
-    eyebrow: `心理学词典 · ${DICTIONARY.length} 条 · ${DICT_GROUPS.length} 组`,
+    eyebrow: `心理学词典 · ${DICTIONARY.length} 条 · ${DICT_GROUPS.length} 组 · ${DICT_CATS.length} 个主题`,
     title: '把常用的心理学词，说清楚一点',
-    lead: `${DICT_CATS.length} 个主题、${DICT_KINDS.length} 类概念，先搜或先挑一类；点卡片看展开与相关词条。只做科普，不提供诊断或个体化建议。`,
+    lead: `按「先看见自己的状态 → 再理解心智怎么运作 → 从自己走向他人 → 数字时代与证据素养」四组排。每组、每个主题都有一句导语，长主题再切成几个概念簇；也可以直接搜，或按主题 / 概念类型叠加筛选。只做科普，不提供诊断或个体化建议。`,
     nav: `<details class="dict-index">
-      <summary>按组浏览 · ${DICT_GROUPS.length} 组</summary>
+      <summary>按组浏览 · ${DICT_GROUPS.length} 组 · 从「我此刻怎么了」开始</summary>
       <nav class="dict-nav" aria-label="本页目录">
-        ${DICT_GROUPS.map(g => `<a href="#dict-group-${esc(g.id)}">${esc(g.name)}<span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
+        ${DICT_GROUPS.map((g, i) => `<a class="dict-nav-group" href="#dict-group-${esc(g.id)}"><b>第 ${i + 1} 组 · ${esc(g.name)}</b><em>${esc(g.desc)}</em><span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
       </nav>
     </details>`,
     search: `<div class="dict-controls">
@@ -225,7 +286,8 @@ function dictView() {
         <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
       </label>
     </div>`,
-    prelude: `${conceptStartPanel(
+    prelude: `${dictStartPathHtml()}
+    ${conceptStartPanel(
       '按概念读',
       '16 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。',
       GLOSSARY.map(g => g.id),
@@ -251,10 +313,17 @@ function dictView() {
       const g = DICT_GROUPS.find(x => (x.cats || []).includes(c)) || {};
       const first = g.cats && g.cats[0] === c;
       const id = first ? `dict-group-${g.id}` : `dict-cat-${DICT_CATS.indexOf(c)}`;
-      return `<h3 class="dict-group-title" id="${esc(id)}" data-group="${esc(c)}">
+      const meta = DICT_CAT_META[c] || {};
+      /* 大组导语只在每组第一个主题前出现；筛到整组为空时由 applyLibraryFilter 收起。 */
+      const lead = first ? `<div class="dict-group-lead" data-group-lead="${esc((g.cats || []).join('|'))}">
+        <span class="dict-group-kicker">第 ${DICT_GROUPS.indexOf(g) + 1} 组 · ${esc(g.name)}</span>
+        <p>${esc(g.desc)}</p>
+      </div>` : '';
+      return `${lead}<h3 class="dict-group-title" id="${esc(id)}" data-group="${esc(c)}">
         <span class="dict-group-name">${esc(c)}</span>
         <span class="dict-group-meta">${esc(g.name || '')}</span>
         <span class="dict-group-count">${dictCountBy(d => d.c === c)} 条</span>
+        ${meta.lead ? `<span class="dict-cat-lead">${esc(meta.lead)}</span>` : ''}
       </h3>`;
     },
     card(d) {
@@ -262,7 +331,8 @@ function dictView() {
       /* 词条若挂到概念层，就在卡头标出概念名；不改变词条内容，只是多一条回链。 */
       const cc = conceptOfDict(d.t);
       const conceptBadge = cc ? `<span class="dict-concept-badge">概念 · ${esc(conceptName(cc))}</span>` : '';
-      return `<details class="dict-card" data-term="${esc(d.t)}" data-cat="${esc(d.c)}" data-kind="${esc(d.k)}" data-search="${esc(hay)}">
+      const cl = clusterMap.get(d.t);
+      return `<details class="dict-card" data-term="${esc(d.t)}" data-cat="${esc(d.c)}" data-kind="${esc(d.k)}"${cl ? ` data-cluster="${esc(cl.id)}"` : ''} data-search="${esc(hay)}">
         <summary>
           <span class="dict-term">${esc(d.t)}</span>
           <span class="dict-en" lang="en">${esc(d.e)}</span>
@@ -276,9 +346,20 @@ function dictView() {
         <div class="dict-detail">
           <p>${esc(d.d)}</p>
           ${d.m ? `<p class="dict-mis"><b>常见误解</b>${esc(d.m)}</p>` : ''}
-          ${(d.r || []).length ? `<div class="dict-related"><b>接着看</b><div class="dict-related-links">${d.r.map(t => `<button class="dict-link" data-action="dict-jump" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>` : ''}
+          ${(d.r || []).length ? `<div class="dict-related"><b>接着看</b><div class="dict-related-links">${d.r.map(t => {
+            const target = DICTIONARY.find(x => x.t === t);
+            const cross = target && target.c !== d.c;
+            return `<button class="dict-link${cross ? ' dict-link-cross' : ''}" data-action="dict-jump" data-t="${esc(t)}"${cross ? ` title="在「${esc(target.c)}」里"` : ''}>${esc(t)}</button>`;
+          }).join('')}</div></div>` : ''}
         </div>
       </details>`;
+    },
+    clusterTitle(d) {
+      const cl = clusterMap.get(d.t);
+      if (!cl || !cl.isStart) return '';
+      return `<h4 class="dict-cluster-title" data-cluster="${esc(cl.id)}" data-group="${esc(d.c)}">
+        <span>${esc(cl.name)}</span><span class="dict-cluster-count">${cl.count} 条</span>
+      </h4>`;
     },
     gridId: 'dict-grid', gridClass: '', cardClass: 'dict-card',
     catsId: 'dict-cats', catsClass: 'dict-cats', catsLabel: '按主题筛选', catsAction: 'dict-cat',
@@ -286,7 +367,7 @@ function dictView() {
     active: dictFiltersActive, countText: dictCountText, syncSelection: syncDictSelection,
     countId: 'dict-count', unit: '条', idleHint: ' · 点卡片展开释义',
     emptyId: 'dict-empty', emptyText: '没有匹配的词条。换个关键词，或点「清空筛选」看看。',
-    note: '词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
+    note: '词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。同一概念簇里的词按「先懂什么、再看什么」排，带小箭头的「接着看」会跳到别的主题。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
   };
 }
 function renderDictionary() { renderLibraryView(dictView()); }
@@ -514,7 +595,7 @@ function renderRetreatPractice(i) {
   </div>` : '';
   stage.innerHTML = `<div class="view">
     <div class="toolbar">${bandChip('<span class="muted">静修间</span>')}
-      <button class="btn-read" data-action="open-retreat">换一个练习</button>
+      <button class="btn-read" data-action="md-list">换一个练习</button>
       <button class="btn-read" data-action="go-map">结束，回地图</button></div>
     <h2>${esc(r.name)}</h2>
     <p class="level-goal">${esc(r.sub)}　·　${esc(r.intro)}</p>
@@ -545,4 +626,93 @@ function paintSpace() {
     <div class="space-dots">${r.steps.map((x, i) => `<span class="space-dot ${i < s ? 'done' : i === s ? 'current' : ''}"></span>`).join('')}</div>
     <div class="actions"><button class="btn btn-primary" data-action="space-next">${s === r.steps.length - 1 ? '做完这一段' : '继续'}</button>
       <button class="btn btn-ghost" data-action="go-map">随时结束</button></div>`;
+}
+
+/* ---------------------------------------------------------------- 静修间 2.0 · sit 引导
+   逐步文字，不计时、不显示剩余秒数；每一步都能「先停在这儿」。
+   结束页只做机制归因与一句 if-then，不显示次数 / 天数 / 时长。 */
+function renderMeditatePractice(id) {
+  clearAsyncTimers(); stopSpeech();
+  const p = MD_PRACTICE_BY_ID[id];
+  if (!p) { renderRetreatList(); return; }
+  const f = MD_FAMILY_BY_ID[p.family] || {};
+  session.view = 'retreat'; session.retreatStep = -1;
+  play = { type: 'sit', data: p, family: f, step: 0, done: false, stopped: false, intent: 0 };
+  const rc = conceptOfMeditate(p);
+  const conceptBlock = `<div class="retreat-concept">
+    <b>${esc(f.name || '这一步在做什么')}</b>
+    <p class="muted">什么时候不做 · ${esc(f.notFor || '不舒服就停')}</p>
+    <p class="muted">${esc(p.minutes)} · 不用计时，随时可以停</p>
+    ${rc ? `<p class="sh-refs">${conceptRefLinks(rc)}</p>` : ''}
+  </div>`;
+  stage.innerHTML = `<div class="view">
+    <div class="toolbar">${bandChip('<span class="muted">静修间</span>')}
+      <button class="btn-read" data-action="md-list">换一个练习</button>
+      <button class="btn-read" data-action="go-map">结束，回地图</button></div>
+    <h2>${esc(p.name)}</h2>
+    <p class="level-goal">${esc(p.sub)}　·　${esc(p.intro)}</p>
+    ${conceptBlock}
+    <div class="play-area" style="margin-top:20px"><div id="sit-body"></div><div id="retreat-result"></div></div>
+    ${retreatSafety()}
+    <div id="feedback-slot" aria-live="polite"></div>
+  </div>`;
+  paintSit();
+  updateTopbar();
+  stage.focus({ preventScroll: true });
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* noop */ }
+}
+
+function paintSit() {
+  const p = play.data, s = play.step;
+  const box = document.getElementById('sit-body');
+  if (!box) return;
+  if (s >= p.steps.length) { finishSit(false); return; }
+  const st = p.steps[s];
+  const pacer = (play.family && play.family.id === 'breath')
+    ? `<div class="md-pacer" aria-hidden="true"><div class="breath-ring running"></div><p>圆变大时吸气，变小时呼气；不跟也可以。</p></div>`
+    : '';
+  box.innerHTML = `<div class="space-card md-step">
+      <span class="space-label">${esc(st.label)}</span>
+      <p>${esc(st.text)}</p>
+    </div>
+    ${pacer}
+    <div class="space-dots">${p.steps.map((x, i) => `<span class="space-dot ${i < s ? 'done' : i === s ? 'current' : ''}"></span>`).join('')}</div>
+    <div class="actions">
+      <button class="btn btn-primary" data-action="md-next">${s === p.steps.length - 1 ? '做完这一步' : '继续'}</button>
+      <button class="btn btn-ghost" data-action="md-stop">先停在这儿</button>
+    </div>`;
+  const res = document.getElementById('retreat-result');
+  if (res) res.innerHTML = '';
+}
+
+function finishSit(stopped) {
+  const p = play.data, f = play.family || {};
+  play.done = true; play.stopped = !!stopped;
+  const box = document.getElementById('sit-body');
+  const res = document.getElementById('retreat-result');
+  if (box) box.innerHTML = `<div class="space-card"><span class="space-label">${stopped ? '停在这里' : '做完了'}</span><p>${esc(p.close)}</p></div>`;
+  if (!res) return;
+  if (stopped) {
+    res.innerHTML = `<div class="feedback good"><p>停在这里也可以，不用补上。</p>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-secondary" data-action="md-start" data-id="${esc(p.id)}">再做一次</button>
+        <button class="btn btn-ghost" data-action="md-list">换一个练习</button>
+        <button class="btn btn-ghost" data-action="go-map">回地图</button>
+      </div></div>`;
+    return;
+  }
+  const byFamily = MD_INTENTS.findIndex(x => x.family === p.family);
+  const byScene = MD_INTENTS.findIndex(x => x.scene === 'all' || (p.scenes || []).includes(x.scene));
+  play.intent = byFamily >= 0 ? byFamily : (byScene >= 0 ? byScene : 0);
+  const intent = (MD_INTENTS[play.intent] || {}).t || '';
+  res.innerHTML = `<div class="feedback good">
+    <p><b>你刚刚做的是</b>：${esc(f.mechanism || '')}</p>
+    <p class="muted" style="margin-top:8px">不用评价做得好不好，也不用延长。</p>
+    <div class="md-intent"><span class="md-intent-kicker">带回一句</span><p id="md-intent-text">${esc(intent)}</p>
+      <button class="btn-read" data-action="md-intent">换一句</button></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn btn-secondary" data-action="md-start" data-id="${esc(p.id)}">再做一次</button>
+      <button class="btn btn-ghost" data-action="md-list">换一个练习</button>
+      <button class="btn btn-ghost" data-action="go-map">回地图</button>
+    </div></div>`;
 }

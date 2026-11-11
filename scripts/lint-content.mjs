@@ -24,6 +24,7 @@ const FILES = [
   'bank-compose',
   'levels-adult-work',
   'library',
+  'meditate',
   'dictionary',
   'selfhelp',
   'slowvars',
@@ -143,13 +144,25 @@ TRACKS.forEach((tr) => {
     const pool = tr.bank[id] || [];
     if (!pool.length) { err(`${tr.name} ${id}: 没有题库`); return; }
     tr.bands.forEach((b) => {
-      const n = pool.filter(v => (v.b || []).includes(b.id)).length;
-      if (n < MIN_VARIANTS) err(`${tr.name} ${id}: ${b.id} 档只有 ${n} 组（要求 ≥${MIN_VARIANTS}）`);
+      const visible = pool.filter(v => (v.b || []).includes(b.id));
+      if (visible.length < MIN_VARIANTS) err(`${tr.name} ${id}: ${b.id} 档只有 ${visible.length} 组（要求 ≥${MIN_VARIANTS}）`);
+      /* 带 tiers 的档（6-12 岁）两层都要有题：基础层保证第一次来就能玩，
+         进阶层保证走过一次之后「多想一步」不会抽出空题。 */
+      if (b.tiers) {
+        const t1 = visible.filter(v => (v.tier || 1) === 1).length;
+        const t2 = visible.filter(v => v.tier === 2).length;
+        if (t1 < MIN_VARIANTS) err(`${tr.name} ${id}: ${b.id} 档基础层只有 ${t1} 组（要求 ≥${MIN_VARIANTS}）`);
+        if (t2 < 1) err(`${tr.name} ${id}: ${b.id} 档「多想一步」层没有题`);
+      }
     });
     const lv = levels.find(l => l.id === id);
     pool.forEach((v, i) => {
       const tag = `${tr.name} ${id}#${i}(${(v.b || []).join('/') || '未标档'})`;
       if (!v.b || !v.b.length) err(`${tag}: 缺 b 档位标记`);
+      /* 儿童 / 亲子轨按深度分层，每条变体都要明确属于哪一层；
+         成年与工作间是单层题库，不要求 tier。 */
+      if (tr.key === 'kid' && v.tier !== 1 && v.tier !== 2) err(`${tag}: 缺 tier 字段（只能是 1 或 2）`);
+      if (v.tier !== undefined && v.tier !== 1 && v.tier !== 2) err(`${tag}: tier 只能是 1 或 2`);
       (v.b || []).forEach((b) => {
         if (!BANDS.some(x => x.id === b)) err(`${tag}: 未知档位「${b}」`);
       });
@@ -296,6 +309,35 @@ DICT.forEach((d, i) => {
 });
 DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典主题「${c}」没有词条`); });
 DICT_KIND_IDS.forEach(k => { if (!DICT.some(d => d.k === k)) err(`词典概念类型「${k}」没有词条`); });
+/* 阅读顺序的结构锁：catMeta 给每个主题一句导语与若干概念簇，簇只声明起点，
+   边界由词条数组顺序派生。起点必须真实存在、单调递增，且首簇起点就是主题首条。 */
+const DICT_CAT_META = DICT_META.catMeta || {};
+DICT_CATS.forEach(c => {
+  const meta = DICT_CAT_META[c];
+  if (!meta) { err(`词典主题「${c}」缺 dictionaryMeta.catMeta 导语与概念簇`); return; }
+  if (!meta.lead) err(`词典主题「${c}」缺 catMeta.lead 导语`);
+  if (!Array.isArray(meta.clusters) || !meta.clusters.length) {
+    err(`词典主题「${c}」缺 catMeta.clusters`);
+    return;
+  }
+  const terms = DICT.filter(d => d.c === c).map(d => d.t);
+  const starts = meta.clusters.map(cl => cl.start);
+  if (new Set(starts).size !== starts.length) err(`词典主题「${c}」的概念簇起点重复`);
+  let last = -1;
+  meta.clusters.forEach((cl, i) => {
+    if (!cl.name || !cl.start) { err(`词典主题「${c}」概念簇#${i} 缺 name 或 start`); return; }
+    const at = terms.indexOf(cl.start);
+    if (at < 0) err(`词典主题「${c}」概念簇「${cl.name}」的起点「${cl.start}」不是本主题词条`);
+    else {
+      if (at <= last) err(`词典主题「${c}」概念簇起点顺序与词条数组不一致：${cl.start}`);
+      if (i === 0 && at !== 0) err(`词典主题「${c}」第一个概念簇的起点应是该主题首条`);
+      last = at;
+    }
+  });
+});
+Object.keys(DICT_CAT_META).forEach(c => {
+  if (!DICT_CATS.includes(c)) err(`dictionaryMeta.catMeta 里的「${c}」不是合法主题`);
+});
 
 /* ---------- 自助工具箱 ---------- */
 const SH_CATS = ['心力恢复', '认知自助', '行为与身体', '关系与支持', '自助边界'];
@@ -418,7 +460,10 @@ GLOSSARY.forEach((g, i) => {
   if (!g.id || !/^[a-z][a-z0-9-]*$/.test(g.id)) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
   if (seenConcept.has(g.id)) err(`${tag}: id 重复`);
   seenConcept.add(g.id);
-  ['kid', 'adult', 'line', 'mechanism'].forEach(k => { if (!g[k]) err(`${tag}: 缺字段 ${k}`); });
+  ['kid', 'adult', 'line', 'mechanism', 'bridge', 'practice'].forEach(k => { if (!g[k]) err(`${tag}: 缺字段 ${k}`); });
+  /* 承接句与实践卡是站间闭环：太短会变成口号，太长又会盖住题目本身。 */
+  if (g.bridge && (g.bridge.length < 12 || g.bridge.length > 70)) err(`${tag}: bridge 应在 12–70 字，当前 ${g.bridge.length}`);
+  if (g.practice && (g.practice.length < 12 || g.practice.length > 70)) err(`${tag}: practice 应在 12–70 字，当前 ${g.practice.length}`);
   if (!g.dose || !g.dose.time) err(`${tag}: 缺 dose.time`);
   if (!CODEX[g.kid]) err(`${tag}: kid「${g.kid}」不在 CODEX 里`);
   if (!CODEX[g.adult]) err(`${tag}: adult「${g.adult}」不在 CODEX 里`);
@@ -573,6 +618,69 @@ bottles.forEach((b, i) => {
   seenBottleQ.add(b.q);
 });
 
+/* ---------- 静修间 2.0：练习族与 sit 引导 ----------
+   5 族 × 2 档；族上写机制与边界，练习只写步骤。
+   场景只用于「此刻」筛选，不落盘；intent 是固定句式的 if-then，不保存。 */
+const MD = MI.meditate || {};
+const MD_FAMS = MD.families || [];
+const MD_PS = MD.practices || [];
+const MD_SCENES = MD.scenes || [];
+const MD_INTENTS = MD.intents || [];
+if (MD_FAMS.length !== 5) err(`冥想练习：族应为 5 个，当前 ${MD_FAMS.length} 个`);
+if (MD_PS.length !== 10) err(`冥想练习：引导练习应为 10 条，当前 ${MD_PS.length} 条`);
+if (MD_SCENES.length !== 6) err(`冥想练习：场景应为 6 个，当前 ${MD_SCENES.length} 个`);
+if (MD_INTENTS.length < 6) err(`冥想练习：if-then 句至少 6 条，当前 ${MD_INTENTS.length} 条`);
+const mdFamIds = new Set();
+MD_FAMS.forEach((f, i) => {
+  const tag = `冥想族#${i} ${f.id || ''}`;
+  if (!f.id || mdFamIds.has(f.id)) err(`${tag}: id 缺失或重复`);
+  mdFamIds.add(f.id);
+  ['name', 'sub', 'mechanism', 'notFor'].forEach(k => { if (!f[k]) err(`${tag}: 缺 ${k}`); });
+  if (f.concept && !GLOSSARY.some(g => g.id === f.concept)) err(`${tag}: 概念锚点「${f.concept}」不存在`);
+  checkLen(f.mechanism, tag);
+});
+const mdSceneIds = new Set();
+MD_SCENES.forEach((s, i) => {
+  if (!s.id || !s.name) err(`冥想场景#${i}: 缺 id / name`);
+  if (mdSceneIds.has(s.id)) err(`冥想场景#${i}: id 重复`);
+  mdSceneIds.add(s.id);
+});
+const mdPracticeIds = new Set();
+const mdDosesByFamily = new Map();
+MD_PS.forEach((p, i) => {
+  const tag = `冥想练习#${i} ${p.id || ''}`;
+  if (!p.id || mdPracticeIds.has(p.id)) err(`${tag}: id 缺失或重复`);
+  mdPracticeIds.add(p.id);
+  if (!mdFamIds.has(p.family)) err(`${tag}: family「${p.family}」不存在`);
+  if (![1, 3].includes(p.dose)) err(`${tag}: dose 只能是 1 或 3，当前 ${p.dose}`);
+  ['name', 'sub', 'minutes', 'intro', 'close'].forEach(k => { if (!p[k]) err(`${tag}: 缺 ${k}`); });
+  if (p.minutes && !p.minutes.includes(p.dose === 1 ? '1 分钟' : '3 分钟')) err(`${tag}: minutes 与 dose 不一致`);
+  if (!Array.isArray(p.steps) || p.steps.length < 3 || p.steps.length > 5) err(`${tag}: 步骤应为 3–5 步，当前 ${(p.steps || []).length} 步`);
+  (p.steps || []).forEach((s, si) => {
+    if (!s.label || !s.text) err(`${tag}: 第 ${si + 1} 步缺 label / text`);
+    if (typeof s.text === 'string' && s.text.length > 40) err(`${tag}: 第 ${si + 1} 步 ${s.text.length} 字，超过 40 字`);
+  });
+  if (!Array.isArray(p.scenes) || !p.scenes.length) err(`${tag}: 至少 1 个场景`);
+  (p.scenes || []).forEach(s => { if (!mdSceneIds.has(s)) err(`${tag}: 场景「${s}」不存在`); });
+  if (!mdDosesByFamily.has(p.family)) mdDosesByFamily.set(p.family, []);
+  mdDosesByFamily.get(p.family).push(p.dose);
+});
+MD_FAMS.forEach((f) => {
+  const doses = (mdDosesByFamily.get(f.id) || []).sort();
+  if (doses.join(',') !== '1,3') err(`冥想族「${f.id}」: 必须有 1 分钟与 3 分钟各一条，当前 ${doses.join(',') || '无'}`);
+});
+MD_SCENES.forEach((s) => {
+  const n = MD_PS.filter(p => p.dose === 1 && (p.scenes || []).includes(s.id)).length;
+  if (n < 2) err(`冥想场景「${s.name}」: 短版练习只有 ${n} 条，至少要 2 条`);
+});
+MD_INTENTS.forEach((t, i) => {
+  if (!t || !t.t || !t.family || !t.scene) err(`冥想 if-then 句#${i}: 缺 t / family / scene`);
+  if (t.family && t.family !== 'all' && !mdFamIds.has(t.family)) err(`冥想 if-then 句#${i}: family「${t.family}」不存在`);
+  if (t.scene && t.scene !== 'all' && !mdSceneIds.has(t.scene)) err(`冥想 if-then 句#${i}: scene「${t.scene}」不存在`);
+  if (t.t && (!t.t.includes('如果') || !t.t.includes('就'))) err(`冥想 if-then 句#${i}: 需含「如果…就…」`);
+  checkLen(t.t, `冥想 if-then 句#${i}`);
+});
+
 /* ---------- 工作间（成年支线） ----------
    支线关卡不在 ADULT.levels 里，所以不参与 17 站结构检查；这里单独校验：
    4 幕、id 唯一、只标成年档、变体池与关卡一一对应、不带 card / skill / island / num。 */
@@ -706,7 +814,7 @@ const countOf = (bank) => Object.values(bank).reduce((s, a) => s + a.length, 0);
 const perBand = (bank, id) => (bank[id] || []).length;
 console.log(`儿童 / 亲子：${KID.levels.length} 站（含终章）· ${(KID.islands || []).length} 岛 · 变体 ${countOf(bankKid)} 组`);
 console.log(`成年：${ADULT.levels.length} 站（含终章）· ${(ADULT.islands || []).length} 岛 · 变体 ${countOf(bankAdult)} 组`);
-console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱 · 急救入口 ${H_ACTS.length} 个动作 + ${H_ITEMS.length} 条求助`);
+console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 冥想 ${MD_PS.length} 条 / ${MD_FAMS.length} 族 / ${MD_SCENES.length} 场景 · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱 · 急救入口 ${H_ACTS.length} 个动作 + ${H_ITEMS.length} 条求助`);
 
 if (warns.length) {
   console.log(`\n提示 ${warns.length} 条：`);

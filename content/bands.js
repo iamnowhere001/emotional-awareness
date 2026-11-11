@@ -1,4 +1,6 @@
-/* 年龄分档 · 5 档，adult 走独立关卡表
+/* 年龄分档 · 4 档，adult 走独立关卡表
+   6-12 岁合并档带 tiers：同一档内按「基础 / 多想一步」两层抽题（见 content/bank-*.js 的 tier）。
+   旧档里的 a9 由 js/core.js 的 BAND_REMAP 映射到 a6，进度不丢。
    纯数据，不含逻辑。加载顺序见 index.html。 */
 window.MI = window.MI || {};
 MI.bands = [
@@ -17,27 +19,15 @@ MI.bands = [
   },
   {
     "id": "a6",
-    "name": "6-9 岁",
-    "tag": "读短句",
+    "name": "6-12 岁",
+    "tag": "读短句 · 也能多想一步",
     "scale": 1.06,
     "rest": 3,
     "speak": true,
     "adult": false,
-    "desc": "生活里的小故事，三选一为主，开始练习把感受说得更准一点。",
-    "len": "一次 4～6 站，约 10 分钟",
-    "track": "kid",
-    "shells": true
-  },
-  {
-    "id": "a9",
-    "name": "9-12 岁",
-    "tag": "多想一步",
-    "scale": 1,
-    "rest": 3,
-    "speak": false,
-    "adult": false,
-    "desc": "线索更多、链条更长，加入「想法不等于事实」和多个人视角的推理。",
-    "len": "一次 6～8 站，约 12 分钟",
+    "tiers": true,
+    "desc": "生活里的小故事，三选一为主。先玩基础题；这一站走过一次后，可以自己切到「多想一步」：线索更多、链条更长，练「想法不等于事实」和不同人的视角。随时能切回来。",
+    "len": "一次 4～8 站，约 10～12 分钟",
     "track": "kid",
     "shells": true
   },

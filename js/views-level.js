@@ -1,6 +1,41 @@
 /* js/views-level.js · 关卡视图：RENDERERS、makePlay、renderLevel、子渲染与通关结果卡。
    经典脚本顺序加载，与 js/core.js 共享全局词法作用域；不要在此重复声明已有的顶层名字。 */
 
+/* ---------------------------------------------------------------- 两个人一起选
+   从当前这一题的选项里现取一组标签，两个人各挑一次，然后并排看差异。
+   不判对错、不进 play 的完成判定、不写存档；关掉面板就什么都不剩。 */
+function duoOptions(v) {
+  if (!v) return [];
+  const src = Array.isArray(v.options) ? v.options
+    : Array.isArray(v.items) ? v.items
+    : Array.isArray(v.rungs) ? v.rungs
+    : Array.isArray(v.words) ? v.words.map(w => ({ t: w }))
+    : Array.isArray(v.cards) ? v.cards.slice(0, 4)
+    : [];
+  return src.slice(0, 6).map(o => String((o && (o.t || o.n || o.label || o.text)) || '').slice(0, 24)).filter(Boolean);
+}
+function paintDuo() {
+  const slot = document.getElementById('duo-slot');
+  if (!slot) return;
+  const d = session.duo;
+  if (!d) { slot.innerHTML = ''; return; }
+  const labelOf = i => esc(d.opts[i] || '—');
+  let body;
+  if (d.step === 3) {
+    body = `<p class="duo-lead">两个人都选好了</p>
+      <div class="duo-result"><div><b>第一个人</b><span>${labelOf(d.first)}</span></div>
+        <div><b>第二个人</b><span>${labelOf(d.second)}</span></div></div>
+      <p class="duo-note">${d.first === d.second ? '这次挑到了同一个。' : '这次挑的不一样。'}同一件事，两个人可以不一样；想聊聊为什么也行，不想聊也可以。这里不判对错，也不会记下来。</p>
+      <div class="actions"><button class="btn btn-secondary" data-action="duo-close">收起，继续这一站</button></div>`;
+  } else {
+    body = `<p class="duo-lead">${d.step === 1 ? '第一个人先挑一个' : '换第二个人，也挑一个'}</p>
+      <div class="duo-opts">${d.opts.map((o, i) => `<button class="duo-opt" data-action="duo-pick" data-i="${i}">${esc(o)}</button>`).join('')}</div>
+      <p class="duo-note">只是两个人各自挑一次，不影响这一站的进度，也不会被保存。</p>
+      <div class="actions"><button class="btn-read" data-action="duo-close">不玩了，收起</button></div>`;
+  }
+  slot.innerHTML = `<div class="duo-panel">${body}</div>`;
+}
+
 /* ---------------------------------------------------------------- 各关渲染器（规模全部由数据驱动） */
 const RENDERERS = {
   weather(v) {
@@ -10,8 +45,8 @@ const RENDERERS = {
           <span class="weather-glyph" aria-hidden="true">${it.g}</span>
           <span class="weather-name">${esc(it.n)}</span>
           <span class="weather-sub">${esc(it.s)}</span></button>`).join('')}</div>
-      <div class="actions"><button class="btn btn-primary" data-action="weather-go" id="weather-go" disabled>带着它上岛</button>
-      <button class="btn btn-ghost" data-action="weather-go">直接出发</button></div>`;
+      <div class="actions"><button class="btn btn-primary" data-action="weather-go" id="weather-go">就这样出发</button></div>
+      <p class="weather-hint">天气只是随手一指，不选也能走；这个选择不会被保存。</p>`;
   },
   clue(v) {
     const opts = shuffled(withIndex(v.options));
@@ -208,9 +243,20 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
   clearAsyncTimers(); stopSpeech();
   session.view = 'level';
   const lv = lvOverride || currentLevel();
+  /* 6-12 岁合并档的难度不再由出生年份切：没走过的站先给基础层，
+     走过一次再到「多想一步」；用户手动切过就以手动为准。只在内存，不落盘。 */
+  const autoDepth = band().tiers && state.cleared.includes(lv.id) ? 2 : 1;
+  const depth = session.depth || autoDepth;
   /* 从急救页返回时沿用同一份进行态：不重新抽题、不清已选；
      呼吸计时器已被 clearAsyncTimers 停掉，把 running 归位即可。 */
-  play = resumePlay || makePlay(lv, lv.type === 'finale' ? {} : pickVariant(lv.id));
+  play = resumePlay || makePlay(lv, lv.type === 'finale' ? {} : pickVariant(lv.id, { depth }));
+  play.depth = resumePlay ? (resumePlay.depth || depth) : depth;
+  /* 「带回下一站」的实践卡只在下一站出现一次：取用后即清，不落盘、不计数。
+     从急救页返回时沿用同一份进行态，不重复消费。 */
+  const pocket = !resumePlay && session.pocket && session.pocket.from !== lv.id ? session.pocket : null;
+  if (!resumePlay) { session.pocket = null; session.duo = null; }
+  play.pocketShown = resumePlay ? (resumePlay.pocketShown || null) : pocket;
+  const duoOpts = !play.side && lv.type !== 'finale' ? duoOptions(play.v) : [];
   if (sideIndex !== undefined) {
     play.side = true;
     play.sideIndex = sideIndex;
@@ -225,19 +271,27 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : side ? `工作间 · ${esc(lv.time || '')} · 支线` : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
       <button class="btn-read" data-action="${side ? 'go-work' : 'go-map'}">← ${side ? '工作间' : '地图'}</button>
       ${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}
+      ${band().tiers && !side && lv.type !== 'finale'
+        ? `<button class="btn-read" data-action="set-depth" data-d="${depth === 1 ? 2 : 1}">${depth === 1 ? '想多想一步' : '回到基础题'}</button>` : ''}
+      ${duoOpts.length >= 2 ? '<button class="btn-read" data-action="duo-open">两个人一起选</button>' : ''}
       ${speakBtns}
     </div>
     <div class="level-head">
       <div class="level-kicker"><span class="eyebrow">${esc(lv.kind)}</span></div>
       <h2>${esc(lv.name)}</h2><p class="level-goal">${esc(lv.goal)}</p>
       ${conceptHeadline(lv)}
+      ${bridgeLine(lv, play.pocketShown)}
+      ${band().tiers && !side && lv.type !== 'finale'
+        ? `<p class="level-depth">${depth === 1 ? '基础题 · 先看清这件事' : '多想一步 · 线索更长，慢慢来'}</p>` : ''}
     </div>
+    <div id="duo-slot"></div>
     <div class="play-area">${RENDERERS[lv.type](v)}</div>
     <div id="feedback-slot" aria-live="polite"></div>
     <div class="actions" id="level-actions"></div>
     ${b.adult && lv.adult ? `<div class="adult-tip"><b>给大人：</b>${esc(lv.adult)}</div>` : ''}
   </div>`;
   afterRender(lv);
+  paintDuo();
   /* 完成态也可能从急救返回：把结果卡原样重画，保住「去下一站 / 回地图」两条路。
      卡片自己会滚到可见位置，这时就不再拉回页面顶部。 */
   const restoredResult = !!(play.done && play.result);
@@ -339,6 +393,18 @@ function conceptHeadline(lv) {
   if (lv.id === teachId) return `<span class="concept-line">概念 · ${esc(conceptName(c))}${req ? `　·　会用到：${esc(req)}` : ''}</span>`;
   return `<span class="concept-line">会用到 · ${esc(conceptName(c))}（在${teachHtml}学过）</span>`;
 }
+/* 站与站之间的桥：先写「上一站带走了什么」（来自本次打开里的一张实践卡），
+   再写概念层的一句承接。两者都只是阅读提示，不要求用户做过、不记录做没做。 */
+function bridgeLine(lv, pocket) {
+  const c = conceptOfLevel(lv.id);
+  if (!c || lv.type === 'finale') return '';
+  const parts = [];
+  if (pocket && pocket.text) {
+    parts.push(`<div class="bridge-row"><b>上一站带走的</b><span>${esc(pocket.text)}</span></div>`);
+  }
+  if (c.bridge) parts.push(`<div class="bridge-row"><b>这一站接着</b><span>${esc(c.bridge)}</span></div>`);
+  return parts.length ? `<div class="level-bridge">${parts.join('')}</div>` : '';
+}
 /* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
    这样以后新增题型时，即使直接把内容变量传进来，也不会执行成 HTML。 */
 function completeLevel(text) { completeLevelHtml(esc(text)); }
@@ -412,16 +478,23 @@ function completeLevelHtml(html) {
   if (lv.skill && !state.skills.includes(lv.skill)) state.skills.push(lv.skill);
   save();
   updateTopbar();
-  const micro = lv.type !== 'finale' && lv.num === 4
-    ? `<div class="micro-card" style="margin-top:12px">今日微行动：${esc(rand(MICRO_ACTIONS))}</div>` : '';
+  /* 岛末站带走的是与本站概念绑定的一个动作，不再是随机抽的通用微行动。
+     「带回下一站」只写内存，下一站的关卡页显示一次就清掉，不打卡、不计数。 */
+  const cDone = conceptOfLevel(lv.id);
+  const micro = lv.type !== 'finale' && lv.num === 4 && cDone && cDone.practice
+    ? `<div class="micro-card practice-card" style="margin-top:12px">
+         <div class="practice-lead"><b>这一站带走一个动作</b><span>${esc(cDone.practice)}</span></div>
+         <button class="btn-read" data-action="pocket-add" data-t="${esc(cDone.practice)}">带回下一站</button>
+       </div>` : '';
   const next = state.levelIndex + 1;
   const canNext = next < TOTAL && isUnlocked(next);
   const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一站 · ${esc(LEVELS[next].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-map">回到地图</button>
       <button class="btn btn-ghost" data-action="reroll">这站再玩一次</button>`;
-  /* 3-6 / 6-9 档不一次读六段说明：机制、规格与「生活里试试」折进「给大人看」，
-     孩子只看到一句话、收集与下一步；其余档位保持原来的完整顺序，一字不变。 */
-  const lightResult = band().id === 'a3' || band().id === 'a6';
+  /* 结果卡的详细度绑「当前这一题的深度」，不再绑年龄段：3-6 档、以及 6-12 档的基础层
+     只见一句话、收集与下一步，机制 / 规格 / 生活迁移折进「给大人看」；
+     切到「多想一步」或亲子 / 成年档，保持完整六行。 */
+  const lightResult = band().id === 'a3' || (band().tiers && (play.depth || 1) === 1);
   const adultRows = `${conceptRows(lv)}${lv.tryIt ? `<div class="result-row"><b>生活里试试</b><span>${esc(lv.tryIt)}</span></div>` : ''}`;
   const shortRows = `<div class="result-row"><b>小贴士</b><span>${esc(lv.tip)}</span></div>
         <div class="result-row"><b>收进图鉴</b><span>${esc(lv.card || '这一站')}　·　本领：${esc(lv.skill || '这一站')}</span></div>`;

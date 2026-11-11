@@ -1,7 +1,7 @@
-/* 心情闯关岛 v0.14.1 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.16.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
-   五档：3-6 / 6-9 / 9-12 / 亲子全年龄 / 成年
+   四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
    设计红线：情绪没有标准答案 / 不打分 / 不排名 / 不采集心情文本
    本地只保存：关卡进度、词卡（按轨）、本领、贝壳、岛屿装饰、年龄段与显示设置 */
 
@@ -15,7 +15,7 @@ const EXPORT_APP = 'mood-island';
 
 /* ---------------------------------------------------------------- 数据来源
    内容全在 content/ 下：bands.js / levels-kid*.js / levels-adult.js /
-   bank-*.js / bank-compose.js / levels-adult-work.js / library.js /
+   bank-*.js / bank-compose.js / levels-adult-work.js / library.js / meditate.js /
    dictionary.js / selfhelp.js / slowvars.js / help.js。
    这里是唯一入口；文件缺失时给出可读提示，不白屏。 */
 const MI = window.MI || {};
@@ -80,6 +80,16 @@ const DECOR = LIB.DECOR || [];
 const BOTTLES = LIB.BOTTLES || [];
 const RETREAT = LIB.RETREAT || [];
 const RETREAT_SAFETY = SAFETY_TEXT;
+/* 静修间 2.0：5 个练习族 × 2 档，数据在 content/meditate.js。
+   练习只负责步骤；机制与「什么时候不做」写在族上，避免每条重复。 */
+const MEDITATE = MI.meditate || {};
+const MD_FAMILIES = MEDITATE.families || [];
+const MD_PRACTICES = MEDITATE.practices || [];
+const MD_SCENES = MEDITATE.scenes || [];
+const MD_INTENTS = MEDITATE.intents || [];
+const MD_FAMILY_BY_ID = MD_FAMILIES.reduce((m, f) => { m[f.id] = f; return m; }, {});
+const MD_PRACTICE_BY_ID = MD_PRACTICES.reduce((m, p) => { m[p.id] = p; return m; }, {});
+const conceptOfMeditate = p => GLOSSARY_BY_ID[(MD_FAMILY_BY_ID[(p && p.family) || ''] || {}).concept || ''] || null;
 const DICTIONARY = MI.dictionary || [];
 /* 词典的组织方式也在数据里：主题分组、顺序与概念类型都不在逻辑里另写一份。 */
 const DICT_META = MI.dictionaryMeta || {};
@@ -106,7 +116,7 @@ const HELP_ACTIONS = HELP.actions || [];
 const HELP_NUMBERS = HELP.numbers || {};
 const HELP_KID = HELP.kid || {};
 const CONTENT_OK = !!(AGE_BANDS.length && KID.levels.length && ADULT.levels.length && HELP_ACTIONS.length
-  && Object.keys(BANK_COMPOSE).length && WORK.length);
+  && Object.keys(BANK_COMPOSE).length && WORK.length && MD_PRACTICES.length);
 
 /* 当前轨：儿童 / 亲子共用 kid 表，成年档走独立表。切档时 syncTrack() 重绑。
    轨道身份以 bands.js 的 track 字段为准，不硬编码档位 id；
@@ -138,8 +148,9 @@ for (const id of COMPOSE_LEVEL_IDS) {
   }
   COMPOSE_KEYS[id] = keys;
 }
-/* 字号既可能是用户手选的 3 档，也可能是档位自带的 scale；只有这些值会被接受 */
-const SCALE_VALUES = new Set([1, 1.15, 1.3].concat(AGE_BANDS.map(b => b.scale).filter(Number.isFinite)));
+/* 字号既可能是用户手选的 3 档，也可能是档位自带的 scale；只有这些值会被接受。
+   1.06 / 1.18 显式留一份：档位合并后若哪天调了 bands 的 scale，老存档里手动设过的字号仍不能被判为越界。 */
+const SCALE_VALUES = new Set([1, 1.06, 1.15, 1.18, 1.3].concat(AGE_BANDS.map(b => b.scale).filter(Number.isFinite)));
 /* skills 目前不分轨：两轨没有同名本领，回归会断言这一点。
    若以后要复用名字，必须先把 skills 拆成按轨结构并写迁移，否则会跨轨解锁。 */
 function trackOfBandId(id) {
@@ -178,12 +189,21 @@ const DEFAULT_STATE = {
    必须在 `let state = load()` 之前定义：migrate() 会用到它，const 晚于调用会落入 TDZ。 */
 const ID_REMAP = { '3-5': 'finale' };
 const remapIds = arr => arr.map(id => ID_REMAP[id] || id);
+/* 6-9 与 9-12 合并成 6-12 岁档后，旧存档 / 旧导出 JSON 里的 a9 仍要认得。
+   id 沿用 a6，是为了让主线进度、词卡、贝壳、seen 与 sideCleared 一个字段都不用迁移。 */
+const BAND_REMAP = { 'a9': 'a6' };
+const remapBand = id => (typeof id === 'string' ? (BAND_REMAP[id] || id) : null);
 let state = load();
 let play = {};
 let session = {
   clearedThisRun: 0, view: 'home', tip: '', navDir: '',
   mapScroll: 0, lastCleared: '', interrupted: false, retreatStep: -1,
-  helpFrom: 'home'
+  helpFrom: 'home',
+  /* 6-12 岁档的深度层：null 表示按「这站走过没有」自动决定，1 基础 / 2 多想一步。
+     与 pocket（带回下一站的实践卡）一样只活在这一次打开里，不写存档、不计数。 */
+  depth: null, pocket: null,
+  /* 「两个人一起选」的临时状态：两次选择 + 对照，不判对错、不写存档。 */
+  duo: null
 };
 let lastVariant = {};
 let helpWord = null;
@@ -196,6 +216,7 @@ let dictQuery = '';
 let dictKind = 'all';
 let shState = null;
 let shCat = 'all';
+let mdScene = 'all';
 let svVar = null;
 let svCat = 'all';
 let breathTimer = null;
@@ -302,7 +323,7 @@ function migrate(s) {
   const scale = Number.isFinite(settings.scale) && SCALE_VALUES.has(settings.scale) ? settings.scale : 1;
   return {
     version: SCHEMA_VERSION,
-    band: AGE_BANDS.some(b => b.id === s.band) ? s.band : null,
+    band: (() => { const id = remapBand(s.band); return AGE_BANDS.some(b => b.id === id) ? id : null; })(),
     cleared, awarded,
     cards: migrateCards(s.cards, { ...s, cleared, awarded }),
     skills: Array.isArray(s.skills) ? [...new Set(s.skills.filter(x => typeof x === 'string' && ALL_SKILLS.has(x)))] : [],

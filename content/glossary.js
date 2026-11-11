@@ -141,6 +141,8 @@ MI.glossary = [
 ];
 
 /* 概念关系层：每个概念依赖哪些更早的概念、在哪一站被教、在词典里能接着读哪几条。
+   bridge 是「上一站带走什么 → 这一站用它」的一句承接，practice 是与本站概念绑定的
+   一个可带走的动作（替代原来随机发的微行动），两轨共用同一份，不写存档、不计数。
    这些字段不写进上面每一条，是为了让「内容」与「关系」分开看；
    运行时由 js/core.js 建反向索引，scripts/lint-content.mjs 会校验：
    - requires 必须是真实概念，且不能成环；
@@ -151,22 +153,86 @@ MI.glossary = [
    都在解锁点之前教过，避免再次出现「用到但没教」。 */
 (() => {
   const links = {
-    notice:      { teach: ['1-1', 'A1-1'], requires: [], dicts: ['注意'] },
-    body:        { teach: ['1-2', 'A1-2'], requires: ['notice'], dicts: ['内感受', '具身认知'] },
-    intensity:   { teach: ['1-3', 'A1-3'], requires: ['notice', 'body'], dicts: ['情绪', '情绪调节'] },
-    granularity: { teach: ['1-4', 'A1-4'], requires: ['notice', 'intensity'], dicts: ['情绪粒度', '情绪'] },
-    breath:      { teach: ['2-1', 'A2-1'], requires: ['body', 'intensity'], dicts: ['正念', '情绪调节'] },
-    reframe:     { teach: ['2-2', 'A2-2'], requires: ['notice', 'granularity'], dicts: ['认知重评', '情绪调节'] },
-    chain:       { teach: ['2-3', 'A2-3'], requires: ['reframe', 'body'], dicts: ['反刍', '认知解离', '情绪ABC理论'] },
-    need:        { teach: ['2-4', 'A2-4'], requires: ['granularity', 'body'], dicts: ['马斯洛需求层次', '自我决定理论'] },
-    perspective: { teach: ['3-1', 'A3-1'], requires: ['notice', 'granularity'], dicts: ['观点采择', '心理理论'] },
-    evidence:    { teach: ['3-2', 'A3-2'], requires: ['perspective', 'notice'], dicts: ['确认偏差', '认知偏差'] },
-    express:     { teach: ['3-3', 'A3-3'], requires: ['need', 'perspective', 'evidence'], dicts: ['非暴力沟通', '我信息', '主动倾听'] },
-    review:      { teach: ['3-4', 'A3-4'], requires: ['notice', 'body', 'granularity'], dicts: ['提取练习', '间隔效应'], review: true },
-    control:     { teach: ['4-1', 'A4-1'], requires: ['reframe', 'need'], dicts: ['担忧', '焦虑'] },
-    anger:       { teach: ['4-2', 'A4-2'], requires: ['intensity', 'body'], dicts: ['情绪调节', '压力'] },
-    counter:     { teach: ['4-3', 'A4-3'], requires: ['reframe', 'perspective'], dicts: ['自我关怀', '接纳'] },
-    boundary:    { teach: ['4-4', 'A4-4'], requires: ['express', 'need'], dicts: ['边界', '非暴力沟通'] }
+    notice: {
+      teach: ['1-1', 'A1-1'], requires: [], dicts: ['注意'],
+      bridge: '这是第一站，不用先学会什么。只要留意一下「我现在有感觉」。',
+      practice: '今天随便挑一个时刻，在心里说一句「我现在有点……」，说不出词也没关系。'
+    },
+    body: {
+      teach: ['1-2', 'A1-2'], requires: ['notice'], dicts: ['内感受', '具身认知'],
+      bridge: '上一站认出「我有感觉」，这一站去找它是从哪儿看出来的：肩膀、呼吸、手心。',
+      practice: '停十秒，看看肩膀是松的还是紧的、手心是干还是潮，不用改变它。'
+    },
+    intensity: {
+      teach: ['1-3', 'A1-3'], requires: ['notice', 'body'], dicts: ['情绪', '情绪调节'],
+      bridge: '上一站找到了身体线索，这一站给这些线索一个大概的分量。',
+      practice: '把此刻最明显的一种感觉，放进「一点点 / 中等 / 很满」里的一格。'
+    },
+    granularity: {
+      teach: ['1-4', 'A1-4'], requires: ['notice', 'intensity'], dicts: ['情绪粒度', '情绪'],
+      bridge: '上一站把感受放上了刻度，这一站再给它一个更准的名字。',
+      practice: '把「我不太舒服」换成一个更具体的词，比如「有点闷」或「有点委屈」。'
+    },
+    breath: {
+      teach: ['2-1', 'A2-1'], requires: ['body', 'intensity'], dicts: ['正念', '情绪调节'],
+      bridge: '上一站把感觉说得更准了，这一站先不处理它，只陪着呼吸待一会儿。',
+      practice: '找一个不赶时间的空隙，慢慢呼三次气，比吸气长一点就行；头晕就停。'
+    },
+    reframe: {
+      teach: ['2-2', 'A2-2'], requires: ['notice', 'granularity'], dicts: ['认知重评', '情绪调节'],
+      bridge: '上一站让身体慢下来一点，这一站看看同一件事有没有另一种站得住的说法。',
+      practice: '挑一件今天有点在意的事，写出另一个同样站得住的解释，不用往好处说。'
+    },
+    chain: {
+      teach: ['2-3', 'A2-3'], requires: ['reframe', 'body'], dicts: ['反刍', '认知解离', '情绪ABC理论'],
+      bridge: '上一站换过一次镜头，这一站把感受、想法、动作和需要连成一条线。',
+      practice: '把刚才那件事拆成四行：我感觉到什么、我想到什么、我做了什么、我其实需要什么。'
+    },
+    need: {
+      teach: ['2-4', 'A2-4'], requires: ['granularity', 'body'], dicts: ['马斯洛需求层次', '自我决定理论'],
+      bridge: '上一站拆开了那条链，这一站看链条尽头：我其实在盼着什么。',
+      practice: '在「我有点烦」后面补半句：「大概是因为我盼着……」。'
+    },
+    perspective: {
+      teach: ['3-1', 'A3-1'], requires: ['notice', 'granularity'], dicts: ['观点采择', '心理理论'],
+      bridge: '上一站看清自己的需要，这一站试试同一件事在别人眼里是什么样。',
+      practice: '同一件事，替当时不在场的另一个人写一句话，猜错也没关系。'
+    },
+    evidence: {
+      teach: ['3-2', 'A3-2'], requires: ['perspective', 'notice'], dicts: ['确认偏差', '认知偏差'],
+      bridge: '上一站站到了别人的位置，这一站回来问一句：我看到的和我知道的，差在哪儿。',
+      practice: '把「他肯定是……」改成「我看到的是……」，只改这一句。'
+    },
+    express: {
+      teach: ['3-3', 'A3-3'], requires: ['need', 'perspective', 'evidence'], dicts: ['非暴力沟通', '我信息', '主动倾听'],
+      bridge: '上一站分清了观察与推测，这一站把「我」说出口，又不把对方推远。',
+      practice: '用「我看到…我觉得…我希望…」说一句，先不要求对方回应。'
+    },
+    review: {
+      teach: ['3-4', 'A3-4'], requires: ['notice', 'body', 'granularity'], dicts: ['提取练习', '间隔效应'], review: true,
+      bridge: '这一站不教新东西：把岛 1 认过的词凭记忆再取一次，看看留下了哪些。',
+      practice: '不看提示，凭记忆说出三个描写感受的词，想不起来就翻图鉴。'
+    },
+    control: {
+      teach: ['4-1', 'A4-1'], requires: ['reframe', 'need'], dicts: ['担忧', '焦虑'],
+      bridge: '上一站回看了学过的词，这一站把它们用在一件还没结果的事上。',
+      practice: '把现在惦记的事分两堆：今天能动的、只能等的；各写一件就够。'
+    },
+    anger: {
+      teach: ['4-2', 'A4-2'], requires: ['intensity', 'body'], dicts: ['情绪调节', '压力'],
+      bridge: '上一站分出了能做的和只能等的，这一站给火气也留一个刻度。',
+      practice: '给此刻的火气找一档，再挑那一档对应的一个小动作，做完就算结束。'
+    },
+    counter: {
+      teach: ['4-3', 'A4-3'], requires: ['reframe', 'perspective'], dicts: ['自我关怀', '接纳'],
+      bridge: '上一站学会了不急着给火气定性，这一站对「如果当时」也松一点。',
+      practice: '把「要是当时我……」改写成「当时我做了…，现在我在意的是…」。'
+    },
+    boundary: {
+      teach: ['4-4', 'A4-4'], requires: ['express', 'need'], dicts: ['边界', '非暴力沟通'],
+      bridge: '上一站把「如果当时」说完整了，这一站把话说向别人：我需要什么，到哪里为止。',
+      practice: '找一件不太想答应的小事，说一句「这个我先不接」，不需要补理由。'
+    }
   };
   MI.glossary.forEach(g => Object.assign(g, links[g.id] || {}));
 })();

@@ -16,13 +16,13 @@ function renderAgeGate() {
   stage.innerHTML = `<div class="view">
     <span class="eyebrow">第一步 · 之后随时能改</span>
     <h2 style="margin:12px 0 10px">先选一下，谁来玩</h2>
-    <p class="lead">不同年龄用的是不同题目：选项多少、线索长短、要不要读给你听，都会跟着变。前三档与亲子档共用一套站，成年档是单独的一套；两边进度各自保留，换档不会丢。</p>
+    <p class="lead">不同年龄用的是不同题目：选项多少、线索长短、要不要读给你听，都会跟着变。6-12 岁这一档先玩基础题，走过一次后可以随时切到「多想一步」。孩子与亲子档共用一套站，成年档是单独的一套；两边进度各自保留，换档不会丢。</p>
     <div class="age-grid">${AGE_BANDS.map(b =>
       `<button class="age-card ${b.id === 'adult' ? 'adult-card' : ''}" data-action="set-band" data-b="${b.id}" data-next="home">
         <span class="age-name">${esc(b.name)}</span><span class="age-tag">${esc(b.tag)}</span>
         <span class="age-desc">${esc(b.desc)}</span><span class="age-len">${esc(b.len)}${b.mindful ? ' · 含静修间' : ''}</span>
       </button>`).join('')}</div>
-    <p class="home-note">前四档面向孩子与亲子共玩；最后一项是给自己的，另有一间不打卡的静修间。拿不准就选中间那档，随时可以在「设置」里换。不会记录年龄，也不会上传任何信息。</p>
+    <p class="home-note">前三档面向孩子与亲子共玩；最后一项是给自己的，另有一间不打卡的静修间。拿不准就选 6-12 岁那档，随时可以在「设置」里换。不会记录年龄，也不会上传任何信息。</p>
   </div>`;
   updateTopbar();
   resetViewScroll();
@@ -83,6 +83,7 @@ function renderHome() {
         </div>
         <div class="home-shortcuts">
           <span class="muted">还没准备好上岛？</span>
+          ${isAdultTrack() ? '<button class="btn-read" data-action="open-retreat">1 分钟练习</button>' : ''}
           <button class="btn-read" data-action="open-dictionary">心理学词典</button>
           <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
           <button class="btn-read" data-action="open-slowvars">慢变量</button>
@@ -324,8 +325,8 @@ function renderMap() {
         </button>
         <button class="hub-card" data-action="${mindful ? 'open-retreat' : 'goto-band'}">
           <span class="hub-name">静修间</span>
-          <span class="hub-desc">五感锚定、给想法松绑、三分钟呼吸空间。</span>
-          <span class="hub-meta">${mindful ? `${RETREAT.length} 个练习 · 随时可停` : '成年档开放 · 现在可切换'}</span>
+          <span class="hub-desc">5 个练习族 × 2 档，或按此刻的场景挑一个。</span>
+          <span class="hub-meta">${mindful ? `${MD_PRACTICES.length + RETREAT.length} 个练习 · 不记录` : '成年档开放 · 现在可切换'}</span>
         </button>
       </div>
     </section>
@@ -442,6 +443,13 @@ function retreatCard(r, i) {
     <span class="retreat-len">${esc(r.minutes)} · 随时可停</span>
   </button>`;
 }
+function mdCard(p) {
+  return `<button class="retreat-card md-card" data-action="md-start" data-id="${esc(p.id)}">
+    <span class="retreat-name">${esc(p.name)}</span>
+    <span class="retreat-sub">${esc(p.sub)}</span>
+    <span class="retreat-len">${esc(p.minutes)} · 随时可停</span>
+  </button>`;
+}
 function renderRetreatList() {
   clearAsyncTimers(); stopSpeech();
   session.view = 'retreat'; session.navDir = ''; session.retreatStep = -1;
@@ -450,16 +458,46 @@ function renderRetreatList() {
     .filter(g => g.list.length);
   const other = indexed.filter(x => !RETREAT_GROUPS.includes(x.r.mood));
   if (other.length) groups.push({ m: '别的时刻', list: other });
+  const curScene = mdScene === 'all' || MD_SCENES.some(s => s.id === mdScene) ? mdScene : 'all';
+  mdScene = curScene;
+  const shorts = MD_PRACTICES.filter(p => p.dose === 1);
+  const nowList = (curScene === 'all' ? shorts : shorts.filter(p => (p.scenes || []).includes(curScene))).slice(0, 3);
+  const sceneBtns = [`<button class="md-scene ${curScene === 'all' ? 'on' : ''}" data-action="md-scene" data-s="all" aria-pressed="${curScene === 'all'}">都可以</button>`]
+    .concat(MD_SCENES.map(s => `<button class="md-scene ${curScene === s.id ? 'on' : ''}" data-action="md-scene" data-s="${esc(s.id)}" aria-pressed="${curScene === s.id}">${esc(s.name)}</button>`)).join('');
+  const familyCards = MD_FAMILIES.map(f => {
+    const one = MD_PRACTICES.find(p => p.family === f.id && p.dose === 1);
+    const three = MD_PRACTICES.find(p => p.family === f.id && p.dose === 3);
+    if (!one || !three) return '';
+    return `<div class="md-family">
+      <div class="md-family-head"><b>${esc(f.name)}</b><span>${esc(f.sub)}</span></div>
+      <div class="md-doses">
+        <button class="btn-read" data-action="md-start" data-id="${esc(one.id)}">短版 · ${esc(one.minutes)}</button>
+        <button class="btn-read" data-action="md-start" data-id="${esc(three.id)}">长版 · ${esc(three.minutes)}</button>
+      </div>
+    </div>`;
+  }).join('');
   stage.innerHTML = `<div class="view">
     <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
     <span class="eyebrow">静修间 · 不计进度</span>
     <h2 style="margin:12px 0 10px">不用完成什么，坐一会儿就好</h2>
-    <p class="lead">${RETREAT.length} 个可以随时停下的小练习，按此刻的状态挑一个就好。没有连续天数、没有提醒、不记录你做过几次，也不给任何评价。</p>
+    <p class="lead">${MD_FAMILIES.length} 个练习族、${MD_PRACTICES.length} 条引导，加上 ${RETREAT.length} 个情境练习。按此刻的场景挑一个，或者从最短的开始。没有连续天数、没有提醒、不记录你做过几次。</p>
+    ${MD_PRACTICES.length ? `<section class="md-now" aria-labelledby="md-now-title">
+      <h3 class="retreat-group-title" id="md-now-title">此刻</h3>
+      <div class="md-scenes" role="group" aria-label="按此刻的场景挑一个">${sceneBtns}</div>
+      <div class="md-now-grid">${nowList.map(mdCard).join('')}</div>
+    </section>` : ''}
     ${retreatSafety()}
-    ${groups.map(g => `<section class="retreat-group">
-      <h3 class="retreat-group-title">${esc(g.m)}</h3>
-      <div class="retreat-grid">${g.list.map(x => retreatCard(x.r, x.i)).join('')}</div></section>`).join('')}
-    <p class="home-note">这些练习参考了正念与认知取向里常见的通用思路，经过简化，只是一般性的放松方式，不是治疗，也不能代替专业帮助。</p>
+    ${MD_PRACTICES.length ? `<section class="md-families" aria-labelledby="md-fam-title">
+      <h3 class="retreat-group-title" id="md-fam-title">练习族 · 每个只教一个动作</h3>
+      <div class="md-family-grid">${familyCards}</div>
+    </section>` : ''}
+    <details class="md-more">
+      <summary>更多情境练习 · ${RETREAT.length} 个</summary>
+      ${groups.map(g => `<section class="retreat-group">
+        <h3 class="retreat-group-title">${esc(g.m)}</h3>
+        <div class="retreat-grid">${g.list.map(x => retreatCard(x.r, x.i)).join('')}</div></section>`).join('')}
+    </details>
+    <p class="home-note">这些练习参考了正念与认知取向里常见的通用思路，经过简化，只是一般性的放松方式，不是治疗，也不能代替专业帮助。可以睁眼，也可以随时停。</p>
   </div>`;
   updateTopbar();
   resetViewScroll();

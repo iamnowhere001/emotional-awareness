@@ -784,6 +784,71 @@ html.high-contrast .dict-nav a { border-width: 2px; }
 .dict-group-name { font-size: calc(.94rem * var(--scale)); font-weight: 600; color: var(--ink); }
 .dict-group-meta { font-size: calc(.72rem * var(--scale)); color: var(--ink-3); }
 .dict-group-count { margin-left: auto; font-size: calc(.74rem * var(--scale)); color: var(--ink-3); }
+
+/* 四层阅读结构：组目录 → 大组导语 → 主题导语 → 概念簇标题 → 卡片。
+   前三层都只由 dictionaryMeta 派生，这里只负责让层级在页面上真的看得见。 */
+.dict-nav-group {
+    flex: 1 1 240px; flex-direction: column; align-items: flex-start;
+    gap: 3px; border-radius: 12px; min-width: 0;
+}
+.dict-nav-group b { font-weight: 500; color: var(--ink); font-size: calc(.82rem * var(--scale)); }
+.dict-nav-group em {
+    font-style: normal; white-space: normal; line-height: 1.55;
+    font-size: calc(.72rem * var(--scale)); color: var(--ink-3);
+}
+.dict-nav-group span { align-self: flex-end; }
+.dict-start-path {
+    margin: 12px 0 4px; padding: 12px 14px; border-radius: 14px;
+    border: 1.5px solid var(--line-strong); background: var(--surface-2);
+}
+/* 一行 chips：起步路径是入口，不该像当年的 16 张概念卡那样把 162 条推到一屏之外。 */
+.dict-path-list {
+    list-style: none; margin: 10px 0 0; padding: 0;
+    display: flex; flex-wrap: wrap; gap: 6px;
+}
+.dict-path-btn {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+    padding: 5px 11px 5px 6px; border-radius: 999px;
+    border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink-2);
+}
+.dict-path-btn:hover, .dict-path-btn:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.dict-path-num {
+    flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent); font-size: calc(.7rem * var(--scale));
+}
+.dict-path-btn b {
+    font-weight: 500; color: var(--ink);
+    font-size: calc(.8rem * var(--scale)); white-space: nowrap;
+}
+.dict-group-lead {
+    grid-column: 1 / -1; margin: 20px 0 0; padding: 12px 14px; border-radius: 12px;
+    background: var(--accent-soft); border: 1px solid var(--line-strong);
+}
+.dict-group-lead[hidden] { display: none !important; }
+.dict-group-kicker { font-size: calc(.76rem * var(--scale)); color: var(--accent); font-weight: 500; }
+.dict-group-lead p {
+    margin: 5px 0 0; font-size: calc(.84rem * var(--scale));
+    color: var(--ink-2); line-height: 1.7;
+}
+.dict-cat-lead {
+    flex: 1 1 100%; font-weight: 400; font-size: calc(.78rem * var(--scale));
+    color: var(--ink-3); line-height: 1.65;
+}
+.dict-cluster-title {
+    grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px;
+    margin: 10px 0 0; padding: 0 4px 4px 10px; border-left: 2px solid var(--line-strong);
+    font-size: calc(.8rem * var(--scale)); font-weight: 500; color: var(--ink-2);
+}
+.dict-cluster-title[hidden] { display: none !important; }
+.dict-cluster-count {
+    margin-left: auto; font-weight: 400;
+    font-size: calc(.72rem * var(--scale)); color: var(--ink-3);
+}
+.dict-link-cross::after { content: " ↗"; color: var(--ink-3); }
+html.high-contrast .dict-path-btn,
+html.high-contrast .dict-nav-group { border-width: 2px; }
+
 .dict-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .dict-badges .dict-cat-badge { margin-top: 0; }
 .dict-kind-badge {
@@ -814,6 +879,8 @@ html.high-contrast .dict-kind-badge { border-width: 2px; }
     .dict-grid { grid-template-columns: 1fr; }
     .dict-start { padding: 13px; }
     .dict-group-title { padding: 9px 10px; }
+    .dict-path-btn { min-height: 38px; }
+    .dict-nav-group { flex-basis: 100%; }
     /* 主题/类型筛选在手机上横着滑，别让两组筛选把卡片推到两屏之后 */
     .dict-cats, .dict-kinds {
         display: flex; flex-wrap: nowrap; overflow-x: auto; padding: 2px 0 4px;
@@ -1281,6 +1348,35 @@ html[data-band="a3"] .step { height: 40px; }
 .space-dot.done { background: var(--accent); }
 .space-dot.current { background: var(--warm); }
 
+/* 静修间 2.0：此刻 / 练习族 / 更多情境练习 */
+.md-now { margin-top: 4px; }
+.md-scenes { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.md-scene {
+    appearance: none; border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font: inherit;
+    font-size: calc(.84rem * var(--scale)); min-height: 36px; cursor: pointer;
+}
+.md-scene:hover { border-color: var(--accent); color: var(--accent); }
+.md-scene.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.md-now-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0 18px; }
+.md-family-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 18px; }
+.md-family { border: 1.5px solid var(--line); border-radius: 14px; padding: 16px; background: var(--surface-2); }
+.md-family-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.md-family-head b { font-size: calc(1.02rem * var(--scale)); }
+.md-family-head span { font-size: calc(.82rem * var(--scale)); color: var(--ink-3); }
+.md-doses { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.md-doses .btn-read { min-height: 36px; }
+.md-more { margin: 6px 0 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.md-more > summary { cursor: pointer; color: var(--ink-2); font-size: calc(.9rem * var(--scale)); padding: 4px 0; }
+.md-more > summary:hover { color: var(--accent); }
+.md-intent { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--warm-soft); border: 1px solid #efd9b9; }
+.md-intent-kicker { font-size: calc(.78rem * var(--scale)); color: #7c5222; letter-spacing: .08em; }
+.md-intent p { margin: 6px 0 8px; font-size: calc(.95rem * var(--scale)); line-height: 1.7; }
+.md-step p { font-size: calc(1.08rem * var(--scale)); }
+.md-pacer { text-align: center; margin-top: 12px; }
+.md-pacer .breath-ring { width: 96px; height: 96px; margin: 4px auto 8px; border-width: 2px; }
+.md-pacer p { font-size: calc(.78rem * var(--scale)); color: var(--ink-3); line-height: 1.6; }
+
 /* ---------- 概念层：入口、机制与回链 ---------- */
 /* 概念不是新页面，是一层把站点 / 工具卡 / 词典接起来的索引；
    这里的样式只负责让入口可点、机制块可读、回链不抢正文。 */
@@ -1424,6 +1520,7 @@ html[data-band="a3"] .step { height: 40px; }
 
 @media (max-width: 640px) {
     .retreat-grid { grid-template-columns: 1fr; }
+    .md-now-grid, .md-family-grid { grid-template-columns: 1fr; }
     .progress-wrap { flex-wrap: nowrap; }
     .step-track { min-width: 0; flex: 1 1 auto; }
     #progress-text { width: auto; flex: none; }
@@ -1529,6 +1626,9 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 :root[data-theme="dark"]:not(.high-contrast) .micro-card,
 :root[data-theme="dark"]:not(.high-contrast) .talk-card,
 :root[data-theme="dark"]:not(.high-contrast) .space-card,
+:root[data-theme="dark"]:not(.high-contrast) .md-family,
+:root[data-theme="dark"]:not(.high-contrast) .md-intent,
+:root[data-theme="dark"]:not(.high-contrast) .md-scene,
 :root[data-theme="dark"]:not(.high-contrast) .sh-mech,
 :root[data-theme="dark"]:not(.high-contrast) .retreat-concept,
 :root[data-theme="dark"]:not(.high-contrast) .dict-mis,
@@ -1556,6 +1656,7 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 :root[data-theme="dark"]:not(.high-contrast) .storage-warning,
 :root[data-theme="dark"]:not(.high-contrast) .feedback.good,
 :root[data-theme="dark"]:not(.high-contrast) .feedback.gentle { color: var(--ink-2); }
+:root[data-theme="dark"]:not(.high-contrast) .md-intent-kicker { color: var(--warm); }
 /* accent / blue 在深色里是亮色，按钮上的白字要反过来才读得清。 */
 :root[data-theme="dark"]:not(.high-contrast) .btn-primary,
 :root[data-theme="dark"]:not(.high-contrast) .result-check,
@@ -1566,7 +1667,8 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 :root[data-theme="dark"]:not(.high-contrast) .dict-cat.on,
 :root[data-theme="dark"]:not(.high-contrast) .seg button.on { color: #10221c; }
 :root[data-theme="dark"]:not(.high-contrast) .btn-primary:hover:not(:disabled) { background: #a8e2c9; }
-/* 首站未选天气时主按钮是禁用的：亮度降一档即可，别让它变成看不清的深色块。 */
+/* 其他题型仍有禁用态的主按钮（如拼句未完成）：亮度降一档即可，别变成看不清的深色块。
+   首站天气按钮不再禁用，不选也能一次点走。 */
 :root[data-theme="dark"]:not(.high-contrast) .btn-primary:disabled {
     background: #33564a; color: #cfe8db; opacity: 1;
 }
@@ -1593,4 +1695,59 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 :root[data-theme="dark"]:not(.high-contrast) .step.current::before { background: var(--surface); }
 :root[data-theme="dark"]:not(.high-contrast) .step.done::before { background: var(--accent); border-color: var(--accent); }
 :root[data-theme="dark"]:not(.high-contrast) .step:hover:not(:disabled)::before { background: #3f5a4e; }
+
+/* ---------- 合并档：深度层 / 站间桥 / 带得走的动作 / 两个人一起选 ---------- */
+.level-bridge {
+    margin: 14px 0 0; padding: 10px 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--line); display: grid; gap: 6px;
+}
+.bridge-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px; align-items: baseline; line-height: 1.6;
+    font-size: calc(.84rem * var(--scale)); color: var(--ink-2);
+}
+.bridge-row b { color: var(--accent); font-weight: 500; }
+.bridge-row span { min-width: 0; overflow-wrap: anywhere; }
+.level-depth { margin: 10px 0 0; font-size: calc(.78rem * var(--scale)); color: var(--ink-3); }
+.weather-hint { margin: 10px 0 0; font-size: calc(.8rem * var(--scale)); color: var(--ink-3); }
+.practice-card { display: grid; gap: 10px; }
+.practice-lead { display: grid; gap: 4px; }
+.practice-lead b { color: var(--accent); font-weight: 500; }
+.practice-card .btn-read { justify-self: start; }
+.duo-panel {
+    margin: 0 0 16px; padding: 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--line);
+}
+.duo-lead { font-size: calc(.92rem * var(--scale)); font-weight: 500; margin-bottom: 10px; }
+.duo-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.duo-opt {
+    padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--ink); font: inherit;
+    font-size: calc(.86rem * var(--scale)); cursor: pointer;
+}
+.duo-opt:hover { border-color: var(--accent); }
+.duo-result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.duo-result > div {
+    padding: 10px; border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--line); display: grid; gap: 4px;
+}
+.duo-result b { font-size: calc(.76rem * var(--scale)); color: var(--ink-3); font-weight: 500; }
+.duo-note { font-size: calc(.82rem * var(--scale)); color: var(--ink-3); line-height: 1.65; }
+.duo-panel .actions { margin-top: 12px; }
+/* 点下去有回应：只做位移与描边，全局 reduce-motion 会自动关掉这些过渡。 */
+.weather-btn, .opt, .duo-opt, .chip, .memo-card {
+    transition: transform .16s ease, border-color .16s ease, background-color .16s ease;
+}
+.weather-btn:active, .opt:active, .duo-opt:active, .chip:active { transform: scale(.98); }
+.result-card { border-top: 3px solid var(--accent); }
+@media (max-width: 420px) { .duo-result { grid-template-columns: 1fr; } }
+:root[data-theme="dark"]:not(.high-contrast) .level-bridge,
+:root[data-theme="dark"]:not(.high-contrast) .duo-panel,
+:root[data-theme="dark"]:not(.high-contrast) .duo-result > div,
+:root[data-theme="dark"]:not(.high-contrast) .duo-opt,
+:root[data-theme="dark"]:not(.high-contrast) .practice-card {
+    background-color: var(--surface-2); border-color: var(--line); color: var(--ink-2);
+}
+:root[data-theme="dark"]:not(.high-contrast) .bridge-row b,
+:root[data-theme="dark"]:not(.high-contrast) .practice-lead b { color: var(--accent-soft); }
 
