@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.17.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.18.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
@@ -105,6 +105,9 @@ const SH_DISTORTIONS = SELFHELP.distortions || [];
 const SH_SAFETY = SAFETY_TEXT;
 const SLOWVARS = MI.slowvars || {};
 const SV_VARS = SLOWVARS.vars || [];
+/* 日常层与时间预算也全在数据里：视图只负责排布，不另存一份五件套清单。 */
+const SV_DAILY = SLOWVARS.daily || [];
+const SV_BUDGET = SLOWVARS.budget || [];
 const SV_PRACTICES = SLOWVARS.practices || [];
 const SV_TRAPS = SLOWVARS.traps || [];
 const SV_HORIZONS = SLOWVARS.horizons || [];

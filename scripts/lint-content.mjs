@@ -389,10 +389,16 @@ const SV_VARS = SLOW.vars || [];
 const SV_PRACTICES = SLOW.practices || [];
 const SV_TRAPS = SLOW.traps || [];
 const SV_HORIZONS = SLOW.horizons || [];
+/* 日常层与时间预算：内容是两层结构（方向层 + 日常层），但数量仍是显式契约。 */
+const SV_DAILY = SLOW.daily || [];
+const SV_BUDGET = SLOW.budget || [];
+const SV_MD_IDS = new Set(((MI.meditate || {}).practices || []).map(p => p.id));
 if (!MI.safety || !MI.safety.text) err('边界说明：缺 MI.safety.text（所有知识库共用一份）');
 if (SV_VARS.length !== 6) err(`慢变量：变量应为 6 个，当前 ${SV_VARS.length} 个`);
-if (SV_PRACTICES.length !== 12) err(`慢变量：练习卡应为 12 张，当前 ${SV_PRACTICES.length} 张`);
-if (SV_TRAPS.length !== 10) err(`慢变量：快变量陷阱应为 10 条，当前 ${SV_TRAPS.length} 条`);
+if (SV_DAILY.length !== 5) err(`慢变量：日常五件套应为 5 件，当前 ${SV_DAILY.length} 件`);
+if (SV_BUDGET.length !== 3) err(`慢变量：时间预算应为 3 档，当前 ${SV_BUDGET.length} 档`);
+if (SV_PRACTICES.length !== 20) err(`慢变量：练习卡应为 20 张，当前 ${SV_PRACTICES.length} 张`);
+if (SV_TRAPS.length !== 12) err(`慢变量：快变量陷阱应为 12 条，当前 ${SV_TRAPS.length} 条`);
 if (SV_HORIZONS.length !== 3) err(`慢变量：时间尺度应为 3 个，当前 ${SV_HORIZONS.length} 个`);
 const seenSvVar = new Set();
 const seenSvVarName = new Set();
@@ -418,8 +424,43 @@ SV_PRACTICES.forEach((p, i) => {
   if (!SV_VAR_IDS.has(p.v)) err(`${tag}: v「${p.v}」不是任何 vars[].id`);
   if (!Array.isArray(p.how) || p.how.length < 2) err(`${tag}: 至少需要 2 个步骤`);
   (p.how || []).forEach((x, xi) => { if (!x) err(`${tag}: 第 ${xi + 1} 步为空`); });
+  /* 可选 md：该卡在静修间里已有逐步引导时只给入口；指错 id 会得到一张点不动的卡。 */
+  if ('md' in p && !SV_MD_IDS.has(p.md)) err(`${tag}: md「${p.md}」不是任何静修间练习 id`);
 });
 SV_VAR_IDS.forEach(id => { if (!SV_PRACTICES.some(p => p.v === id)) err(`慢变量「${id}」没有练习卡`); });
+
+/* 日常五件套：名称去重、挂真实变量、剂量字段齐全、出口必须落到真实内容。
+   出口只允许两种（练习卡 / 静修间），别的一律报错——避免又长出一套「虚拟练习」。 */
+const seenSvDaily = new Set();
+SV_DAILY.forEach((d, i) => {
+  const tag = `日常五件套#${i} ${d.name || '(无名)'}`;
+  ['id', 'name', 'e', 'sub', 'when', 'why', 'cut', 'broken'].forEach(k => { if (!d[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (d.id && !/^[a-z][a-z0-9-]*$/.test(d.id)) err(`${tag}: id 应为小写字母 / 数字 / 连字符`);
+  if (d.id && seenSvDaily.has(d.id)) err(`${tag}: id 重复`);
+  if (d.name && seenSvVarName.has(d.name)) err(`${tag}: 与慢变量重名，两层会混淆`);
+  if (d.name && seenSvPractice.has(d.name)) err(`${tag}: 与练习卡重名，两层会混淆`);
+  seenSvDaily.add(d.id);
+  if (!SV_VAR_IDS.has(d.v)) err(`${tag}: v「${d.v}」不是任何 vars[].id`);
+  if (!d.dose || !d.dose.min || !d.dose.std) err(`${tag}: 缺 dose.min / dose.std（最小剂量与标准版）`);
+  const l = d.link || {};
+  if (l.kind === 'card') {
+    if (!seenSvPractice.has(l.id)) err(`${tag}: link.id「${l.id}」不是练习卡标题`);
+  } else if (l.kind === 'md') {
+    if (!SV_MD_IDS.has(l.id)) err(`${tag}: link.id「${l.id}」不是静修间练习 id`);
+  } else {
+    err(`${tag}: link.kind 只能是 card 或 md，当前「${l.kind}」`);
+  }
+});
+/* 时间预算：每档至少 2 张卡，且必须是真实卡片标题——点不动的入口比没有入口更糟。 */
+SV_BUDGET.forEach((b, i) => {
+  const tag = `时间预算#${i} ${b.t || '(无名)'}`;
+  ['t', 'd'].forEach(k => { if (!b[k]) err(`${tag}: 缺字段 ${k}`); });
+  if (!Array.isArray(b.picks) || b.picks.length < 2) err(`${tag}: picks 至少引用 2 张练习卡`);
+  (b.picks || []).forEach((t, ti) => {
+    if (!seenSvPractice.has(t)) err(`${tag}: picks[${ti}]「${t}」不是练习卡标题`);
+  });
+  if (b.picks && new Set(b.picks).size !== b.picks.length) err(`${tag}: picks 引用重复`);
+});
 const seenSvTrap = new Set();
 SV_TRAPS.forEach((t, i) => {
   const tag = `快变量陷阱#${i} ${t.t || '(无名)'}`;
@@ -820,7 +861,7 @@ const countOf = (bank) => Object.values(bank).reduce((s, a) => s + a.length, 0);
 const perBand = (bank, id) => (bank[id] || []).length;
 console.log(`儿童 / 亲子：${KID.levels.length} 站（含终章）· ${(KID.islands || []).length} 岛 · 变体 ${countOf(bankKid)} 组`);
 console.log(`成年：${ADULT.levels.length} 站（含终章）· ${(ADULT.islands || []).length} 岛 · 变体 ${countOf(bankAdult)} 组`);
-console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 冥想 ${MD_PS.length} 条 / ${MD_FAMS.length} 族 / ${MD_SCENES.length} 场景 · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_PRACTICES.length} 张练习 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱 · 急救入口 ${H_ACTS.length} 个动作 + ${H_ITEMS.length} 条求助`);
+console.log(`词卡释义 ${Object.keys(CODEX).length} 条 · 静修 ${retreat.length}（${MOODS.map(m => m + ' ' + retreat.filter(r => r.mood === m).length).join(' / ')}） · 冥想 ${MD_PS.length} 条 / ${MD_FAMS.length} 族 / ${MD_SCENES.length} 场景 · 漂流瓶 ${bottles.length} · 心理学词典 ${DICT.length} 条 · 自助工具 ${SH_TOOLS.length} 张 + ${SH_DISTS.length} 条扭曲 · 慢变量 ${SV_VARS.length} 个 + ${SV_DAILY.length} 件日常 + ${SV_PRACTICES.length} 张练习 + ${SV_BUDGET.length} 档预算 + ${SV_HORIZONS.length} 个尺度 + ${SV_TRAPS.length} 个陷阱 · 急救入口 ${H_ACTS.length} 个动作 + ${H_ITEMS.length} 条求助`);
 
 if (warns.length) {
   console.log(`\n提示 ${warns.length} 条：`);

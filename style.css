@@ -1032,8 +1032,68 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     display: block; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-strong);
     color: var(--ink-3); font-style: normal; font-size: calc(.78rem * var(--scale)); line-height: 1.6;
 }
+
+/* ---------- 日常五件套与时间预算 ---------- */
+/* 五件套是「今天做多少」那一层：剂量表比说明更显眼，所以 dt/dd 单独成块；
+   出口只有一条（练习卡或静修间），不做成可勾选的清单。 */
+.sv-daily { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.sv-daily-card {
+    padding: 16px 18px; border-radius: 14px; background: var(--surface);
+    border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px;
+}
+.sv-daily-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sv-daily-head b { font-size: calc(1.02rem * var(--scale)); font-weight: 600; }
+.sv-daily-head span {
+    font-size: calc(.72rem * var(--scale)); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-3);
+}
+.sv-daily-sub { margin: 0; color: var(--accent); font-size: calc(.82rem * var(--scale)); line-height: 1.6; }
+.sv-dose { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.sv-dose > div { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.sv-dose dt { color: var(--ink-3); font-size: calc(.72rem * var(--scale)); }
+.sv-dose dd { margin: 0; color: var(--ink); font-size: calc(.8rem * var(--scale)); line-height: 1.55; }
+.sv-dose > div:first-child dd { font-weight: 600; }
+.sv-daily-why { margin: 0; color: var(--ink-2); font-size: calc(.82rem * var(--scale)); line-height: 1.7; }
+.sv-daily-line {
+    margin: 0; padding-top: 8px; border-top: 1px dashed var(--line-strong);
+    color: var(--ink-2); font-size: calc(.79rem * var(--scale)); line-height: 1.65;
+}
+.sv-daily-line b {
+    display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: calc(.7rem * var(--scale)); font-weight: 600; white-space: nowrap;
+}
+.sv-daily-foot { margin-top: auto; padding-top: 10px; }
+.sv-daily-foot .btn-read, .sv-daily-foot .link-btn { margin-left: 0; font-size: calc(.8rem * var(--scale)); }
+.sv-panel-daily {
+    display: flex; flex-wrap: wrap; gap: 8px 8px; align-items: baseline;
+    margin: 14px 0 12px;
+    padding-top: 12px; border-top: 1px dashed var(--line-strong);
+}
+.sv-panel-daily b { color: var(--accent); font-size: calc(.78rem * var(--scale)); }
+.sv-panel-daily a {
+    padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-strong);
+    color: var(--ink-2); font-size: calc(.76rem * var(--scale)); text-decoration: none;
+}
+.sv-panel-daily a:hover { border-color: var(--accent); color: var(--accent); }
+.sv-budget { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); scroll-margin-top: 76px; }
+.sv-budget-title { margin-top: 0; font-size: calc(.96rem * var(--scale)); font-weight: 600; }
+.sv-budget-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.sv-budget-card {
+    padding: 12px 14px; border-radius: 12px; background: var(--surface-2);
+    border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px;
+}
+.sv-budget-card b { font-size: calc(.88rem * var(--scale)); }
+.sv-budget-card p { margin: 0; color: var(--ink-2); font-size: calc(.78rem * var(--scale)); line-height: 1.65; }
+.sv-budget-picks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
+.sv-budget-picks .link-btn { margin-left: 0; font-size: calc(.78rem * var(--scale)); }
+.sv-md-entry { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--blue-soft); border: 1px solid #cfe4ee; }
+.sv-md-entry b { color: var(--blue); font-size: calc(.8rem * var(--scale)); }
+.sv-md-entry p { margin: 4px 0 6px; color: var(--ink-2); font-size: calc(.8rem * var(--scale)); line-height: 1.65; }
+.sv-md-entry .btn-read { font-size: calc(.8rem * var(--scale)); }
 @media (max-width: 640px) {
     .sv-vars, .sv-horizons, .sv-traps { grid-template-columns: 1fr; }
+    .sv-daily, .sv-budget-grid { grid-template-columns: 1fr; }
 }
 
 /* ---------- finale ---------- */

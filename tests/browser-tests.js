@@ -272,17 +272,28 @@ window.addEventListener('load', function () {
     shCat = 'all'; shState = null; renderMap();
   });
 
-  test('慢变量 6 个变量 / 12 张练习 / 10 个陷阱 / 3 个尺度', () => {
+  test('慢变量 6 变量 / 5 件日常 / 20 张练习 / 12 个陷阱 / 3 个尺度', () => {
     A(SV_VARS.length === 6);
-    A(SV_PRACTICES.length === 12);
-    A(SV_TRAPS.length === 10);
+    A(SV_DAILY.length === 5);
+    A(SV_BUDGET.length === 3);
+    A(SV_PRACTICES.length === 20);
+    A(SV_TRAPS.length === 12);
     A(SV_HORIZONS.length === 3);
     A(SV_VARS.every(v => v.id && v.name && v.sub && v.lead && v.why && v.misuse && v.check && v.move && v.move.t && v.move.d));
     A(new Set(SV_VARS.map(v => v.id)).size === 6);
     A(SV_PRACTICES.every(p => p.t && p.e && p.v && p.when && p.note && Array.isArray(p.how) && p.how.length >= 2));
     A(SV_PRACTICES.every(p => SV_VARS.some(v => v.id === p.v)), '每张练习卡都要挂在合法变量上');
     A(SV_VARS.every(v => SV_PRACTICES.some(p => p.v === v.id)), '每个变量至少要有一张练习卡');
-    A(new Set(SV_PRACTICES.map(p => p.t)).size === 12);
+    A(new Set(SV_PRACTICES.map(p => p.t)).size === 20);
+    A(new Set(SV_DAILY.map(d => d.id)).size === 5, '五件套 id 不重复');
+    A(SV_DAILY.every(d => d.name && d.sub && d.when && d.why && d.cut && d.broken && d.dose && d.dose.min && d.dose.std));
+    A(SV_DAILY.every(d => SV_VARS.some(v => v.id === d.v)), '五件套要挂在真实慢变量上');
+    A(SV_DAILY.every(d => (d.link.kind === 'card' && SV_PRACTICES.some(p => p.t === d.link.id))
+      || (d.link.kind === 'md' && !!MD_PRACTICE_BY_ID[d.link.id])), '五件套的出口只能是练习卡或静修间练习');
+    A(SV_DAILY.every(d => !SV_VARS.some(v => v.name === d.name)), '五件套不应与慢变量重名');
+    A(SV_BUDGET.every(b => Array.isArray(b.picks) && b.picks.length >= 2
+      && b.picks.every(t => SV_PRACTICES.some(p => p.t === t))), '时间预算只能引用真实练习卡');
+    A(SV_PRACTICES.every(p => !('md' in p) || !!MD_PRACTICE_BY_ID[p.md]), '练习卡的 md 必须指向静修间练习');
     A(!SV_PRACTICES.some(p => SV_VARS.some(v => v.name === p.t)), '练习卡不应与慢变量重名');
     A(SV_HORIZONS.every(h => h.t && h.d && Array.isArray(h.asks) && h.asks.length >= 2 && Array.isArray(h.cards) && h.cards.length));
     A(SV_HORIZONS.every(h => h.cards.every(c => SV_PRACTICES.some(p => p.t === c))), '尺度引用必须指向真实练习卡');
@@ -304,22 +315,23 @@ window.addEventListener('load', function () {
     const catOn = [...document.querySelectorAll('#sv-cats .dict-cat.on')];
     A(catOn.length === 1 && catOn[0].dataset.c === 'health', '分类按钮应同步高亮');
     const cards = [...document.querySelectorAll('#sv-grid .sv-card')];
-    A(cards.length === 12);
+    A(cards.length === 20);
     let shown = cards.filter(c => !c.hidden);
-    A(shown.length === 3 && shown.every(c => c.dataset.cat === 'health'), '应只留健康底盘的 3 张卡');
-    A(document.getElementById('sv-count').textContent.includes('3 / 12'));
+    A(shown.length === 7 && shown.every(c => c.dataset.cat === 'health'), '应只留健康底盘的 7 张卡');
+    A(document.getElementById('sv-count').textContent.includes('7 / 20'));
+    A(document.querySelectorAll('#sv-panel .sv-panel-daily a').length === 2, '健康底盘应带出早起与运动');
     const craftCat = [...document.querySelectorAll('#sv-cats .dict-cat')].find(b => b.dataset.c === 'craft');
     A(!!craftCat);
     craftCat.click();
     A(svVar === 'health' && svCat === 'craft', '手动切分类不应清掉变量面板');
     A(panel.querySelectorAll('.sv-row').length === 4, '面板不应被重建');
     shown = cards.filter(c => !c.hidden);
-    A(shown.length === 2 && shown.every(c => c.dataset.cat === 'craft'));
+    A(shown.length === 4 && shown.every(c => c.dataset.cat === 'craft'));
     document.querySelector('[data-action="sv-var-clear"]').click();
     A(svVar === null && svCat === 'all');
-    A(cards.every(c => !c.hidden), '清选后应恢复 12 张');
+    A(cards.every(c => !c.hidden), '清选后应恢复 20 张');
     A(panel.querySelector('.sv-hint') !== null);
-    A(document.getElementById('sv-count').textContent.includes('12 张'));
+    A(document.getElementById('sv-count').textContent.includes('20 张'));
   });
   test('慢变量：非法 id 不改变状态、重新进入清空选择', () => {
     ACTIONS['open-slowvars']();
@@ -336,14 +348,48 @@ window.addEventListener('load', function () {
   test('慢变量：页内目录、尺度引用与无障碍', () => {
     ACTIONS['open-slowvars']();
     const nav = [...document.querySelectorAll('.sv-nav a')];
-    A(nav.length === 4);
+    A(nav.length === 6);
     A(nav.every(a => {
       const href = a.getAttribute('href') || '';
       return href.startsWith('#') && document.getElementById(href.slice(1));
     }), '目录每一项都要有对应锚点');
     A(document.querySelectorAll('#sv-horizons .sv-horizon-link').length === 3);
-    A(document.querySelectorAll('#sv-traps .sv-trap').length === 10);
+    A(document.querySelectorAll('#sv-traps .sv-trap').length === 12);
     A(document.getElementById('sv-panel').getAttribute('aria-live') === 'polite');
+    renderMap();
+  });
+  test('慢变量：日常五件套的出口只有练习卡与静修间', () => {
+    bandTo('adult'); ACTIONS['open-slowvars']();
+    const cards = [...document.querySelectorAll('#sv-daily .sv-daily-card')];
+    A(cards.length === 5, `五件套应有 5 张，实际 ${cards.length}`);
+    /* 每张卡都必须给到「最小剂量」与「断了怎么办」，否则它就只是一句口号 */
+    A(cards.every(c => c.querySelector('.sv-dose') && c.querySelector('.sv-daily-line')), '每张卡都要有剂量表与断点处理');
+    A(document.querySelectorAll('#sv-daily .sv-daily-head span[lang="en"]').length === 5);
+    /* 冥想那一件必须直达静修间已有的引导，而不是在慢变量里再写一份步骤 */
+    const mdBtn = document.querySelector('#sv-daily .sv-daily-card[data-daily="sit"] [data-action="md-start"]');
+    A(!!mdBtn && !!MD_PRACTICE_BY_ID[mdBtn.dataset.id], '冥想应直达静修间引导');
+    mdBtn.click();
+    A(session.view === 'retreat' && play && play.type === 'sit', '点「进静修间」应进入逐步引导');
+    ACTIONS['open-slowvars']();
+    /* 练习卡里那张「把注意力带回来」也要能进静修间（入口来自数据里的 md 字段） */
+    const cardBtn = document.querySelector('#sv-grid .dict-card[data-term="把注意力带回来"] [data-action="md-start"]');
+    A(!!cardBtn, '冥想练习卡应带静修间入口');
+    renderMap();
+  });
+  test('慢变量：时间预算点开对应的练习卡，被筛掉时自动退回全部', () => {
+    bandTo('adult'); ACTIONS['open-slowvars']();
+    A(document.querySelectorAll('#sv-budget .sv-budget-card').length === 3);
+    A(document.querySelectorAll('#sv-budget .sv-budget-picks .link-btn').length >= 6, '每档至少 2 个入口');
+    /* 先筛到「健康底盘」，再点一张属于「心性与注意力」的卡：应退回全部而不是点了没反应 */
+    document.querySelector('#sv-vars .sv-var[data-id="health"]').click();
+    A(svVar === 'health');
+    const pick = [...document.querySelectorAll('#sv-budget .sv-budget-picks .link-btn')]
+      .find(b => b.dataset.t === '把注意力带回来');
+    A(!!pick, '2 分钟档应包含「把注意力带回来」');
+    pick.click();
+    A(svVar === null && svCat === 'all', '目标卡被筛掉时应退回全部');
+    const opened = document.querySelector('#sv-grid .dict-card[data-term="把注意力带回来"]');
+    A(!!opened && opened.open, '预算入口应展开对应练习卡');
     renderMap();
   });
 
@@ -1086,12 +1132,12 @@ window.addEventListener('load', function () {
     A(!!card.querySelector('.sh-mech [data-action="dict-jump"][data-t="认知重评"]'), '应接词典');
     renderMap();
   });
-  test('慢变量 12 张按 6 个变量分区，入口按钮带张数', () => {
+  test('慢变量 20 张按 6 个变量分区，入口按钮带张数', () => {
     bandTo('adult'); ACTIONS['open-slowvars']();
     A(document.querySelectorAll('#sv-vars .sv-var').length === 6);
     A(document.querySelectorAll('#sv-vars .sv-var em').length === 6, '每个入口应标出练习张数');
-    A(document.querySelectorAll('#sv-practices .dict-group-title').length === 6, '12 张卡应按 6 个变量分区');
-    A(document.querySelectorAll('#sv-practices .dict-card').length === 12);
+    A(document.querySelectorAll('#sv-practices .dict-group-title').length === 6, '20 张卡应按 6 个变量分区');
+    A(document.querySelectorAll('#sv-practices .dict-card').length === 20);
     renderMap();
   });
   test('词典按概念读：16 个概念都能跳到已有词条', () => {
@@ -1105,12 +1151,12 @@ window.addEventListener('load', function () {
     A(card.textContent.includes('概念 · 观察与推测'), '词条卡应标出概念名');
     renderMap();
   });
-  test('两份 10 条清单互链，各管一层', () => {
+  test('两份清单互链：10 条想法层 / 12 条节奏层', () => {
     bandTo('adult'); ACTIONS['open-selfhelp']();
     A(document.querySelectorAll('#stage .sh-dist').length === 10);
     A(!!document.querySelector('#stage [data-action="open-slowvars"]'), '想法层应指向节奏层');
     ACTIONS['open-slowvars']();
-    A(document.querySelectorAll('#stage .sv-trap').length === 10);
+    A(document.querySelectorAll('#stage .sv-trap').length === 12);
     A(!!document.querySelector('#sv-traps [data-action="open-selfhelp"]'), '节奏层应指向想法层');
     renderMap();
   });
@@ -1614,6 +1660,10 @@ window.addEventListener('load', function () {
     A(svCols === 1, `慢变量卡在 390px 应为单列，实际 ${svCols} 列`);
     const svVarCols = getComputedStyle(document.getElementById('sv-vars')).gridTemplateColumns.split(' ').length;
     A(svVarCols === 1, `慢变量按钮在 390px 应为单列，实际 ${svVarCols} 列`);
+    const svDailyCols = getComputedStyle(document.getElementById('sv-daily')).gridTemplateColumns.split(' ').length;
+    A(svDailyCols === 1, `五件套在 390px 应为单列，实际 ${svDailyCols} 列`);
+    const svBudgetCols = getComputedStyle(document.querySelector('.sv-budget-grid')).gridTemplateColumns.split(' ').length;
+    A(svBudgetCols === 1, `时间预算在 390px 应为单列，实际 ${svBudgetCols} 列`);
     const svHorizonCols = getComputedStyle(document.querySelector('.sv-horizons')).gridTemplateColumns.split(' ').length;
     A(svHorizonCols === 1, `时间尺度在 390px 应为单列，实际 ${svHorizonCols} 列`);
     const svTrapCols = getComputedStyle(document.querySelector('.sv-traps')).gridTemplateColumns.split(' ').length;

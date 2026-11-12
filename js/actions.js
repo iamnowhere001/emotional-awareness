@@ -334,6 +334,24 @@ const ACTIONS = {
     svCat = c;
     syncSvSelection();
   },
+  /* 五件套 / 时间预算跳到某张练习卡：先确认那张卡在页面上。
+     如果它被当前筛选藏起来了，就退回「全部」再展开——不给「点了没反应」的死路。 */
+  'sv-card': (el) => {
+    const t = el.dataset.t;
+    const find = () => [...document.querySelectorAll('#sv-grid .dict-card')].find(c => c.dataset.term === t);
+    const first = find();
+    if (!first) return;
+    if (first.hidden) {
+      svVar = null; svCat = 'all';
+      syncSvSelection();
+    }
+    const card = find();
+    if (!card) return;
+    card.open = true;
+    card.scrollIntoView({ block: 'center' });
+    const summary = card.querySelector('summary');
+    if (summary) summary.focus({ preventScroll: true });
+  },
   'open-skills': () => openSkills(),
   'open-bottle': () => openBottle(),
   'bottle-choose': () => {
