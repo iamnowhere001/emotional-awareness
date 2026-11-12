@@ -309,6 +309,12 @@ DICT.forEach((d, i) => {
 });
 DICT_CATS.forEach(c => { if (!DICT.some(d => d.c === c)) err(`词典主题「${c}」没有词条`); });
 DICT_KIND_IDS.forEach(k => { if (!DICT.some(d => d.k === k)) err(`词典概念类型「${k}」没有词条`); });
+/* myth 的 m 要写「误解」，不要写成「建议」：0.17.0 审查发现，凡是 m 被写成行动建议的条目，
+   几乎都是稳健概念被错标成 myth。这条只兜住体例，真正的证据判断仍要人来做。 */
+const MYTH_NEG = /不是|不等于|不能|别把|别让|不该|并非|未必|不代表|不适合|是夸张|缺乏|没有/;
+DICT.filter(d => d.k === 'myth' && d.m && !MYTH_NEG.test(d.m)).forEach(d => {
+  warn(`词典「${d.t}」标为 myth，但 m 里没有否定式的误解句：先确认这是「概念被夸大」还是「概念本身成立」`);
+});
 /* 阅读顺序的结构锁：catMeta 给每个主题一句导语与若干概念簇，簇只声明起点，
    边界由词条数组顺序派生。起点必须真实存在、单调递增，且首簇起点就是主题首条。 */
 const DICT_CAT_META = DICT_META.catMeta || {};

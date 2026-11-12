@@ -49,6 +49,14 @@ window.addEventListener('load', function () {
     A(DICTIONARY.every(d => cats.includes(d.c) && kinds.includes(d.k)));
     A(DICTIONARY.every(d => !d.r || (d.r.length && d.r.every(r => r !== d.t && DICTIONARY.some(x => x.t === r)))));
   });
+  /* 0.17.0 审查的结论不能靠记忆维持：myth 是指「现象或工具本身被证据削弱」，
+     稳健概念（工作记忆、神经可塑性、确认偏差一类）被标成 myth 会误导读者。
+     这里只锁占比，不锁名单——加词条时不会误伤，但「什么都往 myth 里塞」会被拦下。 */
+  test('「容易误读」不吞掉稳健概念：myth 占比不超过两成', () => {
+    const myth = DICTIONARY.filter(d => d.k === 'myth');
+    A(myth.length / DICTIONARY.length <= 0.2, `myth ${myth.length} / ${DICTIONARY.length}，超过两成`);
+    A(myth.every(d => d.m), '每张 myth 卡都要写边界，不能只贴标签');
+  });
   test('心理学词典可搜索、可按分类筛选', () => {
     bandTo('a6');
     ACTIONS['open-dictionary']();
