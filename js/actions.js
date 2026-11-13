@@ -49,7 +49,10 @@ const ACTIONS = {
     session.navDir = 'forward'; closeModal();
     renderLevel(null, WORK[i], i);
   },
-  'go-work': () => { stopSpeech(); closeModal(); session.navDir = 'back'; renderWork(); },
+  'go-work': () => {
+    if (!isAdultTrack()) { session.tip = '工作间只在成年档开放，先回地图。'; renderMap(); return; }
+    stopSpeech(); closeModal(); session.navDir = 'back'; renderWork();
+  },
   'next-level': () => {
     if (play.side) {
       const i = play.sideIndex + 1;
@@ -113,6 +116,9 @@ const ACTIONS = {
       /* 与 routeTo 的回落规则保持一致：已有年龄段时，选档页只是换档过渡屏。 */
       session.helpFrom = session.view === 'gate' && state.band ? 'home' : (session.view || 'home');
       helpResume = session.view === 'level' ? play : null;
+      retreatResume = session.view === 'retreat'
+        ? { play, kind: play && play.type, id: (play && play.data && play.data.id) || '', index: play && play.retreatIndex }
+        : null;
     }
     renderHelp();
   },
@@ -122,10 +128,18 @@ const ACTIONS = {
     stopSpeech(); closeModal(); session.navDir = 'back';
     const from = session.helpFrom;
     const resume = helpResume;
+    const rr = retreatResume;
     helpResume = null;
+    retreatResume = null;
     if (from === 'map') renderMap();
     else if (from === 'level') renderLevel(resume);
-    else if (from === 'retreat') (session.retreatStep >= 0 ? renderRetreatPractice(session.retreatStep) : renderRetreatList());
+    else if (from === 'retreat') {
+      /* 静修 2.0 的 sit 把 retreatStep 记成 -1，单靠这个标量会退回列表；
+         按暂存的来源类型重建同一练习，沿用同一份 play 与步骤。 */
+      if (rr && rr.play && rr.kind === 'sit' && rr.id) renderMeditatePractice(rr.id, rr.play);
+      else if (rr && rr.play && Number.isInteger(rr.index)) renderRetreatPractice(rr.index, rr.play);
+      else renderRetreatList();
+    }
     else if (from === 'dict') renderDictionary();
     else if (from === 'selfhelp') renderSelfHelp();
     else if (from === 'slowvars') renderSlowVars();
@@ -363,8 +377,14 @@ const ACTIONS = {
   'close-modal': () => closeModal(),
 
   /* 静修间：不计进度、不打卡、不判对错 */
-  'open-retreat': () => { mdScene = 'all'; session.navDir = 'forward'; renderRetreatList(); },
-  'retreat-start': (el) => { session.navDir = 'forward'; renderRetreatPractice(Number(el.dataset.i)); },
+  'open-retreat': () => {
+    if (!band().mindful) { session.tip = '静修间只在成年档开放，先回地图。'; renderMap(); return; }
+    mdScene = 'all'; session.navDir = 'forward'; renderRetreatList();
+  },
+  'retreat-start': (el) => {
+    if (!band().mindful) { session.tip = '静修间只在成年档开放，先回地图。'; renderMap(); return; }
+    session.navDir = 'forward'; renderRetreatPractice(Number(el.dataset.i));
+  },
   'ground-pick': (el) => {
     const r = Number(el.dataset.row), i = Number(el.dataset.i);
     play.picks[r] = i;
@@ -407,6 +427,7 @@ const ACTIONS = {
     requestAnimationFrame(() => { try { window.scrollTo(0, y); } catch (e) { /* noop */ } });
   },
   'md-start': (el) => {
+    if (!band().mindful) { session.tip = '静修间只在成年档开放，先回地图。'; renderMap(); return; }
     const id = el.dataset.id;
     if (!MD_PRACTICE_BY_ID[id]) return;
     session.navDir = 'forward';

@@ -588,8 +588,15 @@ if (GATE_INDEX < 0) err(`工作间：workGate「${WORK_GATE_ID}」不是成年�
   if (ti < 0) { err(`工作间「${w.id}」的概念「${c.id}」没有成年轨教学站`); return; }
   if (ti > GATE_INDEX) err(`工作间「${w.id}」用到「${c.id}」，但它教在 ${t}，晚于解锁点 ${WORK_GATE_ID}`);
 });
-/* 两轨每个站点都应挂到一个概念，避免新站漏配后结果卡没有机制说明。 */
+/* 两轨每个站点都应挂到一个概念，避免新站漏配后结果卡没有机制说明。
+   终章是收束，不教新概念，刻意不挂：两轨 finale / A-finale 不参与这条检查。 */
+const FINALE_IDS = new Set(
+  [...(KID.levels || []), ...(ADULT.levels || [])]
+    .filter(l => l.type === 'finale')
+    .map(l => l.id)
+);
 conceptLevelIds.forEach(id => {
+  if (FINALE_IDS.has(id)) return;
   if (id && !GLOSSARY.some(g => (g.stations || []).includes(id))) warn(`关卡「${id}」没有挂到任何概念`);
 });
 
@@ -848,12 +855,61 @@ COMPOSE_IDS.forEach((id) => {
 });
 
 
-/* ---------- 红线词 ---------- */
+/* ---------- 红线词 ----------
+   不再对整份 MI 做裸子串匹配：那会把「不是诊断」「心理治疗」（词典词条名）、
+   「排名什么时候出」（关卡题干）这类合法语境也算成固定噪声。
+   改成逐次命中看上下文：只有「否定 / 免责语境」或「已登记白名单」才放过，
+   评分 / 疗效 / 诊断的正向语境仍照常报。末尾的自检反证检测没有被放宽。 */
 const RED = ['得分率', '分数', '排名', '正确率', '治疗', '疗效', '诊断', '抑郁症', '焦虑症', '量表', '障碍'];
 const blob = JSON.stringify(MI);
-RED.forEach((w) => {
-  const n = blob.split(w).length - 1;
-  if (n) warn(`出现「${w}」${n} 次，确认语境没有评分 / 诊断 / 疗效暗示`);
+/* 已人工确认的合法专名 / 题干：只是恰好含红线词，不是评分或诊断暗示。
+   '心理治疗' 是词典词条名，也覆盖 r 关联与 catMeta 起点里的引用；
+   '排名什么时候出' 是 sort 关卡里「在意排名」的念头，不是给玩家排名。 */
+const RED_WHITELIST = ['心理治疗', '排名什么时候出'];
+/* 否定 / 免责句式：红线词前紧邻这些标记，说明是在声明「这里不做诊断 / 不是治疗」。 */
+const NEG_BEFORE = /(?:不是|并非|不等于|不代表|不提供|不做|不用于|不能替代|不能代替|别把)$/;
+/* 科普澄清：如「临床诊断不是一回事」，否定落在红线词之后。 */
+const NEG_AFTER = /^(?:不是一回事|不等于|并非|不能替代|不能代替)/;
+/* 这次命中是否正好落在某个已登记白名单短语内部（不是「附近出现过」就算）。 */
+function inWhiteList(text, word, at) {
+  return RED_WHITELIST.some((phrase) => {
+    const p = phrase.indexOf(word);
+    if (p < 0) return false;
+    let from = 0, idx;
+    while ((idx = text.indexOf(phrase, from)) !== -1) {
+      if (at === idx + p) return true;
+      from = idx + 1;
+    }
+    return false;
+  });
+}
+/* 可放过的合法语境：白名单短语，或紧邻的否定 / 免责 / 澄清句式。 */
+function benignHit(text, word, at) {
+  if (inWhiteList(text, word, at)) return true;
+  const before = text.slice(Math.max(0, at - 6), at);
+  const after = text.slice(at + word.length, at + word.length + 6);
+  return NEG_BEFORE.test(before) || NEG_AFTER.test(after);
+}
+/* 扫出所有「真正可疑」的命中（白名单与否定语境之外的）。 */
+function redFlags(text) {
+  const hits = [];
+  RED.forEach((w) => {
+    let at = -1;
+    while ((at = text.indexOf(w, at + 1)) !== -1) {
+      if (!benignHit(text, w, at)) hits.push(w);
+    }
+  });
+  return hits;
+}
+const tally = new Map();
+redFlags(blob).forEach((w) => tally.set(w, (tally.get(w) || 0) + 1));
+tally.forEach((n, w) => warn(`出现「${w}」${n} 次，确认语境没有评分 / 诊断 / 疗效暗示`));
+/* 自检：正向语境的敏感词必须仍被判为可疑，防止白名单 / 否定式放宽后漏报。
+   样本故意不带任何否定词，逐个都应由 redFlags 抓到。 */
+const POSITIVE = '按得分率算分数、正确率排名，疗效显著，可以诊断抑郁症和焦虑症，用量表筛查障碍。';
+const caught = new Set(redFlags(POSITIVE));
+['得分率', '分数', '正确率', '疗效', '诊断'].forEach((w) => {
+  if (!caught.has(w)) err(`红线词自检失败：「${w}」在正向语境没被检出，检测被削弱了`);
 });
 
 /* ---------- 汇总 ---------- */

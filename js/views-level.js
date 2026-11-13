@@ -58,11 +58,14 @@ const RENDERERS = {
   },
   slider(v) {
     const n = v.replies.length, mid = Math.ceil(n / 2), labels = sliderLabels(v);
+    /* 从急救页返回会复用同一份 play：滑块与读数必须跟着 play.value 走，
+       不能固定回 mid，否则显示档位与提交时采用的档位不一致。 */
+    const value = Number.isInteger(play.value) && play.value >= 1 && play.value <= n ? play.value : mid;
     return `${scenarioBox('场景', v.scenario)}
       <p class="prompt">${esc(v.question)}</p>
       <div class="thermo">
-        <div class="thermo-value" id="thermo-value">${mid} · ${labels[mid - 1]}</div>
-        <input type="range" id="thermo" min="1" max="${n}" step="1" value="${mid}" aria-label="感受强度，1 到 ${n}">
+        <div class="thermo-value" id="thermo-value">${value} · ${labels[value - 1]}</div>
+        <input type="range" id="thermo" min="1" max="${n}" step="1" value="${value}" aria-label="感受强度，1 到 ${n}">
         <div class="thermo-labels"><span>1 · ${labels[0]}</span><span>${mid} · ${labels[mid - 1]}</span><span>${n} · ${labels[n - 1]}</span></div>
       </div>
       <p class="muted" style="margin-top:12px">这一关没有正确档位。选完会告诉你，这个刻度下的感受通常长什么样。</p>
@@ -251,6 +254,14 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
      呼吸计时器已被 clearAsyncTimers 停掉，把 running 归位即可。 */
   play = resumePlay || makePlay(lv, lv.type === 'finale' ? {} : pickVariant(lv.id, { depth }));
   play.depth = resumePlay ? (resumePlay.depth || depth) : depth;
+  /* 记忆翻牌的两张不匹配牌靠 850ms 定时器解锁；从急救页返回时 clearAsyncTimers()
+     已经把定时器收掉，这里必须手动复位，否则 play.lock 永远为 true、那两张牌也永远翻着，
+     整局点不动。play.matched 保留，不丢已经配好对的进度。 */
+  if (resumePlay && play.type === 'memory') {
+    play.lock = false;
+    play.first = null;
+    play.open = new Set();
+  }
   /* 「带回下一站」的实践卡只在下一站出现一次：取用后即清，不落盘、不计数。
      从急救页返回时沿用同一份进行态，不重复消费。 */
   const pocket = !resumePlay && session.pocket && session.pocket.from !== lv.id ? session.pocket : null;
@@ -425,6 +436,13 @@ function paintResultCard(payload) {
     </div>`;
     try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
   }
+  /* 结果卡出现后，toolbar 里「这一题进行中」的按钮要收掉：否则点 duo-open / set-depth
+     只会静默 return 或重抽掉结果卡，看起来像坏掉。下一步 / 回地图由结果卡自己给。
+     只限定 .toolbar，不动结果卡里的同名「这站再玩一次」按钮。 */
+  document.querySelectorAll('#stage .toolbar [data-action="duo-open"], #stage .toolbar [data-action="set-depth"], #stage .toolbar [data-action="reroll"]').forEach(b => {
+    b.disabled = true;
+    b.hidden = true;
+  });
   const actions = document.getElementById('level-actions');
   if (actions) actions.innerHTML = '';
 }

@@ -41,6 +41,10 @@ const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
 const roadmap = readFileSync(join(root, 'ROADMAP.md'), 'utf8');
 const css = readFileSync(join(root, 'style.css'), 'utf8');
 const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
+/* 用例数锁：只数行首的 test( 注册调用，口径与 scripts/check-consistency.mjs 一致。
+   宽松的 \btest\( 会把断言里的 .test(...) 与注释算进去（实测 154 vs 153）。 */
+const browserTestsSrc = readFileSync(join(root, 'tests/browser-tests.js'), 'utf8');
+const registeredTests = (browserTestsSrc.match(/^[ \t]*test\s*\(/gm) || []).length;
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
   'bank-kid-1-3', 'bank-kid-island4', 'bank-adult-1-3', 'bank-adult-island4',
@@ -302,6 +306,14 @@ S('新增样式类都在视图里有对应渲染',
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();
 if (!chrome) {
+  /* 无 Chrome 时不能让 70 项源码检查白跑：先把源码结论逐项给出来再退出。
+     浏览器部分未运行，退出码仍为 1，CI 能感知「测不全」；
+     只看源码结论时也可以单独跑 npm run doctor。 */
+  const lines = staticChecks.map(c => `${c.ok ? 'PASS' : 'FAIL'} · [源码] ${c.name}`);
+  const failed = lines.filter(l => l.startsWith('FAIL')).length;
+  if (verbose) lines.forEach(l => console.log('  ' + l));
+  else lines.filter(l => l.startsWith('FAIL')).forEach(l => console.log('  ✗ ' + l));
+  console.log(`源码检查 ${staticChecks.length} 项（未运行浏览器）：${lines.length - failed} PASS / ${failed} FAIL`);
   console.error('✗ 找不到 Chrome / Chromium。设置 CHROME_PATH 指向可执行文件后重试。');
   process.exit(1);
 }
@@ -385,8 +397,15 @@ const lines = [
   ...staticChecks.map(c => `${c.ok ? 'PASS' : 'FAIL'} · [源码] ${c.name}`),
   ...result.lines
 ];
+/* 用例数锁：注入页里若有裸 return 或异常，后面的 test() 不会注册，
+   而 verdict 只统计已注册用例的 ok —— PASS 数会被静默压低却仍报「0 FAIL」。 */
+const executedTests = result.lines.length;
+if (executedTests !== registeredTests) {
+  console.error(`✗ 用例数锁：静态注册 ${registeredTests} 条，实际执行 ${executedTests} 条。测试代码可能提前 return 或抛错，本次 PASS 数不可信。`);
+  process.exit(1);
+}
 const failed = lines.filter(l => l.startsWith('FAIL')).length;
 if (verbose) lines.forEach(l => console.log('  ' + l));
 else lines.filter(l => l.startsWith('FAIL')).forEach(l => console.log('  ✗ ' + l));
-console.log(`回归 ${result.lines.length} 项 + 源码检查 ${staticChecks.length} 项：${lines.length - failed} PASS / ${failed} FAIL`);
+console.log(`回归 ${executedTests} 项（注册 ${registeredTests} / 执行 ${executedTests}）+ 源码检查 ${staticChecks.length} 项：${lines.length - failed} PASS / ${failed} FAIL`);
 process.exit(failed ? 1 : 0);

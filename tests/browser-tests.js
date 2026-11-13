@@ -1175,7 +1175,11 @@ window.addEventListener('load', function () {
     ['5 样', '4 样', '3 种', '2 种', '1 种'].forEach(k => A(move.d.includes(k), `状态动作缺「${k}」`));
     const ground = HELP_ACTIONS.find(a => a.id === 'ground');
     A(ground && ground.tag === '急诊版', '急救的落地动作应标急诊版');
-    A(ground.lead.includes('精简形态'), '应说明这是精简形态');
+    /* 0.19 文案把「精简形态」改写成「急诊版」：三步 = 落地 / 呼吸 / 看到 3 样东西，
+       完整的五步在工具箱。断言锁语义与三件事都在，不再绑死某四个字。 */
+    A(ground && ground.lead.includes('急诊版'), '应说明这是急诊版');
+    ['先落地', '呼吸', '3 样东西'].forEach(k =>
+      A(ground.lead.includes(k), `急诊版文案缺「${k}」`));
   });
   test('选档页进急救：已有档回首页，无档回选档页', () => {
     bandTo('adult');
@@ -1843,6 +1847,127 @@ window.addEventListener('load', function () {
     bandTo('all'); A(!band().tiers);
     bandTo('adult'); A(!band().tiers);
     bandTo('a6');
+  });
+
+  /* ---------- 0.19.0 运行时修复回归 ---------- */
+  test('0.19 · 非法 percent-encoding 的 hash 不抛错、回落到首页', () => {
+    bandTo('a6'); state.cleared = []; save(); renderHome();
+    A(parseHash('#/level/%').view === 'bad', '坏编码应判为 bad 而不是抛 URIError');
+    A(parseHash('#/level/%zz').view === 'bad');
+    A(parseHash('#/level/%E0%A4%A').view === 'bad');
+    routeTo(parseHash('#/level/%'));
+    A(session.view === 'home' && location.hash === '#/home', '应落到首页并改写地址');
+    A(stage.innerHTML.length > 100, '首屏不应空白（冷启动白屏回归）');
+  });
+  test('0.19 · 坏地址纠正走 replaceState，不往历史栈压记录', () => {
+    bandTo('a6'); state.cleared = []; save(); renderHome();
+    const before = history.length;
+    routeTo(parseHash('#/nope'));
+    A(session.view === 'home' && location.hash === '#/home');
+    A(history.length === before, `坏地址纠正不该增加历史记录（${before} → ${history.length}）`);
+    routeTo(parseHash('#/level/%-bad'));
+    A(history.length === before, '坏编码地址纠正同样不该入栈');
+  });
+  test('0.19 · 儿童档慢变量页不渲染静修间入口，直接调动作也被挡', () => {
+    bandTo('a6'); ACTIONS['open-slowvars']();
+    A(document.querySelectorAll('[data-action="md-start"]').length === 0,
+      '低龄档不应渲染静修间入口（UI 与动作层门禁一致）');
+    ACTIONS['md-start']({ dataset: { id: MD_PRACTICES[0].id } });
+    A(session.view === 'map', `应回到地图，实际 ${session.view}`);
+    A(!play || play.type !== 'sit', '不应进入 sit 练习');
+    ACTIONS['open-retreat']();
+    A(session.view === 'map', 'open-retreat 在低龄档也应回到地图');
+    bandTo('adult'); ACTIONS['open-slowvars']();
+    A(document.querySelectorAll('[data-action="md-start"]').length > 0, '成年档应保留静修间入口');
+    renderMap();
+  });
+  test('0.19 · 记忆翻牌中途进急救，返回后仍能继续翻牌', () => {
+    bandTo('a6'); session.depth = null;
+    const idx = byType('memory');
+    A(idx >= 0, '应能找到记忆翻牌关');
+    state.levelIndex = idx; renderLevel();
+    A(play.type === 'memory');
+    let a = -1, b = -1;
+    for (let i = 0; i < play.deck.length && b < 0; i++) {
+      for (let j = i + 1; j < play.deck.length; j++) {
+        if (play.deck[i].pair !== play.deck[j].pair) { a = i; b = j; break; }
+      }
+    }
+    A(a >= 0 && b >= 0, '应能找到一对不匹配的牌');
+    ACTIONS['memo-flip']({ dataset: { i: String(a) } });
+    ACTIONS['memo-flip']({ dataset: { i: String(b) } });
+    A(play.lock === true, '不匹配时应进入锁定态');
+    ACTIONS['open-help']();
+    A(session.view === 'help', '应进入急救页');
+    ACTIONS['help-close']();
+    A(session.view === 'level' && play.type === 'memory', '应回到同一关');
+    A(play.lock === false, '返回后必须解锁，否则整局点不动');
+    A(play.open.size === 0, '两张不匹配牌应盖回，不该永远翻着');
+    const next = [...document.querySelectorAll('#stage .memo-card')]
+      .find(c => !c.disabled && !play.open.has(Number(c.dataset.i)));
+    A(!!next, '应有可翻的牌');
+    const before = play.open.size;
+    ACTIONS['memo-flip']({ dataset: { i: next.dataset.i } });
+    A(play.open.size === before + 1, '应能继续翻牌');
+  });
+  test('0.19 · slider 从急救返回后显示值与 play.value 一致', () => {
+    bandTo('a6'); session.depth = null;
+    const idx = byType('slider');
+    A(idx >= 0, '应能找到温度计关');
+    state.levelIndex = idx; renderLevel();
+    A(play.type === 'slider');
+    const input = document.getElementById('thermo');
+    A(!!input, '应渲染滑块');
+    const target = play.v.replies.length;
+    input.value = String(target);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    A(play.value === target, '拖动应更新 play.value');
+    ACTIONS['open-help']();
+    ACTIONS['help-close']();
+    A(session.view === 'level' && play.type === 'slider', '应回到同一关');
+    const shown = document.getElementById('thermo');
+    A(Number(shown.value) === play.value, `滑块显示 ${shown.value} 应与 play.value ${play.value} 一致`);
+    A(document.getElementById('thermo-value').textContent.includes(String(play.value)), '读数也应一致');
+  });
+  test('0.19 · 通关后 toolbar 的双人按钮被禁用，结果卡按钮保留', () => {
+    bandTo('a6'); session.depth = null;
+    state.levelIndex = 0; renderLevel();
+    const duo = document.querySelector('#stage .toolbar [data-action="duo-open"]');
+    A(!!duo && !duo.disabled, '未通关时双人按钮可用');
+    completeLevel('回归用通关文案');
+    A(play.done === true);
+    const after = document.querySelector('#stage .toolbar [data-action="duo-open"]');
+    A(!!after && after.disabled, '通关后双人按钮应禁用');
+    A(!document.querySelector('.duo-panel'), '不该出现双人面板');
+    ACTIONS['duo-open']();
+    A(session.duo === null, '通关后直接调 duo-open 也不该开启面板');
+    A(!!document.querySelector('#feedback-slot [data-action="reroll"]'), '结果卡里的「这站再玩一次」仍要保留');
+  });
+  test('0.19 · sit 练习中途进急救，返回仍停在同一练习同一步', () => {
+    bandTo('adult');
+    const p = MD_PRACTICES.find(x => x.steps && x.steps.length >= 3) || MD_PRACTICES[0];
+    A(!!p);
+    ACTIONS['md-start']({ dataset: { id: p.id } });
+    A(session.view === 'retreat' && play.type === 'sit', '应进入 sit 引导');
+    ACTIONS['md-next']();
+    const step = play.step;
+    A(step === 1, '应前进一步');
+    ACTIONS['open-help']();
+    A(session.view === 'help' && session.helpFrom === 'retreat');
+    ACTIONS['help-close']();
+    A(session.view === 'retreat' && play.type === 'sit', '应回到同一练习而不是列表');
+    A(play.step === step, `应停在同一步 ${step}，实际 ${play.step}`);
+    A(!!document.getElementById('sit-body'), '练习容器应重建');
+    renderMap();
+  });
+  test('0.19 · 慢变量页仅低龄档显示年龄适配提示', () => {
+    bandTo('a6'); ACTIONS['open-slowvars']();
+    A(stage.textContent.includes('这一页更多写给大人；孩子可以先去玩主线'), '低龄档应显示提示');
+    bandTo('adult'); ACTIONS['open-slowvars']();
+    A(!stage.textContent.includes('这一页更多写给大人'), '成年档不应显示提示');
+    bandTo('all'); ACTIONS['open-slowvars']();
+    A(!stage.textContent.includes('这一页更多写给大人'), '亲子档不应显示提示');
+    renderMap();
   });
 
   bandTo('a6');

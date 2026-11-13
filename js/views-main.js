@@ -325,7 +325,7 @@ function renderMap() {
         </button>
         <button class="hub-card" data-action="${mindful ? 'open-retreat' : 'goto-band'}">
           <span class="hub-name">静修间</span>
-          <span class="hub-desc">5 个练习族 × 2 档，或按此刻的场景挑一个。</span>
+          <span class="hub-desc">${MD_FAMILIES.length} 个练习族 × 2 档，或按此刻的场景挑一个。</span>
           <span class="hub-meta">${mindful ? `${MD_PRACTICES.length + RETREAT.length} 个练习 · 不记录` : '成年档开放 · 现在可切换'}</span>
         </button>
       </div>

@@ -96,7 +96,11 @@ function parseHash(hash) {
   if (!parts.length) return { view: null };
   if (parts[0] === 'level') {
     if (parts.length < 2) return { view: 'bad' };
-    return { view: 'level', id: decodeURIComponent(parts.slice(1).join('/')) };
+    /* 地址栏是外部输入：非法 percent-encoding 会让 decodeURIComponent 抛 URIError。
+       它曾在冷启动的顶层语句里冒泡，导致首屏再也不渲染（白屏），所以就地降级成坏地址。 */
+    try {
+      return { view: 'level', id: decodeURIComponent(parts.slice(1).join('/')) };
+    } catch (e) { return { view: 'bad' }; }
   }
   if (parts.length > 1 || !ROUTE_VIEWS.has(parts[0])) return { view: 'bad' };
   return { view: parts[0] };
@@ -116,9 +120,11 @@ function syncHash() {
   const want = hashFor(session.view);
   if (location.hash === want) return;
   /* 只在「一条合法视图地址换成另一条」时入栈；首次写入、坏地址纠正仍用 replaceState，
-     避免刷新一次就多一条历史。file:// 一律走原来的写法。 */
+     避免刷新一次就多一条历史，也避免坏地址被压进栈后按后退永远绕不出去。
+     file:// 一律走原来的写法。parseHash 已对非法编码就地降级，这里可以直接复用。 */
   const canStack = location.protocol === 'http:' || location.protocol === 'https:';
-  const switching = canStack && /^#\//.test(location.hash) && /^#\//.test(want);
+  const currentOk = parseHash(location.hash).view !== 'bad';
+  const switching = canStack && currentOk && /^#\//.test(location.hash) && /^#\//.test(want);
   try {
     if (switching) history.pushState(null, '', want);
     else history.replaceState(null, '', want);
@@ -199,6 +205,9 @@ function routeTo(r) {
     session.helpFrom = session.view === 'gate' && state.band ? 'home' : (session.view || 'home');
     if (session.view === 'level') helpResume = play;
     else helpResume = null;   /* 非关卡来源不留旧进行态 */
+    retreatResume = session.view === 'retreat'
+      ? { play, kind: play && play.type, id: (play && play.data && play.data.id) || '', index: play && play.retreatIndex }
+      : null;
     renderHelp();
     return;
   }
@@ -209,8 +218,11 @@ function routeTo(r) {
   if (r.view === 'dict') { ACTIONS['open-dictionary'](); return; }
   if (r.view === 'selfhelp') { ACTIONS['open-selfhelp'](); return; }
   if (r.view === 'slowvars') { ACTIONS['open-slowvars'](); return; }
-  /* 空地址或认不出的地址：落到默认首屏，syncHash 会把坏地址改回合法值 */
+  /* 空地址或认不出的地址：落到默认首屏。坏地址纠正一律用 replaceState，
+     否则每次按后退都会回到坏地址、再被入栈一次纠正，历史栈永远清不掉。
+     file:// 下 replaceState 可能被拒，忽略即可，syncHash 还有 location.hash 回落兜底。 */
   session.navDir = '';
+  try { history.replaceState(null, '', hashFor('home')); } catch (e) { /* noop */ }
   renderHome();
 }
 function showFeedback(type, html) {

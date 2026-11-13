@@ -123,6 +123,7 @@ function renderLibraryView(cfg) {
     <span class="eyebrow">${esc(cfg.eyebrow)}</span>
     <h2 style="margin:12px 0 10px">${esc(cfg.title)}</h2>
     <p class="lead">${esc(cfg.lead)}</p>
+    ${cfg.notice ? `<p class="notice">${esc(cfg.notice)}</p>` : ''}
     ${cfg.nav || ''}
     ${cfg.safety ? `<div class="retreat-safety">${esc(cfg.safety)}</div>` : ''}
     ${cfg.search || ''}
@@ -228,8 +229,8 @@ const DICT_START_PATH = [
 ];
 function dictStartPathHtml() {
   return `<section class="dict-start-path" aria-label="五分钟起步路径">
-    <h3 class="sh-section-title">第一次来？按这 5 条读</h3>
-    <p class="muted sh-section-sub">从「这门学科在说什么」走到「带着不舒服也能往前」。点一条直接展开它，不用从头翻 162 条。</p>
+    <h3 class="sh-section-title">第一次来？按这 ${DICT_START_PATH.length} 条读</h3>
+    <p class="muted sh-section-sub">从「这门学科在说什么」走到「带着不舒服也能往前」。点一条直接展开它，不用从头翻 ${DICTIONARY.length} 条。</p>
     <ol class="dict-path-list">
       ${DICT_START_PATH.map((x, i) => `<li><button class="dict-path-btn" data-action="dict-jump" data-t="${esc(x.t)}" title="${esc(x.why)}"><span class="dict-path-num">${i + 1}</span><b>${esc(x.t)}</b></button></li>`).join('')}
     </ol>
@@ -289,7 +290,7 @@ function dictView() {
     prelude: `${dictStartPathHtml()}
     ${conceptStartPanel(
       '按概念读',
-      '16 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。',
+      `${GLOSSARY.length} 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。`,
       GLOSSARY.map(g => g.id),
       'dict-concept',
       true
@@ -444,7 +445,7 @@ function selfHelpView() {
     emptyId: 'sh-empty', emptyText: '这一类暂时没有卡片。点「全部」看看。',
     epilogue: `<section class="sh-section">
       <h3 class="sh-section-title">认知扭曲速查</h3>
-      <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。这 10 条是想法层的；节奏层的 12 条「快变量陷阱」在慢变量页。<button class="link-btn" data-action="open-slowvars">去慢变量页</button></p>
+      <p class="muted sh-section-sub">给想法起个名字，通常能让人和它拉开一点距离。标签是为了松绑，不是给自己扣帽子。这 ${SH_DISTORTIONS.length} 条是想法层的；节奏层的 ${SV_TRAPS.length} 条「快变量陷阱」在慢变量页。<button class="link-btn" data-action="open-slowvars">去慢变量页</button></p>
       <div class="sh-dist-grid">${SH_DISTORTIONS.map(d => `<div class="sh-dist">
         <b>${esc(d.t)}</b><span>${esc(d.d)}</span><em>${esc(d.eg)}</em></div>`).join('')}</div>
     </section>`,
@@ -481,6 +482,9 @@ function svPanel(id) {
 function svDailyLink(d) {
   const l = d.link || {};
   if (l.kind === 'md' && MD_PRACTICE_BY_ID[l.id]) {
+    /* 静修间只在成年档开放：低龄档连入口都不渲染，与 md-start 的动作层门禁一致，
+       避免「看得见、点进去又被带回地图」。 */
+    if (!band().mindful) return '';
     const p = MD_PRACTICE_BY_ID[l.id];
     return `<button class="btn-read" data-action="md-start" data-id="${esc(l.id)}">进静修间 · ${esc(p.name)}（${esc(p.minutes)}）</button>`;
   }
@@ -523,6 +527,9 @@ function slowVarsView() {
     eyebrow: '慢变量 · 在快时代里养底盘',
     title: '有些东西，值得慢慢养',
     lead: `${SV_VARS.length} 个慢变量管方向，${SV_DAILY.length} 件日常管今天：早起、冥想、阅读、写作、运动。另有 ${SV_PRACTICES.length} 张练习卡、${SV_BUDGET.length} 档可用时间、${SV_TRAPS.length} 个快变量陷阱、${SV_HORIZONS.length} 个时间尺度。没有打卡，也不问你做到了多少。`,
+    /* 这一页写的是三观 / 十年视角 / 就医体检，更多是给大人看的：
+       只在 3-6 / 6-12 两档于页头补一句，亲子与成年档保持原样。纯渲染层，不动数据。 */
+    notice: isKidTone() ? '这一页更多写给大人；孩子可以先去玩主线' : '',
     nav: `<details class="sv-index">
       <summary>本页目录 · ${SV_VARS.length} 个慢变量 + ${SV_DAILY.length} 件日常</summary>
       <nav class="sv-nav" aria-label="本页目录">
@@ -558,7 +565,7 @@ function slowVarsView() {
     items: SV_PRACTICES,
     catOf: p => p.v,
     catName: id => svVarName(id),
-    /* 练习卡按变量分区：12 张不再平铺，选变量后只留下对应分区。 */
+    /* 练习卡按变量分区：不再平铺，选变量后只留下对应分区。 */
     groupTitle(c) {
       return `<h3 class="dict-group-title" data-group="${esc(c)}">
         <span class="dict-group-name">${esc(svVarName(c))}</span>
@@ -568,7 +575,8 @@ function slowVarsView() {
     card(p) {
       /* 有些练习在静修间里已有逐步引导：卡片不重写步骤，只给一个入口。
          入口 id 写在数据里（practices[].md），视图不认识「哪个练习属于冥想」。 */
-      const md = p.md ? MD_PRACTICE_BY_ID[p.md] : null;
+      /* 同 svDailyLink：低龄档不渲染进静修间的入口，只保留卡片本身的说明。 */
+      const md = band().mindful && p.md ? MD_PRACTICE_BY_ID[p.md] : null;
       const detail = md ? `<div class="sv-md-entry"><b>静修间有引导</b>
         <p>${esc(md.name)} · ${esc(md.minutes)}，逐步走，随时可以停。</p>
         <button class="btn-read" data-action="md-start" data-id="${esc(md.id)}">进静修间做这一张</button></div>` : '';
@@ -592,7 +600,7 @@ function slowVarsView() {
     </section>
     <section class="sv-section" id="sv-traps">
       <h3 class="sv-section-title">快变量陷阱速查</h3>
-      <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。这 ${SV_TRAPS.length} 条是节奏层的；想法层的 10 条认知扭曲在自助工具箱。<button class="link-btn" data-action="open-selfhelp">去工具箱</button></p>
+      <p class="muted sv-section-sub">不是要你消灭快变量，而是别让它们替你决定长期方向。这 ${SV_TRAPS.length} 条是节奏层的；想法层的 ${SH_DISTORTIONS.length} 条认知扭曲在自助工具箱。<button class="link-btn" data-action="open-selfhelp">去工具箱</button></p>
       <div class="sv-traps">${SV_TRAPS.map(t => `<div class="sv-trap">
         <b>${esc(t.t)}</b><span>${esc(t.d)}</span><em>${esc(t.eg)}</em></div>`).join('')}</div>
     </section>`,
@@ -617,29 +625,32 @@ function syncSvSelection() {
   applySvFilter();
 }
 
-function renderRetreatPractice(i) {
+function renderRetreatPractice(i, resumePlay) {
   clearAsyncTimers(); stopSpeech();
   session.view = 'retreat'; session.retreatStep = i;
   const r = RETREAT[i];
   if (!r) { renderRetreatList(); return; }
-  play = { type: r.type, data: r, tries: 0, done: false, retreatIndex: i };
+  /* 从急救页返回时沿用同一份进行态：不重新抽 defuse 变体、不重置 ground / space 的进度。 */
+  play = resumePlay || { type: r.type, data: r, tries: 0, done: false, retreatIndex: i };
   let body = '';
   if (r.type === 'ground') {
-    play.picks = r.rows.map(() => null);
+    if (!resumePlay) play.picks = r.rows.map(() => null);
     body = `<div class="ground-rows">${r.rows.map((row, ri) =>
       `<div class="ground-row" data-row="${ri}"><div class="compose-label">${esc(row.label)}</div>
         <div class="compose-choices">${row.choices.map((c, ci) =>
           `<button class="word-chip" data-action="ground-pick" data-row="${ri}" data-i="${ci}">${esc(c)}</button>`).join('')}</div></div>`).join('')}</div>
       <div id="retreat-result"></div>`;
   } else if (r.type === 'defuse') {
-    play.v = rand(r.variants);
-    play.opts = shuffled(withIndex(play.v.options));
+    if (!resumePlay) {
+      play.v = rand(r.variants);
+      play.opts = shuffled(withIndex(play.v.options));
+    }
     body = `${scenarioBox('脑子里冒出来的那句话', play.v.thought)}
       <div class="opt-grid">${play.opts.map(({ v: o, i }, k) => optBtn(k, o.t, o.d, 'defuse-pick', i)).join('')}</div>
       <div id="retreat-result"></div>
       <div class="actions"><button class="btn btn-secondary" data-action="defuse-reroll">换一句</button></div>`;
   } else {
-    play.step = 0;
+    if (!resumePlay) play.step = 0;
     body = `<div id="space-body"></div><div id="retreat-result"></div>`;
   }
   /* 静修练习复用概念层的机制与规格：三种题型各对到一个概念，不新增解释文本。 */
@@ -688,13 +699,15 @@ function paintSpace() {
 /* ---------------------------------------------------------------- 静修间 2.0 · sit 引导
    逐步文字，不计时、不显示剩余秒数；每一步都能「先停在这儿」。
    结束页只做机制归因与一句 if-then，不显示次数 / 天数 / 时长。 */
-function renderMeditatePractice(id) {
+function renderMeditatePractice(id, resumePlay) {
   clearAsyncTimers(); stopSpeech();
   const p = MD_PRACTICE_BY_ID[id];
   if (!p) { renderRetreatList(); return; }
   const f = MD_FAMILY_BY_ID[p.family] || {};
   session.view = 'retreat'; session.retreatStep = -1;
-  play = { type: 'sit', data: p, family: f, step: 0, done: false, stopped: false, intent: 0 };
+  /* 从急救页返回时沿用同一份进行态：paintSit() 按 play.step 重画，
+     不重新抽题、不退回第一步；只在内存，不写存档。 */
+  play = resumePlay || { type: 'sit', data: p, family: f, step: 0, done: false, stopped: false, intent: 0 };
   const rc = conceptOfMeditate(p);
   const conceptBlock = `<div class="retreat-concept">
     <b>${esc(f.name || '这一步在做什么')}</b>

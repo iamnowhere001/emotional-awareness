@@ -234,7 +234,7 @@ function openSettings() {
     <div class="modal-body">
       <div class="setting-row"><strong>年龄段</strong><div class="seg">
         ${AGE_BANDS.map(b => `<button class="${state.band === b.id ? 'on' : ''}" data-action="set-band" data-b="${b.id}" data-next="map">${esc(b.name)}</button>`).join('')}
-      </div><p class="muted" style="margin-top:8px">${esc(band().desc)}　${esc(band().len)}。前四档共用一套儿童 / 亲子的站，成年档是独立的一套，两边进度分开记、都保留。</p></div>
+      </div><p class="muted" style="margin-top:8px">${esc(band().desc)}　${esc(band().len)}。前三档共用一套儿童 / 亲子的站，成年档是独立的一套，两边进度分开记、都保留。</p></div>
       <div class="setting-row"><strong>字号</strong><div class="seg">
         ${[[1, '标准'], [1.15, '大'], [1.3, '特大']].map(([v, n]) => `<button class="${s.scale === v ? 'on' : ''}" data-action="set-scale" data-v="${v}">${n}</button>`).join('')}
       </div></div>
@@ -261,7 +261,9 @@ function openSettings() {
         </div>
         <p class="muted" id="data-status" role="status"></p></div>
     </div>
-    <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">完成</button>
+    <div class="modal-actions">
+      ${importUndo ? '<button class="btn btn-secondary" data-action="import-undo">撤销上次导入</button>' : ''}
+      <button class="btn btn-primary" data-action="close-modal">完成</button>
       <button class="btn btn-ghost" data-action="clear-progress">清空本机进度</button></div>`);
   /* 重建后按 data-action / data-k / data-b 找同一个控件；
      值会翻转的开关（自动朗读、高对比）先找同值，找不到再退回同组第一个。 */

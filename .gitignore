@@ -13,3 +13,6 @@ node_modules/
 # 回归脚本的临时产物
 tests/.tmp/
 *.log
+
+# 本地截图暂存目录（回归产物，无跟踪文件），不入库
+.screenshots/

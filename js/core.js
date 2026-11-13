@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.18.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v0.19.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
@@ -112,7 +112,7 @@ const SV_PRACTICES = SLOWVARS.practices || [];
 const SV_TRAPS = SLOWVARS.traps || [];
 const SV_HORIZONS = SLOWVARS.horizons || [];
 const SV_SAFETY = SAFETY_TEXT;
-/* 急救入口：3 个 1 分钟动作与本地求助信息，全部是 content/help.js 里的固定数据。
+/* 急救入口：3 个短动作（约 1 分钟 / 20 秒 / 30 秒）与本地求助信息，全部是 content/help.js 里的固定数据。
    不联网、不拨号、不做风险判断，也不保存用户在这里的选择。 */
 const HELP = MI.help || {};
 const HELP_ACTIONS = HELP.actions || [];
@@ -172,7 +172,7 @@ function isAdultTrack() { return bandTrack() === 'adult'; }
 function cardsInTrack() { return state.cards[bandTrack()] || []; }
 
 function band() { return AGE_BANDS.find(b => b.id === state.band) || AGE_BANDS[1] || AGE_BANDS[0] || {}; }
-/* 急救入口的语气分层：3-6 / 6-9 / 9-12 走「找一个大人」，亲子档与成年档走成人口径。
+/* 急救入口的语气分层：3-6 / 6-12 两档走「找一个大人」，亲子与成年档走成人口径。
    尚未选档时按成人口径处理——不能假设拿着设备的是一个孩子。 */
 function isKidTone() {
   const b = band();
@@ -214,6 +214,9 @@ let helpGroundDone = false;
 /* 从关卡里打开急救时，暂存当前的进行态（题目、已选、试过几次）。
    返回时恢复同一道题；只在内存里，不写存档。 */
 let helpResume = null;
+/* 从静修练习里打开急救时，暂存进行态与来源类型（sit / 旧版三种题型）。
+   返回时按类型重建同一练习、沿用同一份 play 与步骤；只在内存里，不写存档。 */
+let retreatResume = null;
 let dictCat = 'all';
 let dictQuery = '';
 let dictKind = 'all';

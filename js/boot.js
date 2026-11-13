@@ -9,7 +9,9 @@ document.addEventListener('click', (e) => {
   const anchor = e.target.closest && e.target.closest('a[href^="#"]');
   if (anchor && !anchor.getAttribute('href').startsWith('#/')) {
     e.preventDefault();
-    const id = decodeURIComponent(anchor.getAttribute('href').slice(1));
+    let id = '';
+    try { id = decodeURIComponent(anchor.getAttribute('href').slice(1)); }
+    catch (err) { /* 坏锚点只影响这一次滚动，不能让它冒到委托外、把当前功能整屏重建 */ }
     const target = id ? document.getElementById(id) : null;
     if (target) {
       /* 词典单页可长达 2.8 万像素，平滑滚动会走上好几秒；目录跳转用瞬时定位。 */
@@ -114,7 +116,11 @@ if (window.matchMedia) {
 registerOffline();
 /* 地址栏里带了 hash 就按它直达；没有则落到默认首屏，并由 syncHash 写入合法地址。
    hashchange 覆盖手动改地址、刷新后同页跳转，以及少数浏览器 replaceState 失败时的回落。 */
-window.addEventListener('hashchange', () => routeTo(parseHash(location.hash)));
+window.addEventListener('hashchange', () => {
+  /* 地址栏是外部输入：解析或渲染一旦抛错，兜底回默认首屏，别让页面卡在旧屏。 */
+  try { routeTo(parseHash(location.hash)); }
+  catch (e) { try { routeTo({ view: null }); } catch (e2) { /* noop */ } }
+});
 /* 系统返回：http(s) 下每次换屏都会 pushState，浏览器后退 / 物理返回键 / 侧滑
    在这里映射回上一屏。与 hashchange 可能同时触发，atRoute 拦掉重复渲染。
    弹窗打开时先收掉遮罩，避免返回后留一个盖住新页面的对话框。 */
@@ -122,19 +128,20 @@ window.addEventListener('popstate', () => {
   /* 弹窗不占地址：第一次返回只收掉弹窗，再把地址同步回当前屏，
      不要让「关弹窗」顺带把用户推回上一页。 */
   if (overlay.classList.contains('open')) { closeModal(); syncHash(); return; }
-  const r = parseHash(location.hash);
+  let r;
+  try { r = parseHash(location.hash); } catch (e) { r = { view: null }; }
   if (routeReady && atRoute(r)) return;
   routeTo(r);
 });
 if (!CONTENT_OK) {
   stage.innerHTML = `<div class="view">
     <h2>内容没加载出来</h2>
-    <p class="lead">content/ 下的数据文件没有读到。检查 index.html 里 content/*.js 的引入顺序：
-    需要 bands → levels-kid → levels-kid-island4 → levels-adult → bank-* → bank-compose → levels-adult-work → library → dictionary → selfhelp → slowvars → help，之后才是 js/core.js 起的逻辑脚本（顺序见 README §3.1）。</p>
+    <p class="lead">content/ 下的数据文件没有读到。脚本的引入顺序以 index.html 为准（内容在前、逻辑在后，清单见 scripts/js-files.mjs），也可以跑 npm run doctor 检查。</p>
     <p class="muted">打开浏览器控制台可以看到具体是哪个文件 404。</p>
   </div>`;
 } else {
-  const initial = parseHash(location.hash);
+  let initial;
+  try { initial = parseHash(location.hash); } catch (e) { initial = { view: null }; }
   /* 没选档时 routeTo 自己会回落到选档页；正常有档则按地址 / 默认首页 */
   routeTo(initial);
   /* 空地址或非法地址在渲染时已被 syncHash 改写；这里再兜一次，确保首次进入地址合法 */
