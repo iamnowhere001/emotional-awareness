@@ -22,7 +22,7 @@ const ACTIONS = {
     const i = nextStationIndex();
     session.navDir = 'forward';
     if (i < 0) { renderMap(); return; }
-    state.levelIndex = i;
+    session.levelIndex = i;
     play = {};
     closeModal();
     renderLevel();
@@ -31,7 +31,7 @@ const ACTIONS = {
     const i = nextStationIndex();
     session.navDir = 'forward';
     if (i < 0) { renderMap(); return; }
-    state.levelIndex = i;
+    session.levelIndex = i;
     play = {};
     closeModal();
     renderLevel();
@@ -39,7 +39,7 @@ const ACTIONS = {
   'go-map': () => { stopSpeech(); closeModal(); session.navDir = 'back'; renderMap(); },
   'open-level': (el) => {
     if (session.view === 'map') session.mapScroll = window.scrollY || 0;
-    state.levelIndex = Number(el.dataset.i);
+    session.levelIndex = Number(el.dataset.i);
     play = {};
     session.navDir = 'forward'; closeModal(); renderLevel();
   },
@@ -62,7 +62,7 @@ const ACTIONS = {
       }
       return;
     }
-    state.levelIndex += 1; session.navDir = 'forward'; renderLevel();
+    session.levelIndex += 1; session.navDir = 'forward'; renderLevel();
   },
   'reroll': () => {
     session.navDir = 'forward';
@@ -208,6 +208,15 @@ const ACTIONS = {
     renderMap();
   },
   'open-settings': () => openSettings(),
+  /* 安装到主屏：用先前暂存的 beforeinstallprompt 调起安装。
+     deferredInstallPrompt 由 boot.js 在运行时赋值，存在此处只读取。 */
+  'install-app': () => {
+    if (!deferredInstallPrompt) return;
+    try {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(() => { deferredInstallPrompt = null; }).catch(() => { deferredInstallPrompt = null; });
+    } catch (e) { /* noop */ }
+  },
   'export-progress': () => exportProgress(),
   'import-progress': () => pickImportFile(),
   'cancel-import': () => { pendingImport = null; closeModal(); openSettings(); },

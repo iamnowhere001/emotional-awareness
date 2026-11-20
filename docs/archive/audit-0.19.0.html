@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>心情闯关岛 · 代码审查报告 v0.19.0</title>
+<style>
+  :root{
+    --bg:#f6f5f0; --surface:#fffdf8; --surface-2:#f1efe6; --ink:#24302c; --ink-2:#52605b;
+    --ink-3:#7a8781; --line:#e2e5de; --line-2:#cfd6cd; --accent:#38695a; --accent-soft:#e7f0ea;
+    --red:#a23b32; --red-bg:#fbecea; --amber:#8a6112; --amber-bg:#fbf1da; --blue:#2c5d86; --blue-bg:#e7f0f8;
+    --green:#2f6b46; --green-bg:#e6f2e9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 24px 96px}
+  header.top{border-bottom:2px solid var(--line-2);padding-bottom:26px;margin-bottom:34px}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:.08em;font-size:.8rem;text-transform:uppercase}
+  h1{font-size:2rem;margin:8px 0 6px;line-height:1.25}
+  .sub{color:var(--ink-2);margin:0}
+  .meta{color:var(--ink-3);font-size:.85rem;margin-top:14px}
+  h2{font-size:1.35rem;margin:0 0 4px}
+  h3{font-size:1.05rem;margin:0}
+  code{background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.86em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#7a3f2b}
+  .lede{font-size:1rem;color:var(--ink-2);margin:0 0 26px}
+
+  /* 概览卡 */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 30px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .stat b{display:block;font-size:1.7rem;line-height:1.1}
+  .stat span{color:var(--ink-3);font-size:.82rem}
+  .stat.must b{color:var(--red)} .stat.should b{color:var(--amber)} .stat.nice b{color:var(--blue)}
+  .stat.ok b{color:var(--green)}
+
+  /* 分档标题 */
+  section{border-top:1px solid var(--line);padding-top:30px;margin-top:38px}
+  .band{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .tag{font-size:.78rem;font-weight:700;padding:4px 11px;border-radius:99px;white-space:nowrap}
+  .tag.must{background:var(--red-bg);color:var(--red)}
+  .tag.should{background:var(--amber-bg);color:var(--amber)}
+  .tag.nice{background:var(--blue-bg);color:var(--blue)}
+  .band p{margin:0;color:var(--ink-3);font-size:.86rem}
+
+  /* 问题卡 */
+  .item{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px;margin-bottom:16px;border-left:5px solid var(--line-2)}
+  .item.must{border-left-color:var(--red)} .item.should{border-left-color:var(--amber)} .item.nice{border-left-color:var(--blue)}
+  .item h3{margin-bottom:10px;display:flex;gap:10px;align-items:baseline}
+  .num{color:var(--ink-3);font-size:.82rem;font-weight:700;font-family:ui-monospace,monospace}
+  .rows{display:grid;grid-template-columns:82px 1fr;gap:8px 14px;font-size:.94rem}
+  .rows dt{color:var(--ink-3);font-weight:600}
+  .rows dd{margin:0}
+  .files{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84em;color:#7a3f2b}
+  .why u{text-decoration-color:var(--line-2);text-underline-offset:3px}
+  .fix{background:var(--accent-soft);border-radius:8px;padding:10px 13px;margin-top:2px}
+
+  /* 正面清单 */
+  .good{background:var(--green-bg);border:1px solid #cfe3d4;border-radius:14px;padding:20px 24px}
+  .good ul{margin:10px 0 0;padding-left:20px;columns:2;column-gap:36px}
+  .good li{margin-bottom:6px;break-inside:avoid;font-size:.92rem}
+
+  .method{background:var(--surface-2);border-radius:12px;padding:18px 22px;font-size:.88rem;color:var(--ink-2)}
+  .method code{background:#fff}
+  .note{font-size:.82rem;color:var(--ink-3);margin-top:14px}
+  @media(max-width:720px){
+    .stats{grid-template-columns:repeat(2,1fr)} .rows{grid-template-columns:1fr;gap:2px}
+    .rows dt{margin-top:8px} .good ul{columns:1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="kicker">Code Review · 心情闯关岛</div>
+    <h1>功能与工程质量审查报告</h1>
+    <p class="sub">审查对象：v0.19.0 · 纯前端 / 零依赖 / 不联网 PWA · 约 1.4 万行 JS + 1813 行 CSS</p>
+    <p class="meta">审查日期 2026-11-20　·　维度：功能完整性 / 用户体验 / 结构与可维护性 / 性能 / 错误处理 / 边界 / 安全 / 可访问性</p>
+  </header>
+
+  <p class="lede">
+    总体结论：这是一个工程纪律明显高于同类个人项目的作品——版本六处一致自检、脚本清单与预缓存覆盖自检、内容 lint、153 项浏览器用例，注释详细解释了每个“为什么”。
+    现存问题以<strong>健壮性收尾</strong>为主，没有发现致命安全漏洞或 XSS 注入路径（用户输入全部转义或走 <code>textContent</code>，无 <code>eval</code> / <code>document.write</code>，无外部链接，存档迁移白名单完备）。
+    下列每一条都可在代码中定位；无法定位的说法一律不列入。
+  </p>
+
+  <div class="stats">
+    <div class="stat must"><b>3</b><span>必须修复 · 已全部修复</span></div>
+    <div class="stat should"><b>6</b><span>建议优化 · 已全部落实</span></div>
+    <div class="stat nice"><b>3/4</b><span>可选增强 · 已落实 3 条</span></div>
+    <div class="stat ok"><b>全绿</b><span>verify 全套 223 PASS / 0 FAIL</span></div>
+  </div>
+
+  <div style="background:var(--green-bg);border:1px solid #cfe3d4;border-radius:12px;padding:16px 20px;margin:0 0 30px">
+    <strong style="color:var(--green)">修复状态（2026-11-20 更新）</strong>
+    <p style="margin:8px 0 0;font-size:.94rem">
+      本报告列出的 13 条发现已按建议处理：M1–M3、S1–S6、O1/O2/O4 共 12 条已落实代码；
+      O3（危机文案真人复核）属流程门槛，需谢衣本人完成，未改动。
+      改动后 <code>npm run check / lint / doctor / test:e2e</code> 全绿（223 PASS / 0 FAIL），
+      并用一次性浏览器探针验证了 8 项新增行为。未改版本号、未做 git 提交。
+      下方各条保留原始问题描述，便于对照。
+    </p>
+  </div>
+
+  <!-- ===================== 必须修复 ===================== -->
+  <section>
+    <div class="band">
+      <span class="tag must">必须修复</span>
+      <p>可真实触发、影响功能正确性或用户数据，建议在下一次发版前处理。</p>
+    </div>
+
+    <div class="item must">
+      <h3><span class="num">M1</span> 自动朗读的延迟定时器未纳入统一清理，切屏后仍会朗读</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>开启“进站自动读题”后，<code>renderLevel</code> 注册一个 <code>setTimeout(…, 350)</code> 直接调用 <code>speakTexts(questionTexts())</code>。该定时器既没有保存句柄，也不在 <code>clearAsyncTimers()</code> 的清理清单里（清单只清 <code>breathTimer / memoTimer / restTimer</code>）。</dd>
+        <dt class="why">影响</dt><dd>进站 350ms 内点“返回地图 / 换档 / 进急救”等切走视图时，<code>stopSpeech()</code> 先取消了朗读，但延迟回调随后触发，从<strong>新页面</strong>抓取文本继续朗读——离开关卡后仍蹦出声音，且读的是不相干内容。对一个用于安抚情绪的应用，这是明显的体验破坏。</dd>
+        <dt>相关文件</dt><dd class="files">js/views-level.js:315-317 · js/shell.js:279-286（clearAsyncTimers）· js/shell.js:287-301（stopSpeech / speakTexts）</dd>
+        <dt>建议</dt><dd class="fix">把该 timer 句柄存进一个模块级变量（如 <code>speakTimer</code>），加入 <code>clearAsyncTimers()</code> 一并 <code>clearTimeout</code>；同时在回调内再校验 <code>session.view === 'level'</code> 且关卡 id 未变，双保险。</dd>
+      </dl>
+    </div>
+
+    <div class="item must">
+      <h3><span class="num">M2</span> 缺少全局错误兜底，运行期异常会静默白屏</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>全项目没有 <code>window.onerror</code> / <code>unhandledrejection</code> 监听，也没有全局 <code>error</code> 事件处理。现有的兜底只在启动期（<code>CONTENT_OK</code>）与 <code>hashchange</code> 的 <code>try/catch</code>，覆盖不到渲染过程中的异常。</dd>
+        <dt class="why">影响</dt><dd>任何未预期的异常——内容字段缺失导致某个 <code>RENDERERS[type]</code> 抛错、<code>speechSynthesis</code> 在个别设备抛错、导入数据边界外的畸形值——都会让 <code>stage.innerHTML</code> 停在半途：用户看到空白或残缺页面，没有任何提示，也不知道怎么恢复。键盘与读屏用户尤其无助。</dd>
+        <dt>相关文件</dt><dd class="files">index.html:16-48（#stage 容器）· js/boot.js:107-149（仅启动兜底）· js/core.js:121-122（CONTENT_OK）</dd>
+        <dt>建议</dt><dd class="fix">在 <code>boot.js</code> 顶层注册 <code>window.addEventListener('error', …)</code> 与 <code>'unhandledrejection'</code>，统一渲染一张可读错误卡，提供“返回地图 / 重新载入”出口；保留 <code>console.error</code> 便于排查。注意不要把已知无害的静默失败（如语音不支持）误报给用户，可在处理器内白名单过滤。</dd>
+      </dl>
+    </div>
+
+    <div class="item must">
+      <h3><span class="num">M3</span> 多标签页会静默互相覆盖进度（数据丢失）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>save()</code> 每次都把内存里的整份 <code>state</code> 全量写入同一个 localStorage 键；项目没有任何 <code>storage</code> 事件监听。</dd>
+        <dt class="why">影响</dt><dd>同一应用开两个标签页：A 页玩出新进度并保存；B 页仍持有旧 <code>state</code>，此时 B 页任何一次写操作（通关、换档、调字号、导入）都会用旧快照<strong>整体覆盖</strong>，A 的进度无声消失。多标签浏览是常见习惯，这是真实可达的数据丢失路径。</dd>
+        <dt>相关文件</dt><dd class="files">js/core.js:236-257（load / readRaw）· js/core.js:368-376（save）· js/boot.js（无 storage 监听）</dd>
+        <dt>建议</dt><dd class="fix">在 <code>boot.js</code> 监听 <code>window 'storage'</code>，检测到 <code>STORAGE_KEY</code> 被外部修改且本地有未保存变更时，弹出提示让用户选择“用最新进度继续（重载）”或“保留当前”；最低成本方案是检测到外部写入即提示刷新，避免无声覆盖。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ===================== 建议优化 ===================== -->
+  <section>
+    <div class="band">
+      <span class="tag should">建议优化</span>
+      <p>不阻塞发版，但影响性能、健壮性或长期可维护性，建议排入近期迭代。</p>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S1</span> 运行时游标 levelIndex 混入存档，但不进迁移白名单</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>state.levelIndex</code> 是“当前正在看哪一关”的运行时游标，被直接挂在持久化对象 <code>state</code> 上，随 <code>save()</code> 写进 localStorage 与导出 JSON；但它既不在 <code>DEFAULT_STATE</code>，也完全不被 <code>migrate()</code> 读取。</dd>
+        <dt class="why">影响</dt><dd>同一个对象一半是持久数据、一半是临时状态，语义混淆。导出文件会带一个未在契约中声明的字段，导入后该字段丢失、行为与导出前不一致。当前不致丢进度（重进会重算），但属于数据卫生欠账，未来一旦有人依赖它恢复位置就会踩坑。</dd>
+        <dt>相关文件</dt><dd class="files">js/core.js:183-210（DEFAULT_STATE / state）· js/core.js:315-352（migrate）· js/actions.js:25,34,42 · js/shell.js:184 · js/boot.js:83</dd>
+        <dt>建议</dt><dd class="fix">把 <code>levelIndex</code> 移到 <code>session</code>（如 <code>session.levelIndex</code>），彻底不落盘；或反过来在 <code>DEFAULT_STATE</code> 与 <code>migrate()</code> 中显式声明它——二选一，别维持当前“默默写入又默默丢弃”的中间态。</dd>
+      </dl>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S2</span> 首屏 26 个脚本阻塞加载 + 全量内容数据（100KB CSS / 88KB 词典）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>index.html</code> 用 26 个普通 <code>&lt;script src&gt;</code> 顺序加载，无 <code>defer</code>；<code>style.css</code> 100KB、<code>content/dictionary.js</code> 88KB、题库多份大文件全部随首屏解析。</dd>
+        <dt class="why">影响</dt><dd><code>file://</code> 双击与 PWA 二次访问（SW 预缓存命中）影响很小；但 http(s) 冷启动、弱网或低端设备上，26 个串行请求 + 全量数据解析会明显拖慢首屏。词典/自助/慢变量在首屏根本用不到。</dd>
+        <dt>相关文件</dt><dd class="files">index.html:51-77 · style.css（100K）· content/dictionary.js（88K）· sw.js:23-56（预缓存清单）</dd>
+        <dt>建议</dt><dd class="fix">优先做零风险的一项：给纯逻辑脚本加 <code>defer</code>（<code>defer</code> 保序，不破坏“顺序敏感”契约），让 HTML 解析与脚本下载并行。更大收益需按视图动态加载重型内容，但会触碰“零构建 / file:// 可用”红线——务必在守住这两条的前提下评估，因此列为建议而非必须。</dd>
+      </dl>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S3</span> 数字键快捷键只取第一组，部分声明支持的元素实际按不到</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>键盘处理里 <code>[opts, rungs, others].find(g =&gt; g.length)?.[n]</code> 只命中<strong>第一个非空组</strong>。<code>others</code> 组把 <code>.pair-item / .word-chip / .weather-btn / .chip / .clue-card</code> 混在一起。</dd>
+        <dt class="why">影响</dt><dd>线索关同时存在 <code>.opt</code>（clue-choose 选项）与 <code>.clue-card</code>（可翻的线索卡）。此时第一组恒为 <code>.opt</code>，数字键永远只点选项，<code>.clue-card</code> 虽被列入“支持数字键”却无法用数字键触发。代码注释声称这些题型都支持数字键，实现与声明不一致。</dd>
+        <dt>相关文件</dt><dd class="files">js/boot.js:56-67 · js/views-level.js:52-58（clue 渲染，opt + clue-card 共存）· js/util.js:123-129（optBtn 的 aria-keyshortcuts）</dd>
+        <dt>建议</dt><dd class="fix">按题型明确数字键映射：或合并所有可见选项为单一有序列表；或在 <code>VIEW_CONFIG</code> / 题型配置里声明当前关的数字键目标选择器，避免用一个 <code>find</code> 猜组。同时保证 <code>aria-keyshortcuts</code> 与实际可触发元素一致。</dd>
+      </dl>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S4</span> 多段语音朗读存在中途静默（speechSynthesis 已知问题）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>speakTexts()</code> 对文本数组 <code>forEach</code> 逐条 <code>speechSynthesis.speak(u)</code>。Chrome 对一次性排入多段 utterance 有已知缺陷：约 15 秒后可能静默停住（“读选项”尤其容易触发）。</dd>
+        <dt class="why">影响</dt><dd>依赖朗读的用户（视障、阅读困难、低龄儿童）点“读选项”时可能听一半就断，且没有可见提示说明为何停止。文字仍在页面上，属体验降级而非功能丧失。</dd>
+        <dt>相关文件</dt><dd class="files">js/shell.js:288-301（speakTexts）· js/actions.js:452-453（speak-question / speak-options）· js/actions.js:173-183（另一处 speak 调用）</dd>
+        <dt>建议</dt><dd class="fix">把多段文本合并成一条 utterance（用标点连接）一次播完；或在前一段的 <code>onend</code> 里调度下一段，并用周期性 <code>resume()</code> 保活。<code>stopSpeech()</code> 的取消逻辑需相应调整。</dd>
+      </dl>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S5</span> Service Worker 安装 / 注册失败被双层静默吞掉</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>SW 的 <code>install</code> 链尾 <code>.catch(() =&gt; self.skipWaiting())</code> 让预缓存失败时仍激活；<code>boot.js</code> 的 <code>register().catch(() =&gt; {})</code> 又吞掉注册失败。代码注释已明确承认“两层各自静默叠加”。</dd>
+        <dt class="why">影响</dt><dd>预缓存清单中任一资源 404 会导致离线能力不完整，但用户与开发者都看不到任何信号，仍以为装好后可离线用。玩法本身不受影响（离线能力不是前提），故列为建议。</dd>
+        <dt>相关文件</dt><dd class="files">sw.js:7-20（注释自述）· sw.js:58-75（install / activate）· js/boot.js:92-105（registerOffline）</dd>
+        <dt>建议</dt><dd class="fix">至少在预缓存失败的 catch 里 <code>console.warn</code> 并标记缓存不完整；设置页可暴露“离线可用 / 不可用”状态，让 PWA 门槛（路线图条件 2）可被真实验收。</dd>
+      </dl>
+    </div>
+
+    <div class="item should">
+      <h3><span class="num">S6</span> 缺少 Content-Security-Policy（纵深防御）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>index.html</code> 没有 CSP。当前应用没有用户输入拼接进 HTML、无外部资源、无 <code>eval</code>，实际 XSS 风险很低。</dd>
+        <dt class="why">影响</dt><dd>属纵深防御缺口而非可利用漏洞：一旦将来引入第三方脚本或新的注入点，没有第二道防线。定级为建议优化，避免误导为“安全问题”。</dd>
+        <dt>相关文件</dt><dd class="files">index.html:1-15 · js/util.js:7（esc）· js/views-library.js:186（搜索词走 textContent）</dd>
+        <dt>建议</dt><dd class="fix">加 <code>&lt;meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; …"&gt;</code>。注意 <code>file://</code> 下 CSP 行为特殊，需实测不要把 <code>noscript</code> 内联样式与必要的内联样式挡掉；若要杜绝内联样式，成本较高，可按项目实际决定。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ===================== 可选增强 ===================== -->
+  <section>
+    <div class="band">
+      <span class="tag nice">可选增强</span>
+      <p>打磨性质，或与发布流程相关而非代码缺陷，视资源决定是否处理。</p>
+    </div>
+
+    <div class="item nice">
+      <h3><span class="num">O1</span> manifest 固定竖屏，平板横屏体验受限</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>manifest.webmanifest</code> 设置 <code>"orientation": "portrait"</code>，装到主屏后强制竖屏。</dd>
+        <dt class="why">影响</dt><dd>在平板、折叠屏或横屏支架上，词典宽表格与地图被迫挤在竖屏宽度里，空间浪费。</dd>
+        <dt>相关文件</dt><dd class="files">manifest.webmanifest（orientation 字段）</dd>
+        <dt>建议</dt><dd class="fix">改为 <code>"any"</code> 或 <code>"natural"</code>，让系统与应用自行决定方向；项目已有 320px–1280px 响应式样式，横屏能自然适配。</dd>
+      </dl>
+    </div>
+
+    <div class="item nice">
+      <h3><span class="num">O2</span> 未适配 Windows forced-colors 高对比模式</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd><code>style.css</code> 有手动 <code>.high-contrast</code>、<code>prefers-color-scheme</code>、<code>prefers-reduced-motion</code>，但没有 <code>@media (forced-colors: active)</code>。</dd>
+        <dt class="why">影响</dt><dd>Windows 高对比模式下系统会覆盖自定义配色，地图岛屿、进度圆点等靠背景色/边框区分的图形可能失去层次。已有手动高对比模式兜底一部分，影响有限。</dd>
+        <dt>相关文件</dt><dd class="files">style.css:1295-1315（high-contrast 规则）· style.css:1601（prefers-reduced-motion）</dd>
+        <dt>建议</dt><dd class="fix">对关键图形元素补 <code>@media (forced-colors: active)</code> 规则，使用系统色关键词（<code>CanvasText</code> / <code>Canvas</code> / <code>Highlight</code>）并确保用边框而非仅背景色传达状态。</dd>
+      </dl>
+    </div>
+
+    <div class="item nice">
+      <h3><span class="num">O3</span> 危机文案真人复核门槛未满足（流程，非代码）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>路线图自述 1.0.0 六条门槛中，“危机文案真人复核”仍未完成；<code>help.js</code> 内的 12356 / 12355 等号码标注“服务时段以当地公布为准”。</dd>
+        <dt class="why">影响</dt><dd>号码或儿童措辞若有偏差，在情绪危机场景下风险高。这不是代码 bug，但对该产品属于发布前必须完成的流程动作。</dd>
+        <dt>相关文件</dt><dd class="files">content/help.js:48-56（号码与风险话术）· ROADMAP.md:15,102（门槛自述）</dd>
+        <dt>建议</dt><dd class="fix">发布前由真人按日期复核号码有效性、服务时段与儿童措辞，留一份带日期与复核人的记录，发布当日再核一次号码。</dd>
+      </dl>
+    </div>
+
+    <div class="item nice">
+      <h3><span class="num">O4</span> 没有“添加到主屏”引导（PWA 门槛条件 2）</h3>
+      <dl class="rows">
+        <dt>问题</dt><dd>SW 与 manifest 配置齐全，但应用没有捕获 <code>beforeinstallprompt</code>，也没有任何引导用户安装的入口。</dd>
+        <dt class="why">影响</dt><dd>路线图把“PWA 主屏实际安装实测”列为未满足门槛；缺少引导会让安装率很低，也让该门槛更难完成。</dd>
+        <dt>相关文件</dt><dd class="files">js/boot.js:92-105（仅注册 SW）· js/ui.js:223-278（设置弹窗，可承载入口）· manifest.webmanifest</dd>
+        <dt>建议</dt><dd class="fix">捕获 <code>beforeinstallprompt</code> 暂存事件，在设置弹窗加一个“安装到主屏”按钮，用户点击时调用 <code>prompt()</code>；同时保留手动引导文案以兼容 iOS Safari。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ===================== 做得好的地方 ===================== -->
+  <section>
+    <div class="band"><span class="tag" style="background:var(--green-bg);color:var(--green)">值得保留</span>
+      <p>这些不是“没问题”，而是主动做对了的工程实践，重构时请勿破坏。</p>
+    </div>
+    <div class="good">
+      <ul>
+        <li>存档迁移白名单 + 损坏 JSON 多键回退，旧档不丢、脏数据不进内存</li>
+        <li>localStorage 不可写时显式提示用户，不假装保存成功</li>
+        <li>通关用 awarded 去重，贝壳/词卡不重复发放；支线进度与主线物理隔离</li>
+        <li>全部用户输入经 <code>esc</code> 或 <code>textContent</code>，无 eval / document.write / 外部链接</li>
+        <li>路由对非法 hash、坏 percent-encoding 就地降级，不白屏</li>
+        <li>视图切换统一清定时器与语音；呼吸计时器被中断有状态标记</li>
+        <li>导入做来源 / 结构 / 版本 / 大小校验，确认前不改状态，且可撤销一次</li>
+        <li>focus-visible、aria-live、reduced-motion、深色模式、44px 触控目标齐备</li>
+        <li>版本六处一致、脚本清单与 SW 预缓存覆盖、README 加载顺序均有自动自检</li>
+        <li>三轮质量脚本 check / lint / doctor 本次实跑全部通过</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>核查方法与边界</h2>
+    <div class="method">
+      本次为<strong>静态代码审查</strong>：通读了 <code>core / util / shell / views-* / ui / actions / boot</code> 全部逻辑文件、<code>index.html</code>、<code>manifest.webmanifest</code>、<code>sw.js</code>，抽查了内容数据与样式；并实跑了
+      <code>npm run check</code>（语法 / 跨文件重复声明）、<code>npm run lint</code>（内容结构）、<code>npm run doctor</code>（版本与清单一致性）——三项均通过。未运行浏览器端 153 项回归用例，因此 M1/S3 等交互时序问题建议在浏览器回归中补充对应用例复现。<br>
+      报告只收录能在代码中定位的发现；已剔除一条经 CSS 核实后不成立的“弹窗焦点陷阱”误报（<code>.modal-close</code> 为 <code>absolute</code> 定位，<code>offsetParent</code> 不为 null）。
+    </div>
+    <p class="note">本报告为审查意见，不改动任何应用代码。</p>
+  </section>
+</div>
+</body>
+</html>

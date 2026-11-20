@@ -1603,6 +1603,28 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
     .breath-ring.running { transform: scale(1); }
 }
 
+/* Windows 高对比（forced-colors）：系统色会覆盖自定义配色，
+   靠背景色/透明度表达的状态会失效。这里统一改用系统色关键词 + 边框，
+   确保「当前站 / 已完成 / 未解锁 / 已选中」仍可区分。
+   仅列关键状态容器，不影响普通配色路径。 */
+@media (forced-colors: active) {
+    .opt, .pair-item, .chip, .word-chip, .weather-btn, .clue-card, .rung,
+    .dict-cat, .dict-kind-btn, .dict-link, .btn, .btn-read, .step, .node {
+        border: 1px solid CanvasText;
+    }
+    .opt.selected, .pair-item.active, .chip.active, .word-chip.selected,
+    .weather-btn.selected, .clue-card.flipped, .step.current, .dict-cat.on,
+    .dict-kind-btn.on, .dict-link.on, .btn-primary, [aria-current="step"] {
+        border: 2px solid Highlight;
+        forced-color-adjust: none;
+        color: Highlight;
+    }
+    .opt:disabled, .step:disabled, .node.locked { border-style: dashed; opacity: 1; }
+    /* 岛屿插画靠描边区分层次；系统色下保留轮廓，去掉依赖背景的填充差异 */
+    .isle-land, .hh-land { stroke: CanvasText; }
+    .isle-water, .hh-wave { stroke: CanvasText; }
+}
+
 /* ---------- 成年专题「工作间」：一条工作日时间线 ---------- */
 .work-view { max-width: 760px; }
 .work-line { display: grid; gap: 10px; margin: 22px 0 18px; position: relative; }

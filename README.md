@@ -2,7 +2,7 @@
 
 > 一起认出心里的天气。按年龄分级的情绪启蒙小游戏：**纯前端 · 零依赖 · 不联网 · 不打分 · 不采集心情文本**。
 >
-> 当前版本 **0.19.0**（0.x 预发布台阶，历史批次已自 v0.1.0 重排，见 [CHANGELOG.md](CHANGELOG.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
+> 当前版本 **1.0.0**（首个正式版，2026-11-20；六条发布门槛全绿，证据见 [docs/release-1.0.0.md](docs/release-1.0.0.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
 
 这不是心理测评，也不能代替专业帮助。它做的事只有一件：把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。
 
@@ -13,7 +13,7 @@
 | 方式 | 操作 | 适用场景 |
 | --- | --- | --- |
 | 直接打开 | 双击 `index.html` | 日常使用。`file://` 下完整可玩，已实测 |
-| 本地服务 | `npm run serve` → `http://localhost:5173` | 手机同网段预览；以后加 service worker 需要 http |
+| 本地服务 | `npm run serve` → `http://localhost:5173` | 手机同网段预览；`Service Worker` 与「安装到主屏」需要 http(s) |
 
 `npm run serve -- 8080`（或 `node scripts/serve.mjs 8080`）可指定端口。**应用本身不需要 Node、不需要构建、不需要安装依赖**；Node.js 18+ 只用于内容自检、本地静态服务和浏览器回归。
 
@@ -103,7 +103,12 @@
 │   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用
 ├── tests/
 │   └── browser-tests.js          # 浏览器回归用例（数量以 npm run doctor 输出为准），由 regression.mjs 注入 390×900 iframe
-├── package.json                  # check / lint / serve / test:e2e / verify
+├── docs/
+│   ├── DEVELOPMENT.md            # 开发手册：打开方式 / 加内容 / 发版流程 / 红线速查
+│   ├── release-1.0.0.md          # 1.0.0 发布记录：六条门槛证据 + §5.3 清单
+│   ├── crisis-review-1.0.0.md    # 危机号码与服务范围复核记录
+│   └── archive/                  # 历史审核与验收快照（含 audit-0.19.0.html）
+├── package.json                  # check / lint / doctor / serve / test:e2e / verify
 ├── .gitignore
 ├── README.md  CHANGELOG.md  ROADMAP.md
 ```
@@ -219,7 +224,7 @@
 
 ## 8. 键盘与无障碍
 
-- 选项左侧徽标是 **1 / 2 / 3…**，直接对应数字键。`1`–`9` 覆盖所有使用 `.opt` 的选择题（线索单选、换视角 `reframe`、终章金句、静修「第一反应」）以及漂流瓶弹窗里的选项；梯子的档位号也能按。天气、配对、滑杆、排序、拼句、记忆牌没有数字键，仍用 Tab / 点击。
+- 选项左侧徽标是 **1 / 2 / 3…**，直接对应数字键。`1`–`9` 覆盖所有使用 `.opt` 的选择题（线索单选、换视角 `reframe`、终章金句、静修「第一反应」）以及漂流瓶弹窗里的选项；梯子的档位号也能按。天气、配对、滑杆、排序、拼句、记忆牌没有数字键，仍用 Tab / 点击。线索卡的「线索 N」编号与答案序号冲突，**数字键一律选答案**，翻线索卡用 Tab + Enter。
 - `Esc` 关弹窗 / 回地图，`←` `→` 在已解锁的站之间切换（仅关卡视图）。地址栏的 `#/…` 只是当前屏的同步结果，不参与 Esc / 返回的判断。
 - 心理学词典的卡片用原生 `details / summary`：Tab 可聚焦，Enter / 空格展开；搜索框可输入，分类按钮、类型按钮与「接着看」都是普通按钮，类型按钮带 `aria-pressed`，`Esc` 回地图。词典另有 3 项大组页内目录锚点，点关联词条跳转后焦点落到目标卡片的 `summary`；分区标题是 `<h3>`，筛空时随卡片一起隐藏。自助工具箱与慢变量同样用 `details / summary`，状态、变量与分类都是普通按钮，`Esc` 回地图。慢变量另有 4 项页内目录锚点；变量 / 状态面板带局部 `aria-live="polite"`，只切分类时不会重复播报说明。
 - 静修间的场景按钮带 `aria-pressed`，步骤点只是装饰、不进朗读；练习页每次只显示一步，不用整页 `aria-live` 播报，避免打断用户自己的节奏。
@@ -257,7 +262,18 @@
 | 合并 `levels-kid*.js` / `bank-kid*.js` | 不做 | 会同时改动 `index.html` 加载顺序、`lint-content.mjs` 的 `FILES`、`regression.mjs` 的顺序断言、岛 4 的 `splice` 插入逻辑与题库 `Object.assign`，收益只是少 2 个文件 |
 | 拆分 `script.js` 为 state / views / actions | 0.12.0 已交付 | 0.11.1 审查确认触发 §1.1 的行数条件（2914 行 > 2500）后，0.12.0 按 9 个连续切片搬进 `js/`：`core → util → shell → views-main → views-library → views-level → ui → actions → boot`。仍是经典脚本顺序加载、共用全局词法作用域，测试与主脚本的隐式依赖原样保留；加载顺序、重复声明、`sw.js` 预缓存清单都由结构断言锁住 |
 
-**已交付 / 未排期**：0.9.0–0.18.0 各版本的交付要点（急救入口、PWA 与导出导入、变体拼装与工作间、`script.js` 拆九块、内容审核与概念层、静修间 2.0、年龄档 5→4、词典证据校准、慢变量两层化等）与逐条技术细节一律见 [CHANGELOG.md](CHANGELOG.md)，本页不复述版本史；未排期的取舍与后续计划见 [ROADMAP.md](ROADMAP.md)。
+**已交付 / 未排期**：0.9.0–0.19.0 各版本的交付要点（急救入口、PWA 与导出导入、变体拼装与工作间、`script.js` 拆九块、内容审核与概念层、静修间 2.0、年龄档 5→4、词典证据校准、慢变量两层化、工程收口等）与逐条技术细节一律见 [CHANGELOG.md](CHANGELOG.md)，本页不复述版本史；未排期的取舍与后续计划见 [ROADMAP.md](ROADMAP.md)。
+
+### 9.1 1.0.0 已知边界（是取舍，不是缺陷）
+
+| 边界 | 现状 | 为什么这样定 |
+| --- | --- | --- |
+| 内容不再扩 | 每轨 4 岛 17 站、词典 162 条、变体 123 组 | 内容不是瓶颈：单轨 5 轮才明显重复。岛 5（羞耻内疚 / 比较嫉妒 / 孤独归属）排 1.1.0 |
+| 儿童档个别术语偏超龄、丧失意象待改写 | 已在 0.13.0 审核中记录，未改 | 属改内容量，需单独一轮文案审读，不在正式版前动 |
+| 无账号、无云同步、无打卡提醒 | 不做，也不排期 | 与「不联网 / 不采集 / 不制造压力」三条红线冲突；换设备用导出 JSON |
+| 朗读依赖系统语音 | 用 Web Speech API，无自建音频 | 零依赖与离线优先；不同设备音色不同，长文已做单段合并与保活 |
+| 仅简体中文 | 无多语言 | 文案以中文语感为准，翻译需重新审读语气，不属工程任务 |
+| 旧进度只在同一浏览器保留 | 清缓存 / 换浏览器需先导出 | 不联网的产品约束；导出 / 导入已做全字段闭环 |
 
 ---
 
@@ -265,6 +281,9 @@
 
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — 开发手册：两种打开方式、加内容、改完必跑、发版流程、设计红线速查、加载顺序契约
 - [CHANGELOG.md](CHANGELOG.md) — 逐版本变更与迁移记录（六段式）
-- [ROADMAP.md](ROADMAP.md) — 0.19.0 → 1.0.0 迭代计划、版本与归档规范、发布清单、1.0.0 门槛
+- [ROADMAP.md](ROADMAP.md) — 1.0.0 之后的迭代计划、版本与归档规范、发布清单、1.1.0 规划
 - [docs/archive/content-review-0.13.0.md](docs/archive/content-review-0.13.0.md) — 内容审核记录（0.13.0 → 0.17.0）历史归档（非当前事实）
 - [docs/archive/acceptance-1.0.0-review.md](docs/archive/acceptance-1.0.0-review.md) — 1.0.0 门槛盘点与 2026-11-08 验收记录（历史快照）
+- [docs/release-1.0.0.md](docs/release-1.0.0.md) — 1.0.0 发布记录：六条门槛的逐条证据、§5.3 发布清单、验收环境与已知不做
+- [docs/crisis-review-1.0.0.md](docs/crisis-review-1.0.0.md) — 危机求助号码与服务范围的复核记录（条件 4）
+- [docs/archive/audit-0.19.0.html](docs/archive/audit-0.19.0.html) — 2026-11-20 全维度代码审查报告（13 条发现与修复状态）

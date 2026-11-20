@@ -12,6 +12,20 @@
     <link rel="icon" href="icons/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="style.css">
+    <!-- CSP 纵深防御：只在 http(s) 下注入。file:// 双击打开是核心红线，
+         而 file:// 的 'self' 语义各浏览器不一，静态 meta 可能拦掉本地脚本，
+         因此绝不在 file:// 下启用。项目无用户输入拼 HTML、无 eval、无外链，
+         这份策略只是第二道防线，不是修补已知漏洞。 -->
+    <script>
+      if (location.protocol === 'http:' || location.protocol === 'https:') {
+        var m = document.createElement('meta');
+        m.httpEquiv = 'Content-Security-Policy';
+        m.content = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+          "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; " +
+          "object-src 'none'; base-uri 'none'; form-action 'none'";
+        document.head.appendChild(m);
+      }
+    </script>
 </head>
 <body>
     <div id="app">
@@ -47,33 +61,35 @@
         </footer>
     </div>
 
-    <!-- 内容：纯数据，顺序敏感；新增岛/题库再加一行即可 -->
-    <script src="content/bands.js"></script>
-    <script src="content/glossary.js"></script>
-    <script src="content/levels-kid.js"></script>
-    <script src="content/levels-kid-island4.js"></script>
-    <script src="content/levels-adult.js"></script>
-    <script src="content/bank-kid-1-3.js"></script>
-    <script src="content/bank-kid-island4.js"></script>
-    <script src="content/bank-adult-1-3.js"></script>
-    <script src="content/bank-adult-island4.js"></script>
-    <script src="content/bank-compose.js"></script>
-    <script src="content/levels-adult-work.js"></script>
-    <script src="content/library.js"></script>
-    <script src="content/meditate.js"></script>
-    <script src="content/dictionary.js"></script>
-    <script src="content/selfhelp.js"></script>
-    <script src="content/slowvars.js"></script>
-    <script src="content/help.js"></script>
-    <!-- 逻辑：按职责拆分，顺序敏感；每块首行注释写着它依赖谁 -->
-    <script src="js/core.js"></script>
-    <script src="js/util.js"></script>
-    <script src="js/shell.js"></script>
-    <script src="js/views-main.js"></script>
-    <script src="js/views-library.js"></script>
-    <script src="js/views-level.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/actions.js"></script>
-    <script src="js/boot.js"></script>
+    <!-- 内容：纯数据，顺序敏感；新增岛/题库再加一行即可。
+         全部 classic script + defer：保留严格的顺序执行与 window.MI 全局契约，
+         同时让下载与 HTML 解析并行，不再阻塞首屏（defer 保序，file:// 下同样生效）。 -->
+    <script defer src="content/bands.js"></script>
+    <script defer src="content/glossary.js"></script>
+    <script defer src="content/levels-kid.js"></script>
+    <script defer src="content/levels-kid-island4.js"></script>
+    <script defer src="content/levels-adult.js"></script>
+    <script defer src="content/bank-kid-1-3.js"></script>
+    <script defer src="content/bank-kid-island4.js"></script>
+    <script defer src="content/bank-adult-1-3.js"></script>
+    <script defer src="content/bank-adult-island4.js"></script>
+    <script defer src="content/bank-compose.js"></script>
+    <script defer src="content/levels-adult-work.js"></script>
+    <script defer src="content/library.js"></script>
+    <script defer src="content/meditate.js"></script>
+    <script defer src="content/dictionary.js"></script>
+    <script defer src="content/selfhelp.js"></script>
+    <script defer src="content/slowvars.js"></script>
+    <script defer src="content/help.js"></script>
+    <!-- 逻辑：按职责拆分，顺序敏感；每块首行注释写着它依赖谁。同样 defer 保序。 -->
+    <script defer src="js/core.js"></script>
+    <script defer src="js/util.js"></script>
+    <script defer src="js/shell.js"></script>
+    <script defer src="js/views-main.js"></script>
+    <script defer src="js/views-library.js"></script>
+    <script defer src="js/views-level.js"></script>
+    <script defer src="js/ui.js"></script>
+    <script defer src="js/actions.js"></script>
+    <script defer src="js/boot.js"></script>
 </body>
 </html>

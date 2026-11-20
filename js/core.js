@@ -1,4 +1,4 @@
-/* 心情闯关岛 v0.19.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v1.0.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
@@ -199,6 +199,9 @@ const remapBand = id => (typeof id === 'string' ? (BAND_REMAP[id] || id) : null)
 let state = load();
 let play = {};
 let session = {
+  /* levelIndex 是「当前正在看哪一关」的运行时游标，不写存档：
+     过去挂在 state 上会随 save() 落盘，却不在 migrate 白名单里，导出再导入就丢。 */
+  levelIndex: 0,
   clearedThisRun: 0, view: 'home', tip: '', navDir: '',
   mapScroll: 0, lastCleared: '', interrupted: false, retreatStep: -1,
   helpFrom: 'home',
@@ -227,6 +230,9 @@ let svVar = null;
 let svCat = 'all';
 let breathTimer = null;
 let memoTimer = null;
+/* 「进站自动读题」的 350ms 延迟朗读句柄：切视图时必须一起清掉，
+   否则 stopSpeech() 刚取消、延迟回调又在新页面上重新读出来。 */
+let speakTimer = null;
 /* 「歇一下」的延迟提醒：切视图时要随 breathTimer / memoTimer 一起清掉，
    否则 900ms 后弹出的休息弹窗会盖在新页面上。 */
 let restTimer = null;

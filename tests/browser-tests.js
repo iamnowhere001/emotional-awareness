@@ -11,7 +11,7 @@ window.addEventListener('load', function () {
     catch (e) { lines.push('FAIL · ' + name + ' → ' + (e && e.message ? e.message : String(e))); failed++; }
   };
   const bandTo = id => { state.band = id; applySettings(); };
-  const goLevel = i => { state.levelIndex = i; renderLevel(); };
+  const goLevel = i => { session.levelIndex = i; renderLevel(); };
   const byType = t => LEVELS.findIndex(l => l.type === t);
   const count = o => Object.values(o).reduce((s, a) => s + a.length, 0);
 
@@ -615,7 +615,7 @@ window.addEventListener('load', function () {
     renderHome();
     A(document.querySelector('.home-next').textContent.includes(KID.levels[1].name));
     document.querySelector('#stage .actions .btn-primary').click();
-    A(session.view === 'level' && state.levelIndex === 1, '应跳过地图，直接进入第 2 站');
+    A(session.view === 'level' && session.levelIndex === 1, '应跳过地图，直接进入第 2 站');
   });
   test('地图「从这里继续」与首页走同一处判断', () => {
     bandTo('a6');
@@ -624,7 +624,7 @@ window.addEventListener('load', function () {
     const btn = document.querySelector('#stage .map-next [data-action="continue"]');
     A(!!btn && document.querySelector('.map-next').textContent.includes(KID.levels[0].name));
     btn.click();
-    A(session.view === 'level' && state.levelIndex === 0);
+    A(session.view === 'level' && session.levelIndex === 0);
   });
 
   /* ---------- 急救入口 ---------- */
@@ -821,16 +821,16 @@ window.addEventListener('load', function () {
     state.cleared = KID.levels.map(l => l.id);
     save(); applySettings();
     const lv = KID.levels[3];
-    state.levelIndex = 0;
+    session.levelIndex = 0;
     routeTo(parseHash('#/level/' + lv.id));
-    A(session.view === 'level' && state.levelIndex === 3, `应定位到第 4 站，实际 ${state.levelIndex}`);
+    A(session.view === 'level' && session.levelIndex === 3, `应定位到第 4 站，实际 ${session.levelIndex}`);
     A(location.hash === '#/level/' + lv.id, `地址应同步，实际 ${location.hash}`);
     renderMap();
     A(location.hash === '#/map');
   });
   test('未知或不可达的 hash 回落，不报错', () => {
     bandTo('a6'); state.cleared = []; save(); renderHome();
-    state.levelIndex = 0;
+    session.levelIndex = 0;
     routeTo(parseHash('#/level/' + KID.levels[16].id));
     A(session.view === 'map' && location.hash === '#/map', '未解锁的站应回到地图');
     A(stage.textContent.includes('还没解锁'));
@@ -868,7 +868,7 @@ window.addEventListener('load', function () {
     A(JSON.stringify(a.options) === JSON.stringify(b.options), '同一 key 换种子也不得改变选项顺序');
     A(a.options.every(o => o.t && o.d && !o.ok), '对外只暴露 t / d，不泄漏 ok 标记');
     const idx = KID.levels.findIndex(l => l.id === '4-3');
-    state.levelIndex = idx;
+    session.levelIndex = idx;
     play = makePlay(KID.levels[idx], a);
     renderLevel(play);
     const root = document.querySelector('#stage [data-variant]');
@@ -934,12 +934,12 @@ window.addEventListener('load', function () {
     A(state.cleared.join(',') === WORK_GATE, '连续两幕也不得污染主线');
   });
   test('工作间 hash 直达、不可达回落、Esc 回地图', () => {
-    bandTo('adult'); state.cleared = [WORK_GATE]; state.sideCleared = []; state.levelIndex = 0; save(); applySettings();
+    bandTo('adult'); state.cleared = [WORK_GATE]; state.sideCleared = []; session.levelIndex = 0; save(); applySettings();
     renderHome();
     routeTo(parseHash('#/level/W-1'));
     A(session.view === 'level' && currentLevel().id === 'W-1' && !!play.side, '应直达第一幕');
     A(location.hash === '#/level/W-1');
-    A(state.levelIndex === 0, '支线不应改写主线停在哪一站');
+    A(session.levelIndex === 0, '支线不应改写主线停在哪一站');
     routeTo(parseHash('#/work'));
     A(session.view === 'work' && location.hash === '#/work', '应进入工作间时间线');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -960,7 +960,7 @@ window.addEventListener('load', function () {
     state.sideCleared = [];
     const idx = LEVELS.findIndex(l => l.id === 'A2-1');
     A(idx > 0, '应能定位到未通关的 A2-1');
-    state.levelIndex = idx;
+    session.levelIndex = idx;
     save(); applySettings();
     renderLevel(null, WORK[0], 0);
     ACTIONS['reroll']();
@@ -1013,7 +1013,7 @@ window.addEventListener('load', function () {
     bandTo('adult');
     play = {};
     const idx = LEVELS.findIndex(l => l.id === 'A2-1');
-    state.levelIndex = idx; renderLevel();
+    session.levelIndex = idx; renderLevel();
     A(play.v.mode === 'space', `A2-1 的变体应是 space 模式（id=${play.id} mode=${play.v.mode}）`);
     const txt = document.getElementById('stage').textContent;
     A(txt.includes('约 3 分钟') && !txt.includes('跟着做'), '按钮应写约 3 分钟，不再按轮数');
@@ -1059,7 +1059,7 @@ window.addEventListener('load', function () {
   test('关卡页标出概念关系：复习站 / 工作间回指教学站', () => {
     bandTo('adult');
     state.cleared = ['A2-4', WORK_GATE]; state.sideCleared = ['W-1', 'W-2'];
-    state.levelIndex = LEVELS.findIndex(l => l.id === 'A3-4');
+    session.levelIndex = LEVELS.findIndex(l => l.id === 'A3-4');
     renderLevel();
     const line = document.querySelector('.concept-line');
     A(!!line && line.textContent.includes('复习'), 'A3-4 应标为复习站');
@@ -1068,12 +1068,12 @@ window.addEventListener('load', function () {
     A(!!wline && wline.textContent.includes('会用到') && wline.textContent.includes('表达'), 'W-3 应回指表达');
     const back = wline.querySelector('[data-action="open-level"]');
     A(!!back && LEVELS[Number(back.dataset.i)].id === 'A3-3', '应能回到 A3-3 教学站');
-    play = {}; state.levelIndex = 0; renderMap();
+    play = {}; session.levelIndex = 0; renderMap();
   });
   test('结果卡先给机制与规格，并接词典', () => {
     bandTo('adult');
     state.cleared = ['A1-1']; state.awarded = []; state.sideCleared = [];
-    state.levelIndex = LEVELS.findIndex(l => l.id === 'A1-2');
+    session.levelIndex = LEVELS.findIndex(l => l.id === 'A1-2');
     renderLevel();
     completeLevel('走过了');
     const txt = document.getElementById('stage').textContent;
@@ -1164,7 +1164,7 @@ window.addEventListener('load', function () {
     A(!('QUOTES' in LIB));
     bandTo('adult');
     const idx = LEVELS.findIndex(l => l.type === 'finale');
-    state.levelIndex = idx; renderLevel();
+    session.levelIndex = idx; renderLevel();
     A(play.quotes.length === 3 && play.quotes.every(q => GLOSSARY_LINES.includes(q)));
   });
   test('5-4-3-2-1 统一为五步，急救版标注「急诊版」', () => {
@@ -1201,7 +1201,7 @@ window.addEventListener('load', function () {
 
   test('从头再来后已完成的幕仍可回看与直达', () => {
     bandTo('adult');
-    state.cleared = []; state.sideCleared = ['W-1', 'W-2']; state.levelIndex = 0;
+    state.cleared = []; state.sideCleared = ['W-1', 'W-2']; session.levelIndex = 0;
     save(); applySettings();
     renderWork();
     const stop = document.querySelector('#stage [data-action="open-work-level"][data-i="0"]');
@@ -1354,7 +1354,7 @@ window.addEventListener('load', function () {
   });
   test('两轨岛末站都发放与概念绑定的实践卡，终章不发放', () => {
     bandTo('a6');
-    state.levelIndex = KID.levels.findIndex(l => l.id === '4-4');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '4-4');
     renderLevel();
     session.clearedThisRun = 0;
     completeLevel('测试');
@@ -1363,7 +1363,7 @@ window.addEventListener('load', function () {
     A(kidCard.textContent.includes(conceptOfLevel('4-4').practice));
     A(kidCard.querySelector('[data-action="pocket-add"]'));
     bandTo('adult');
-    state.levelIndex = ADULT.levels.findIndex(l => l.id === 'A4-4');
+    session.levelIndex = ADULT.levels.findIndex(l => l.id === 'A4-4');
     renderLevel();
     session.clearedThisRun = 0;
     completeLevel('测试');
@@ -1527,12 +1527,12 @@ window.addEventListener('load', function () {
   const snapshotProgress = () => ({
     cleared: state.cleared.slice(), awarded: state.awarded.slice(), skills: state.skills.slice(),
     cards: JSON.parse(JSON.stringify(state.cards)), shells: state.shells, run: session.clearedThisRun,
-    idx: state.levelIndex, play, interrupted: session.interrupted
+    idx: session.levelIndex, play, interrupted: session.interrupted
   });
   const restoreProgress = (snap) => {
     state.cleared = snap.cleared; state.awarded = snap.awarded; state.skills = snap.skills;
     state.cards = snap.cards; state.shells = snap.shells; session.clearedThisRun = snap.run;
-    state.levelIndex = snap.idx; play = snap.play; session.interrupted = snap.interrupted;
+    session.levelIndex = snap.idx; play = snap.play; session.interrupted = snap.interrupted;
     if (restTimer) { clearTimeout(restTimer); restTimer = null; }
     closeModal(); save();
   };
@@ -1541,7 +1541,7 @@ window.addEventListener('load', function () {
     bandTo('a6');
     const snap = snapshotProgress();
     try {
-      state.levelIndex = 0; play = {}; renderLevel();
+      session.levelIndex = 0; play = {}; renderLevel();
       completeLevel('测试');
       A(!!document.querySelector('#feedback-slot .result-card'), '通关后应有结果卡');
       A(!!document.querySelector('#feedback-slot [data-action="next-level"]'), '结果卡应有「去下一站」');
@@ -1564,14 +1564,14 @@ window.addEventListener('load', function () {
       session.clearedThisRun = rest - 1;
       state.cleared = state.cleared.filter(id => id !== LEVELS[0].id);
       state.awarded = state.awarded.filter(id => id !== LEVELS[0].id);
-      state.levelIndex = 0; play = {}; renderLevel();
+      session.levelIndex = 0; play = {}; renderLevel();
       completeLevel('测试');
       A(session.clearedThisRun === rest, `首次通关后本轮计数应为 ${rest}，实际 ${session.clearedThisRun}`);
       A(restTimer !== null, '到点后应排一次休息提醒');
-      state.levelIndex = 1; play = {}; renderLevel();
+      session.levelIndex = 1; play = {}; renderLevel();
       A(restTimer === null, '换到下一站时应取消休息提醒');
       const before = session.clearedThisRun;
-      state.levelIndex = 0; play = {}; renderLevel();
+      session.levelIndex = 0; play = {}; renderLevel();
       completeLevel('测试');
       A(session.clearedThisRun === before, '复玩同一站不应再自增');
       A(restTimer === null, '复玩不应重新排休息提醒');
@@ -1605,7 +1605,7 @@ window.addEventListener('load', function () {
     try {
       const i = byType('breath');
       A(i >= 0, '应能找到呼吸站');
-      state.levelIndex = i; play = {}; renderLevel();
+      session.levelIndex = i; play = {}; renderLevel();
       ACTIONS['breath-start']();
       A(breathTimer !== null && play.running === true, '呼吸应开始计时');
       ACTIONS['open-help']();
@@ -1755,7 +1755,7 @@ window.addEventListener('load', function () {
   });
   test('首次进站抽基础层，走过一次自动进「多想一步」', () => {
     bandTo('a6'); session.depth = null; state.cleared = [];
-    state.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
     renderLevel();
     A(play.depth === 1 && (play.v.tier || 1) === 1);
     state.cleared.push('2-3');
@@ -1765,7 +1765,7 @@ window.addEventListener('load', function () {
   });
   test('手动切层不写存档，换档后回到自动决定', () => {
     bandTo('a6'); session.depth = null;
-    state.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '2-3');
     renderLevel();
     const before = localStorage.getItem('mood-island-v5');
     ACTIONS['set-depth']({ dataset: { d: '2' } });
@@ -1777,7 +1777,7 @@ window.addEventListener('load', function () {
   });
   test('结果卡详细度跟着当前题的深度走，不再绑年龄段', () => {
     bandTo('a6'); session.depth = 1;
-    state.levelIndex = 0; renderLevel();
+    session.levelIndex = 0; renderLevel();
     session.clearedThisRun = 0; completeLevel('测试');
     A(!!document.querySelector('.result-more'), '基础层应折叠成人说明');
     session.depth = 2; renderLevel();
@@ -1787,7 +1787,7 @@ window.addEventListener('load', function () {
   });
   test('关卡页有站间承接句，概念层 16 条都有桥与实践卡', () => {
     bandTo('a6'); session.depth = null;
-    state.levelIndex = KID.levels.findIndex(l => l.id === '1-2');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '1-2');
     renderLevel();
     const bridge = document.querySelector('.level-bridge');
     A(bridge && bridge.textContent.includes('这一站接着'));
@@ -1796,7 +1796,7 @@ window.addEventListener('load', function () {
   });
   test('带回下一站的实践卡只出现一次，不写存档', () => {
     bandTo('a6'); session.depth = null; session.pocket = null;
-    state.levelIndex = KID.levels.findIndex(l => l.id === '1-4');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '1-4');
     renderLevel();
     session.clearedThisRun = 0; completeLevel('测试');
     const btn = document.querySelector('[data-action="pocket-add"]');
@@ -1805,17 +1805,17 @@ window.addEventListener('load', function () {
     ACTIONS['pocket-add'](btn);
     A(session.pocket && session.pocket.from === '1-4');
     A(localStorage.getItem('mood-island-v5') === before, '口袋不该落盘');
-    state.levelIndex = KID.levels.findIndex(l => l.id === '2-1');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '2-1');
     renderLevel();
     A(document.querySelector('.level-bridge').textContent.includes('上一站带走的'));
     A(session.pocket === null, '取用后应清掉');
-    state.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
     renderLevel();
     A(!document.querySelector('.level-bridge').textContent.includes('上一站带走的'), '不该重复出现');
   });
   test('两个人一起选：两轮后并排看，不推进进度、不写存档', () => {
     bandTo('a6'); session.depth = null; state.cleared = [];
-    state.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
+    session.levelIndex = KID.levels.findIndex(l => l.id === '2-2');
     renderLevel();
     const before = localStorage.getItem('mood-island-v5');
     const clearedBefore = state.cleared.length;
@@ -1834,7 +1834,7 @@ window.addEventListener('load', function () {
   });
   test('首站天气主按钮默认可用，选过之后换文案', () => {
     bandTo('a6'); session.depth = null;
-    state.levelIndex = 0; renderLevel();
+    session.levelIndex = 0; renderLevel();
     const go = document.getElementById('weather-go');
     A(go && !go.disabled, '首站主按钮不该禁用');
     A(go.textContent.includes('就这样出发'));
@@ -1885,7 +1885,7 @@ window.addEventListener('load', function () {
     bandTo('a6'); session.depth = null;
     const idx = byType('memory');
     A(idx >= 0, '应能找到记忆翻牌关');
-    state.levelIndex = idx; renderLevel();
+    session.levelIndex = idx; renderLevel();
     A(play.type === 'memory');
     let a = -1, b = -1;
     for (let i = 0; i < play.deck.length && b < 0; i++) {
@@ -1914,7 +1914,7 @@ window.addEventListener('load', function () {
     bandTo('a6'); session.depth = null;
     const idx = byType('slider');
     A(idx >= 0, '应能找到温度计关');
-    state.levelIndex = idx; renderLevel();
+    session.levelIndex = idx; renderLevel();
     A(play.type === 'slider');
     const input = document.getElementById('thermo');
     A(!!input, '应渲染滑块');
@@ -1931,7 +1931,7 @@ window.addEventListener('load', function () {
   });
   test('0.19 · 通关后 toolbar 的双人按钮被禁用，结果卡按钮保留', () => {
     bandTo('a6'); session.depth = null;
-    state.levelIndex = 0; renderLevel();
+    session.levelIndex = 0; renderLevel();
     const duo = document.querySelector('#stage .toolbar [data-action="duo-open"]');
     A(!!duo && !duo.disabled, '未通关时双人按钮可用');
     completeLevel('回归用通关文案');
@@ -1968,6 +1968,100 @@ window.addEventListener('load', function () {
     bandTo('all'); ACTIONS['open-slowvars']();
     A(!stage.textContent.includes('这一页更多写给大人'), '亲子档不应显示提示');
     renderMap();
+  });
+
+  /* ---------- 1.0.0 健壮性收尾回归 ---------- */
+  test('1.0 · 渲染期异常显示可读错误页，详情转义且重入不覆盖', () => {
+    bandTo('a6'); renderMap();
+    showFatalError('boom <script>alert(1)</script>');
+    A(stage.textContent.includes('没能加载好'), '应显示可读错误页');
+    A(!!document.querySelector('#stage [data-action="reload-app"]'), '应给出重新载入出口');
+    A(!!document.querySelector('#stage [data-action="fatal-dismiss"]'), '应给出回到地图出口');
+    A(!document.querySelector('#stage script'), '错误详情必须转义，不得注入脚本');
+    A(stage.textContent.includes('alert(1)'), '详情仍要作为纯文本可读');
+    showFatalError('第二条');
+    A(!stage.textContent.includes('第二条'), '重入时不该用第二条覆盖已有提示');
+    fatalShown = false;
+    renderMap();
+  });
+  test('1.0 · 错误页「回到地图」复位重入保护，之后仍能兜住新异常', () => {
+    bandTo('a6'); renderMap();
+    showFatalError('第一次');
+    A(fatalShown === true);
+    ACTIONS['fatal-dismiss']();
+    A(fatalShown === false, '回到地图后必须解除保护');
+    A(session.view === 'map' && stage.innerHTML.length > 100, '应回到地图');
+    showFatalError('第二次');
+    A(stage.textContent.includes('第二次'), '之后的新异常仍要有提示');
+    fatalShown = false;
+    renderMap();
+  });
+  test('1.0 · 另一个标签页改了存档时提示一次，无关键不打扰', () => {
+    bandTo('a6'); renderMap();
+    storageNotified = false; closeModal();
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue: '{}' }));
+    A(overlay.classList.contains('open'), '应弹出提示');
+    A(overlay.textContent.includes('另一个标签页'), '提示应说明冲突来源');
+    A(!!overlay.querySelector('[data-action="reload-app"]'), '应给出载入最新进度的出口');
+    closeModal(); storageNotified = false;
+    window.dispatchEvent(new StorageEvent('storage', { key: 'some-other-key', newValue: '1' }));
+    A(!overlay.classList.contains('open'), '非存档键不该弹窗');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue: '{}' }));
+    A(overlay.classList.contains('open'), '存档键仍要提示');
+    closeModal(); storageNotified = false;
+  });
+  test('1.0 · 设置里有「装到主屏」：无安装事件时给手动路径，动作不抛错', () => {
+    bandTo('a6'); renderMap();
+    deferredInstallPrompt = null;
+    openSettings();
+    A(overlay.textContent.includes('装到主屏'), '设置里应有安装分组');
+    A(overlay.textContent.includes('添加到主屏'), '不支持 beforeinstallprompt 时应给手动路径');
+    A(!overlay.querySelector('[data-action="install-app"]'), '没有暂存事件时不该显示会空转的按钮');
+    ACTIONS['install-app']();
+    closeModal();
+  });
+  test('1.0 · 进站自动朗读的延迟句柄随切屏一起清掉', () => {
+    bandTo('a6'); session.depth = null;
+    state.settings.speak = true; state.settings.autoSpeak = true;
+    session.levelIndex = 0; renderLevel();
+    A(speakTimer !== null, '进站应挂起延迟朗读');
+    clearAsyncTimers(); stopSpeech();
+    A(speakTimer === null, '切屏时必须清掉延迟朗读，否则会读出下一页的内容');
+    state.settings.autoSpeak = false;
+    renderMap();
+  });
+  test('1.0 · 数字键选答案，不会误翻线索卡', () => {
+    bandTo('a6'); session.depth = null;
+    const idx = byType('clue');
+    A(idx >= 0, '应能找到线索关');
+    session.levelIndex = idx; renderLevel();
+    A(play.type === 'clue');
+    A(document.querySelectorAll('#stage .clue-card').length > 0, '应渲染线索卡');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    A(play.flipped.size === 0, '数字键应选答案，不该顺带翻开线索卡');
+    renderMap();
+  });
+  test('1.0 · http(s) 下注入收紧的 CSP，且不放开内联脚本与 eval', () => {
+    const m = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    A(!!m, 'http 下应注入 CSP meta');
+    A(/script-src 'self'/.test(m.content), '脚本只允许同源');
+    A(/object-src 'none'/.test(m.content) && /base-uri 'none'/.test(m.content), '应禁用 object / base');
+    A(!/unsafe-eval/.test(m.content) && !/script-src[^;]*'unsafe-inline'/.test(m.content), '不应放开 eval 或内联脚本');
+  });
+  test('1.0 · 全部脚本都用 defer 保序，boot 之后才是注入的测试脚本', () => {
+    const scripts = [...document.querySelectorAll('script[src]')];
+    A(scripts.length >= 27, `脚本数量偏少：${scripts.length}`);
+    A(scripts.every(s => s.hasAttribute('defer')), '任一脚本漏 defer 都会破坏保序或阻塞首屏');
+    const srcs = scripts.map(s => s.getAttribute('src'));
+    const bootAt = srcs.indexOf('js/boot.js');
+    A(bootAt > 0 && bootAt === srcs.length - 2, `boot 应是倒数第二个脚本，实际位置 ${bootAt}/${srcs.length}`);
+    A(srcs[0] === 'content/bands.js', '内容脚本仍要排在最前');
+  });
+  test('1.0 · 运行时游标 levelIndex 既不落盘也不进导出', () => {
+    bandTo('a6'); session.levelIndex = 3; save();
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    A(!('levelIndex' in raw), '存档里不该出现 levelIndex');
+    A(!('levelIndex' in exportPayload().state), '导出载荷同样不该带 levelIndex');
   });
 
   bandTo('a6');

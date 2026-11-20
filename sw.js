@@ -17,8 +17,12 @@
       .catch(() => self.skipWaiting())，让 SW 至少能 activate，离线能力不至于整个失效。
    注意：js/boot.js 里 .catch(() => {}) 吞的是 register() 的 Promise，与 install 的
    waitUntil 是两个不同的 Promise；准确说法是「install 失败本身无任何上报，
-   注册失败又被静默吞掉，两层各自静默叠加」。这里不动 js/boot.js。 */
-const VERSION = '0.19.0';
+   注册失败又被静默吞掉，两层各自静默叠加」。1.0.0 起两层都补了 console.warn，
+   失败仍不打扰用户，但控制台可查。
+
+   1.0.0 无新增缓存逻辑，只把版本推进到正式版：缓存名随之变为 mood-island-1.0.0，
+   旧缓存（含 0.19.0 及更早）在 activate 阶段被清掉。 */
+const VERSION = '1.0.0';
 const CACHE = `mood-island-${VERSION}`;
 const ASSETS = [
   './index.html',
@@ -56,13 +60,17 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then((c) => c.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-      /* addAll 里任一资源 404 会让整条链 reject；这时仍要 skipWaiting，
-         否则 SW 永远停在 installed、activate 不跑，离线能力整个失效。 */
-      .catch(() => self.skipWaiting())
+    e.waitUntil(
+      caches.open(CACHE)
+        .then((c) => c.addAll(ASSETS))
+        .then(() => self.skipWaiting())
+        /* addAll 里任一资源 404 会让整条链 reject；这时仍要 skipWaiting，
+           否则 SW 永远停在 installed、activate 不跑，离线能力整个失效。
+           但失败要留下控制台痕迹：过去这里完全静默，缓存不完整与正常安装无从区分。 */
+        .catch((err) => {
+          console.warn('[mood-island] 预缓存未完成，离线能力可能不完整：', err);
+          return self.skipWaiting();
+        })
   );
 });
 

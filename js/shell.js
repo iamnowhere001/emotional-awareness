@@ -57,15 +57,15 @@ function updateTopbar() {
   const track = document.getElementById('step-track');
   if (track) track.innerHTML = sideNow ? '' : LEVELS.map((l, i) => {
     const done = state.cleared.includes(l.id);
-    const cur = session.view === 'level' && state.levelIndex === i;
+    const cur = session.view === 'level' && session.levelIndex === i;
     const unlocked = isUnlocked(i);
     return `<button class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" data-action="open-level" data-i="${i}" ${unlocked ? '' : 'disabled'} ${cur ? 'aria-current="step"' : ''} title="${esc(l.id + ' · ' + l.name)}" aria-label="第 ${i + 1} 站 ${esc(l.name)}${done ? '，已走过' : ''}"></button>`;
   }).join('');
   const pt = document.getElementById('progress-text');
   if (pt) pt.textContent = sideNow
     ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
-    : (vc.title === 'current' && LEVELS[state.levelIndex])
-      ? `第 ${state.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[state.levelIndex].name}`
+    : (vc.title === 'current' && LEVELS[session.levelIndex])
+      ? `第 ${session.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[session.levelIndex].name}`
       : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
   syncHash();
 }
@@ -181,7 +181,7 @@ function routeTo(r) {
       renderMap();
       return;
     }
-    state.levelIndex = idx;
+    session.levelIndex = idx;
     play = {};
     session.navDir = '';
     renderLevel();
@@ -255,11 +255,11 @@ function isUnlocked(i) {
   if (!prevIsland.length) return true;
   return state.cleared.includes(prevIsland[prevIsland.length - 1].id);
 }
-/* 当前正在玩的那一关：主线读 state.levelIndex，支线读 play.sideIndex。
-   支线不改 state.levelIndex，所以退出支线后主线停在哪一站原样保留。 */
+/* 当前正在玩的那一关：主线读 session.levelIndex（运行时游标，不落盘），支线读 play.sideIndex。
+   支线不改 session.levelIndex，所以退出支线后主线停在哪一站原样保留。 */
 function currentLevel() {
   if (play && play.side) return WORK[play.sideIndex] || WORK[0] || {};
-  return LEVELS[state.levelIndex] || LEVELS[0] || {};
+  return LEVELS[session.levelIndex] || LEVELS[0] || {};
 }
 /* 工作间四幕线性解锁：走完 WORK_GATE（A3-4）开放第一幕，之后每一幕要求上一幕已完成。
    入口放在第 3 岛收尾之后，是因为四幕用到的身体信号 / 重评 / 念头链 / 表达
@@ -282,9 +282,17 @@ function clearAsyncTimers() {
     if (play && play.running) session.interrupted = true;
   }
   if (memoTimer) { clearTimeout(memoTimer); memoTimer = null; }
+  /* 自动朗读的延迟回调必须跟着视图一起收掉，否则切屏后仍会读新页面内容 */
+  if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
   if (restTimer) { clearTimeout(restTimer); restTimer = null; }
 }
-function stopSpeech() { try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) { /* noop */ } }
+/* 长文本朗读的保活定时器：Chrome 对 speechSynthesis 约 15 秒后会静默停住，
+   周期性 pause/resume 可唤醒；必须在停止/结束时清理，否则空转耗电。 */
+let speechKeepAlive = null;
+function stopSpeech() {
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) { /* noop */ }
+  if (speechKeepAlive) { clearInterval(speechKeepAlive); speechKeepAlive = null; }
+}
 function speakTexts(texts) {
   if (!state.settings.speak || !('speechSynthesis' in window)) return;
   /* 空内容直接返回：cancel() 会把正在播的「读选项」掐掉，造成「点了读题目反而没声」。 */
@@ -292,11 +300,23 @@ function speakTexts(texts) {
   if (!list.length) return;
   try {
     window.speechSynthesis.cancel();
-    list.forEach(t => {
-      const u = new SpeechSynthesisUtterance(t);
-      u.lang = 'zh-CN'; u.rate = 0.88; u.pitch = 1.05;
-      window.speechSynthesis.speak(u);
-    });
+    if (speechKeepAlive) { clearInterval(speechKeepAlive); speechKeepAlive = null; }
+    /* 合并成一条再读：一次排多段是 Chrome 中途静默的主要诱因；
+       用句号连接保留逐项之间的自然停顿，读选项最多 10 项。 */
+    const u = new SpeechSynthesisUtterance(list.join('。'));
+    u.lang = 'zh-CN'; u.rate = 0.88; u.pitch = 1.05;
+    const done = () => { if (speechKeepAlive) { clearInterval(speechKeepAlive); speechKeepAlive = null; } };
+    u.onend = done;
+    u.onerror = done;
+    speechKeepAlive = setInterval(() => {
+      try {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      } catch (e) { /* noop */ }
+    }, 12000);
+    window.speechSynthesis.speak(u);
   } catch (e) { /* noop */ }
 }
 function questionTexts() {

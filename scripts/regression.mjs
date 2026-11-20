@@ -51,16 +51,16 @@ const contentFiles = [
   'bank-compose', 'levels-adult-work', 'library', 'meditate', 'dictionary', 'selfhelp', 'slowvars', 'help'
 ];
 const headerVersion = (src.slice(0, 200).match(/\bv(\d+\.\d+\.\d+)\b/) || [])[1];
-/* 0.x 台阶制：发版号与存档 schema 是两套编号，重排发版号不得带走 storage key。 */
-S('js/core.js 头注释 / package.json 一致且采用 0.x 台阶制',
-  headerVersion === pkg.version && /^0\.\d+\.\d+$/.test(pkg.version) &&
+/* 发版号与存档 schema 是两套编号：1.0.0 进位不得带走 storage key。 */
+S('js/core.js 头注释 / package.json 一致且符合 semver',
+  headerVersion === pkg.version && /^\d+\.\d+\.\d+$/.test(pkg.version) &&
   /const SCHEMA_VERSION = \d+;/.test(src) && /const STORAGE_KEY = 'mood-island-v5';/.test(src));
 const clVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map(m => m[1]);
 S('README / CHANGELOG / ROADMAP 版本口径一致且历史编号已重排',
   readme.includes(`当前版本 **${pkg.version}**`) &&
   roadmap.includes(`当前版本 **${pkg.version}**`) &&
   changelog.includes(`## [${pkg.version}]`) &&
-  clVersions.length >= 10 && clVersions.every(v => /^0\.\d+\.\d+$/.test(v)) &&
+  clVersions.length >= 10 && clVersions.every(v => /^\d+\.\d+\.\d+$/.test(v)) &&
   !/不占用 ROADMAP|留给.{0,12}编号|不记 \d+\.\d+\.0/.test(changelog));
 /* 对比度：正文/提示色必须在浅色底上达到 WCAG AA 4.5:1 */
 const tokenOf = name => {
@@ -303,6 +303,43 @@ S('新增样式类都在视图里有对应渲染',
   ['level-bridge', 'level-depth', 'practice-card', 'duo-panel', 'weather-hint']
     .every(c => css.includes('.' + c) && src.includes(c)));
 
+/* ---------- 1.0.0 收尾：健壮性改动必须留在代码里 ---------- */
+/* defer 是「首屏不被 26 个脚本串行阻塞」的前提，也是保序契约的一部分。 */
+S('index.html 全部脚本都用 defer 且 boot.js 仍是最后一个',
+  (() => {
+    const tags = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)];
+    return tags.length >= 26 && tags.every(m => /\bdefer\b/.test(m[0])) &&
+      tags[tags.length - 1][1] === 'js/boot.js';
+  })());
+/* CSP 只在 http(s) 注入：file:// 双击是核心红线，不能被静态 meta 误伤。 */
+S('CSP 只在 http(s) 下注入且策略不含 unsafe-eval / 内联脚本',
+  /location\.protocol === 'http:'/.test(html) &&
+  /Content-Security-Policy/.test(html) &&
+  /script-src 'self'/.test(html) && /object-src 'none'/.test(html) &&
+  !/unsafe-eval/.test(html) && !/script-src[^;]*'unsafe-inline'/.test(html));
+/* 运行时游标一旦回到 state 就会重新落盘、导出后丢失。 */
+S('运行时游标 levelIndex 只存在于 session，不写 state',
+  /session\.levelIndex/.test(src) && !/state\.levelIndex/.test(src) &&
+  /session\s*=\s*\{[\s\S]{0,200}levelIndex: 0/.test(src));
+S('渲染期异常有全局兜底且给出两个出口',
+  /window\.addEventListener\('error'/.test(src) &&
+  /window\.addEventListener\('unhandledrejection'/.test(src) &&
+  /function showFatalError/.test(src) &&
+  /data-action="reload-app"/.test(src) && /data-action="fatal-dismiss"/.test(src) &&
+  /ACTIONS\['fatal-dismiss'\]/.test(src));
+S('跨标签页存档冲突有提示且只提示一次',
+  /window\.addEventListener\('storage'/.test(src) &&
+  /storageNotified/.test(src) && /另一个标签页更新了进度/.test(src));
+/* 静默失败是这一轮的主要病根：SW 注册与预缓存失败都必须留痕。 */
+S('SW 注册与预缓存失败都留控制台痕迹',
+  /预缓存未完成/.test(swSrc) && /Service Worker 注册失败/.test(src) &&
+  /SW 更新检查失败/.test(src));
+S('安装入口按能力降级：有事件给按钮，没事件给手动路径',
+  /beforeinstallprompt/.test(src) && /'install-app'/.test(src) && /装到主屏/.test(src) &&
+  /添加到主屏/.test(src));
+/* 发布门槛的条件 6 要求留痕：1.0.0 必须有对应的发布记录。 */
+S('1.0.0 发布记录已留痕', pkg.version !== '1.0.0' || existsSync(join(root, 'docs/release-1.0.0.md')));
+
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();
 if (!chrome) {
@@ -317,10 +354,18 @@ if (!chrome) {
   console.error('✗ 找不到 Chrome / Chromium。设置 CHROME_PATH 指向可执行文件后重试。');
   process.exit(1);
 }
-const appHtml = html.replace(
-  '<script src="js/boot.js"></script>',
-  '<script src="js/boot.js"></script>\n<script src="/tests/browser-tests.js"></script>'
-);
+/* index.html 的脚本统一用 defer 保序。注入的测试脚本也必须 defer，
+   才能排在 boot.js 之后执行（否则非 defer 脚本会在解析期抢先运行，
+   那时应用脚本尚未求值，测试会引用到未定义的 MI / ACTIONS / state）。 */
+const appHtml = (() => {
+  const re = /(<script\s+defer\s+src="js\/boot\.js"><\/script>)/;
+  if (re.test(html)) return html.replace(re, '$1\n<script defer src="/tests/browser-tests.js"></script>');
+  /* 兼容未加 defer 的历史 index.html，避免此处成为脆弱的硬编码单点 */
+  if (html.includes('<script src="js/boot.js"></script>')) {
+    return html.replace('<script src="js/boot.js"></script>', '<script src="js/boot.js"></script>\n<script src="/tests/browser-tests.js"></script>');
+  }
+  return html;
+})();
 if (!appHtml.includes('browser-tests.js')) {
   console.error('✗ 测试脚本注入失败：index.html 里没找到 js/boot.js 的引用。');
   process.exit(1);

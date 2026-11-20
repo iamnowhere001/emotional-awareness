@@ -186,7 +186,7 @@ npm run verify      # = check + lint + doctor + test:e2e
 2. **跑 `npm run verify` 与 `npm run doctor`**：确认六处一致、规模表与结构图同步、加载顺序契约无偏差，以 doctor 输出为准。再按 §5.3 补窄屏 360 / 390 / 414px 无横向溢出、`file://` 双击冒烟、旧档 JSON 走 `migrate()`、红线复核。
 3. **CHANGELOG 写六段**：「新增 / 变更 / 修复 / 工程 / 验证 / 取舍」，取舍段写清「这次故意没做什么、为什么」；**不再解释编号占位**（§4.3）。
 4. **确认 `sw.js` 字节与缓存名变化**（§5.3 第 7 项）：`VERSION` 改了 → 缓存名 `mood-island-${VERSION}` 随之变化 → `install` 预缓存新清单、`activate` 清掉所有旧缓存。有 SW 时额外验证缓存更新（临时副本 A→B 只改 `VERSION`，切到 B 后 reload 只剩新缓存）；有导入功能时额外验证恶意 JSON。
-5. **一笔提交**：每个发版号对应一个 git commit，没有提交就不算发版；自 0.17.0 起恢复「一版一笔提交」（§4.3 记录了 0.12.0 / 0.15.0 / 0.16.0 的历史例外）。提交前确认版本号与 commit 一一对应（§5.3 第 8 项）。
+5. **一笔提交 + 一个 tag**：每个发版号对应一个 git commit，没有提交就不算发版；自 0.17.0 起恢复「一版一笔提交」（§4.3 记录了 0.12.0 / 0.15.0 / 0.16.0 的历史例外）。提交后打注释 tag（`git tag -a vX.Y.Z -m "release: X.Y.Z …"`），确认版本号、提交、tag 三者一一对应（§5.3 第 9 项）。`v1.0.0` 是第一个正式 tag。
 
 内容文件新增后同步 `index.html` 加载顺序、`lint-content.mjs` 的 `FILES`、README 结构与规模表；新增交互在 `tests/browser-tests.js` 补用例；逻辑文件新增或改名同步 `scripts/js-files.mjs`、`index.html`、`sw.js` 三处。文档职责：README = 现状与契约，CHANGELOG = 已发生的事实，ROADMAP = 未来计划，三者不互相复述。
 
@@ -211,6 +211,9 @@ npm run verify      # = check + lint + doctor + test:e2e
 
 - [README.md](../README.md) — 现状、内容规模、加载顺序、命令表、存档迁移、设计红线、无障碍、相关文档
 - [CHANGELOG.md](../CHANGELOG.md) — 逐版本变更与迁移记录（六段式）
-- [ROADMAP.md](../ROADMAP.md) — 未来计划、版本与归档规范 §4、批次节奏与发布清单 §5、1.0.0 门槛
+- [ROADMAP.md](../ROADMAP.md) — 未来计划、版本与归档规范 §4、批次节奏与发布清单 §5、1.1.0 规划
+- [release-1.0.0.md](release-1.0.0.md) — 1.0.0 发布记录：六条门槛证据与 §5.3 清单
+- [crisis-review-1.0.0.md](crisis-review-1.0.0.md) — 危机号码与服务范围复核记录
 - [archive/content-review-0.13.0.md](archive/content-review-0.13.0.md) — 内容审核记录（0.13.0 → 0.17.0）历史归档，**不是当前事实**
 - [archive/acceptance-1.0.0-review.md](archive/acceptance-1.0.0-review.md) — 1.0.0 门槛盘点与 2026-11-08 验收记录，历史快照
+- [archive/audit-0.19.0.html](archive/audit-0.19.0.html) — 2026-11-20 全维度代码审查报告（13 条发现与修复状态）

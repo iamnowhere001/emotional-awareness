@@ -120,7 +120,12 @@ docs.forEach(([file, text]) => {
 
 /* ---------- 4. index.html 脚本清单（集合与顺序）+ sw.js 预缓存 ---------- */
 console.log('\n[脚本清单与预缓存]');
-const htmlScripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
+/* 容忍 src 之外的合法属性（如 defer）：逐标签匹配后单独取 src，
+   保持「顺序敏感」的校验语义不变。 */
+const htmlScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
+  .map(tag => /\bsrc="([^"]+)"/.exec(tag[0]))
+  .filter(m => !!m)
+  .map(m => m[1]);
 const diskContent = readdirSync(join(root, 'content'))
   .filter(f => f.endsWith('.js')).sort().map(f => `content/${f}`);
 const lintContent = lintFiles.map(n => `content/${n}.js`);

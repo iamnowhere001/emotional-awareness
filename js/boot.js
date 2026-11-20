@@ -1,6 +1,83 @@
 /* js/boot.js · 启动接线：事件委托、离线注册、按 hash 进入首屏。
    必须最后加载：这里的顶层语句会立即执行，依赖前面全部文件已求值。 */
 
+/* ---------------------------------------------------------------- 安装到主屏
+   Chromium 系在满足条件时发 beforeinstallprompt，必须先 preventDefault 拦下默认条，
+   存起来供设置里「安装到主屏」按钮调用。iOS Safari 不支持此事件，设置里用文案引导。 */
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+/* ---------------------------------------------------------------- 全局错误兜底
+   启动期的 CONTENT_OK 只覆盖「数据文件完全没读到」；渲染途中的任何异常
+   （字段缺失、个别设备的 speechSynthesis 抛错等）过去会让 stage 停在半途白屏，
+   用户既看不到提示也不知道怎么恢复。这里统一兜底：给可读说明 + 两个出口。
+   只处理真正的脚本异常（有 message）；图片等资源加载失败不打扰用户。 */
+let fatalShown = false;
+function showFatalError(detail) {
+  if (fatalShown) return;
+  fatalShown = true;
+  try { clearAsyncTimers(); stopSpeech(); } catch (e) { /* noop */ }
+  const el = document.getElementById('stage');
+  if (!el) return;
+  const overlayEl = document.getElementById('overlay');
+  if (overlayEl) { overlayEl.classList.remove('open'); overlayEl.innerHTML = ''; }
+  document.body.classList.remove('modal-open');
+  /* 这里不依赖 esc() 等工具函数：它们若没加载成功，本处理器也要能独立工作。 */
+  const safe = String(detail == null ? '' : detail).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  el.innerHTML = `<div class="view">
+    <h2>这一下没能加载好</h2>
+    <p class="lead">不是你的错。可以先试一次重新载入；若还是不行，退回地图换个入口继续，已经走过的进度不会丢。</p>
+    <div class="actions" style="margin-top:18px">
+      <button class="btn btn-primary" data-action="reload-app">重新载入</button>
+      <button class="btn btn-secondary" data-action="fatal-dismiss">回到地图</button>
+    </div>
+    ${safe ? `<details style="margin-top:20px"><summary class="muted">技术细节（反馈时可用）</summary><pre style="white-space:pre-wrap;word-break:break-all;font-size:.82em;color:var(--ink-3)">${safe}</pre></details>` : ''}
+  </div>`;
+  try { el.focus({ preventScroll: true }); } catch (e) { /* noop */ }
+}
+ACTIONS['reload-app'] = () => { try { location.reload(); } catch (e) { /* noop */ } };
+/* 「回到地图」必须解除重入保护：否则这一屏的错误提示会把之后所有异常都吞掉，
+   用户回到地图后再出错时既没有提示也没有出口。回到地图若立即再次抛错，
+   会重新走一遍兜底（fatalShown 已复位），不会陷入静默。 */
+ACTIONS['fatal-dismiss'] = () => {
+  fatalShown = false;
+  try { ACTIONS['go-map'](); } catch (e) { /* 交给全局兜底重新显示 */ }
+};
+window.addEventListener('error', (e) => {
+  /* 无 message 的是 <img>/<link> 等资源加载失败，不打断玩法 */
+  if (!e || !e.message) return;
+  showFatalError(`${e.message}${e.filename ? ` · ${e.filename}:${e.lineno}` : ''}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e && e.reason;
+  showFatalError(r && (r.message || String(r)));
+});
+
+/* ---------------------------------------------------------------- 跨标签页冲突
+   存档是全量覆盖式写入：两个标签页同时打开时，后写的一方会用旧内存抹掉新进度。
+   浏览器在「别的标签页改了 localStorage」时会触发 storage 事件，这里据此提示，
+   让用户明确选一份，而不是无声丢进度。只提示一次，避免连续写入反复弹窗。 */
+let storageNotified = false;
+window.addEventListener('storage', (e) => {
+  if (!e || storageNotified || fatalShown) return;
+  if (e.key !== STORAGE_KEY && !LEGACY_KEYS.includes(e.key)) return;
+  storageNotified = true;
+  try {
+    openModal(`<div class="modal-title">另一个标签页更新了进度</div>
+      <div class="modal-body">
+        <p>你可能也在别的地方打开了《心情闯关岛》，那边刚写入了新的进度。为了避免两个页面互相覆盖，建议载入最新的一份。</p>
+        <p class="muted">若选择留在这页，会继续使用当前进度；之后保存时，另一个标签页的记录会被这份覆盖。</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" data-action="reload-app">载入最新进度</button>
+        <button class="btn btn-ghost" data-action="close-modal">留在这页</button>
+      </div>`);
+  } catch (err) { /* 极端环境下不打扰玩法 */ }
+});
+
 /* ---------------------------------------------------------------- 事件绑定 */
 document.addEventListener('click', (e) => {
   /* 页内目录锚点不能进 hash 路由：#/xxx 是视图地址，#xxx 只是本页里的滚动目标。
@@ -51,14 +128,18 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable)) return;
   /* 数字键和徽标一致：.opt / 梯子档位的 1/2/3… 都能按；
-     关卡里其余「一排按钮」题型（配对、拼词、天气、翻线索、分筐）也走同一套序号；
-     急救页的 8 个词同样支持数字键。 */
+     关卡里其余「一排按钮」题型（配对、拼词、天气、分筐）也走同一套序号；
+     急救页的 8 个词同样支持数字键。
+     线索关的 .clue-card 也带「线索 N」编号，但和答案 .opt 的 1/2/3 数字冲突：
+     原先把两者都放进候选时，find 恒命中 .opt，线索卡其实从未被数字键触发过。
+     现在明确按既有行为处理——数字键统一选答案；线索卡用 Tab + Enter 翻开，
+     避免「看起来能用、实际按不到」的假承诺。 */
   if (/^[1-9]$/.test(e.key)) {
     const n = Number(e.key) - 1;
     const opts = document.querySelectorAll('#stage .opt:not(:disabled)');
     const rungs = document.querySelectorAll('#stage .rung:not(:disabled)');
     const others = session.view === 'level'
-      ? document.querySelectorAll('#stage .pair-item:not(:disabled), #stage .word-chip:not(:disabled), #stage .weather-btn:not(:disabled), #stage .chip:not(:disabled), #stage .clue-card:not(:disabled)')
+      ? document.querySelectorAll('#stage .pair-item:not(:disabled), #stage .word-chip:not(:disabled), #stage .weather-btn:not(:disabled), #stage .chip:not(:disabled)')
       : session.view === 'help'
         ? document.querySelectorAll('#stage .help-word:not(:disabled)')
         : [];
@@ -77,10 +158,10 @@ document.addEventListener('keydown', (e) => {
       }
       return;
     }
-    const i = state.levelIndex + d;
+    const i = session.levelIndex + d;
     if (i >= 0 && i < TOTAL && isUnlocked(i)) {
       session.navDir = d < 0 ? 'back' : 'forward';
-      state.levelIndex = i; renderLevel(); e.preventDefault();
+      session.levelIndex = i; renderLevel(); e.preventDefault();
     }
   }
 });
@@ -96,8 +177,9 @@ function registerOffline() {
     try {
       navigator.serviceWorker.register('sw.js')
         /* 主动检查更新：SW 本身带版本号，新版本 install 后立刻接管并清掉旧缓存 */
-        .then((reg) => { try { reg.update(); } catch (e) { /* noop */ } })
-        .catch(() => { /* 离线能力不是玩法的前提，失败不打扰用户 */ });
+        .then((reg) => { try { const p = reg.update(); if (p && p.catch) p.catch((e) => console.warn('[mood-island] SW 更新检查失败：', e)); } catch (e) { /* noop */ } })
+        /* 离线能力不是玩法的前提，失败不打扰用户；但留一条控制台痕迹便于排查。 */
+        .catch((e) => { console.warn('[mood-island] Service Worker 注册失败：', e); });
     } catch (e) { /* noop */ }
   };
   if (document.readyState === 'complete') register();

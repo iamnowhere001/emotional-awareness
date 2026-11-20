@@ -260,6 +260,11 @@ function openSettings() {
           <button data-action="import-progress">导入进度</button>
         </div>
         <p class="muted" id="data-status" role="status"></p></div>
+      <div class="setting-row"><strong>装到主屏</strong>
+        ${(typeof deferredInstallPrompt !== 'undefined' && deferredInstallPrompt)
+          ? '<p>装到主屏后可以像普通 App 一样打开，断网也能玩。</p><div class="seg"><button data-action="install-app">安装到主屏</button></div>'
+          : '<p class="muted">用 iPhone / iPad 的 Safari 打开时，点底部「分享」→「添加到主屏」即可；其他浏览器若暂不显示安装按钮，用浏览器菜单里的「添加到主屏 / 安装应用」也可以。</p>'}
+      </div>
     </div>
     <div class="modal-actions">
       ${importUndo ? '<button class="btn btn-secondary" data-action="import-undo">撤销上次导入</button>' : ''}

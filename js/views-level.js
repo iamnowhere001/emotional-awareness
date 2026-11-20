@@ -313,7 +313,14 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
     try { window.scrollTo({ top: 0, behavior: state.settings.motion ? 'auto' : 'smooth' }); } catch (e) { /* noop */ }
   }
   if (state.settings.autoSpeak && state.settings.speak && lv.type !== 'finale') {
-    setTimeout(() => speakTexts(questionTexts()), 350);
+    /* 记下关卡 id：即便定时器因故没被 clearAsyncTimers 收掉，回调也会先核对
+       仍在关卡页、且还是同一站，避免切屏 / 换题后读出新页面的文字。 */
+    const lvId = lv.id;
+    if (speakTimer) clearTimeout(speakTimer);
+    speakTimer = setTimeout(() => {
+      speakTimer = null;
+      if (session.view === 'level' && currentLevel().id === lvId) speakTexts(questionTexts());
+    }, 350);
   }
 }
 
@@ -395,7 +402,7 @@ function conceptHeadline(lv) {
   const teachId = conceptTeach(c);
   const tlv = LEVELS.find(l => l.id === teachId);
   const ti = tlv ? LEVELS.indexOf(tlv) : -1;
-  const canGo = ti >= 0 && ti !== state.levelIndex && isUnlocked(ti);
+  const canGo = ti >= 0 && ti !== session.levelIndex && isUnlocked(ti);
   const teachTxt = tlv ? `第 ${tlv.num} 站「${tlv.name}」` : teachId;
   const teachHtml = canGo
     ? `<button class="link-btn" data-action="open-level" data-i="${ti}">${esc(teachTxt)}</button>` : esc(teachTxt);
@@ -504,7 +511,7 @@ function completeLevelHtml(html) {
          <div class="practice-lead"><b>这一站带走一个动作</b><span>${esc(cDone.practice)}</span></div>
          <button class="btn-read" data-action="pocket-add" data-t="${esc(cDone.practice)}">带回下一站</button>
        </div>` : '';
-  const next = state.levelIndex + 1;
+  const next = session.levelIndex + 1;
   const canNext = next < TOTAL && isUnlocked(next);
   const buttons = `${canNext ? `<button class="btn btn-primary" data-action="next-level">去下一站 · ${esc(LEVELS[next].name)}</button>` : ''}
       <button class="btn btn-secondary" data-action="go-map">回到地图</button>
