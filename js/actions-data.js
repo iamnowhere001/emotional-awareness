@@ -13,6 +13,10 @@ Object.assign(ACTIONS, {
     session.pocket = null;
     if (firstPick || !customScale) state.settings.scale = b.scale;
     if (firstPick || !state.settings.speakTouched) state.settings.speak = b.speak;
+    /* 3-6 岁首次选档时自动读题：孩子不识字，进站就该听到题目。
+       只在首次选档生效，之后用户在设置里关掉就永远不再被打开。
+       选档本身是一次点击，iOS 的「先交互才能出声」限制已满足。 */
+    if (firstPick && b.id === 'a3') state.settings.autoSpeak = true;
     save(); applySettings(); closeModal();
     session.tip = b.id === 'adult'
       ? '已切换到「成年 · 心智整理」，换成一套成年人的站，另有一间静修间。儿童档的进度也还留着。'

@@ -169,6 +169,12 @@ const ACTIONS = {
   },
   'speak-question': () => speakTexts(questionTexts()),
   'speak-options': () => speakTexts(optionTexts()),
+  /* 选档页读介绍：此时还没选定档位，直接读档名 + 一句话说明。
+     按钮本身是一次真实点击，iOS 的「先交互才能出声」限制在这里自然满足。 */
+  'speak-band': (el) => {
+    const b = AGE_BANDS.find(x => x.id === el.dataset.b);
+    if (b) speakTexts([b.name + '。' + b.tag, b.desc]);
+  },
 
   /* 1-1 天气：只存在内存，不落盘 */
   'weather-pick': (el) => {

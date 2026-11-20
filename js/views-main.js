@@ -18,10 +18,15 @@ function renderAgeGate() {
     <h2 style="margin:12px 0 10px">先选一下，谁来玩</h2>
     <p class="lead">不同年龄用的是不同题目：选项多少、线索长短、要不要读给你听，都会跟着变。6-12 岁这一档先玩基础题，走过一次后可以随时切到「多想一步」。孩子与亲子档共用一套站，成年档是单独的一套；两边进度各自保留，换档不会丢。</p>
     <div class="age-grid">${AGE_BANDS.map(b =>
-      `<button class="age-card ${b.id === 'adult' ? 'adult-card' : ''}" data-action="set-band" data-b="${b.id}" data-next="home">
-        <span class="age-name">${esc(b.name)}</span><span class="age-tag">${esc(b.tag)}</span>
-        <span class="age-desc">${esc(b.desc)}</span><span class="age-len">${esc(b.len)}${b.mindful ? ' · 含静修间' : ''}</span>
-      </button>`).join('')}</div>
+      `<div class="age-pick">
+        <button class="age-card ${b.id === 'adult' ? 'adult-card' : ''}" data-action="set-band" data-b="${b.id}" data-next="home">
+          <span class="age-icon" aria-hidden="true">${esc(b.icon || '')}</span>
+          <span class="age-name">${esc(b.name)}</span><span class="age-tag">${esc(b.tag)}</span>
+          <span class="age-desc">${esc(b.desc)}</span><span class="age-len">${esc(b.len)}${b.mindful ? ' · 含静修间' : ''}</span>
+          <span class="age-go">点这里进去 →</span>
+        </button>
+        <button class="age-read" data-action="speak-band" data-b="${b.id}" aria-label="读一读「${esc(b.name)}」这一档的介绍">🔊</button>
+      </div>`).join('')}</div>
     <p class="home-note">前三档面向孩子与亲子共玩；最后一项是给自己的，另有一间不打卡的静修间。拿不准就选 6-12 岁那档，随时可以在「设置」里换。不会记录年龄，也不会上传任何信息。</p>
   </div>`;
   updateTopbar();

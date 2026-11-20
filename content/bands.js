@@ -7,6 +7,7 @@ MI.bands = [
   {
     "id": "a3",
     "name": "3-6 岁",
+    "icon": "🧸",
     "tag": "看图玩",
     "scale": 1.18,
     "rest": 2,
@@ -20,6 +21,7 @@ MI.bands = [
   {
     "id": "a6",
     "name": "6-12 岁",
+    "icon": "🎒",
     "tag": "读短句 · 也能多想一步",
     "scale": 1.06,
     "rest": 3,
@@ -34,6 +36,7 @@ MI.bands = [
   {
     "id": "all",
     "name": "亲子 · 全年龄",
+    "icon": "👨‍👩‍👧",
     "tag": "一起聊",
     "scale": 1,
     "rest": 3,
@@ -47,6 +50,7 @@ MI.bands = [
   {
     "id": "adult",
     "name": "成年 · 心智整理",
+    "icon": "🌿",
     "tag": "慢下来",
     "scale": 1,
     "rest": 3,

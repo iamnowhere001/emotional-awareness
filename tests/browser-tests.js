@@ -27,7 +27,7 @@ window.addEventListener('load', function () {
     A(KID.levels.length === 21 && ADULT.levels.length === 21);
     A(KID.islands.length === 5 && ADULT.islands.length === 5);
   });
-  test('题库变体 111 + 41', () => A(count(BANK) === 111 && count(BANK_ADULT) === 41));
+  test('题库变体 111 + 44', () => A(count(BANK) === 111 && count(BANK_ADULT) === 44));
   test('两轨 id 不重叠，终章都在最后', () => {
     const kidIds = new Set(KID.levels.map(l => l.id));
     A(ADULT.levels.every(l => !kidIds.has(l.id)));
@@ -1229,6 +1229,28 @@ window.addEventListener('load', function () {
     A(back.textContent.includes('回到选年龄段'));
     back.click();
     A(session.view === 'gate' && location.hash === '#/gate');
+  });
+  test('选档页有图卡与朗读按钮，3-6 岁首次选档自动读题', () => {
+    /* 选档页：四档都有图标和独立朗读按钮，点朗读不进档。 */
+    bandTo('adult'); state.settings.autoSpeak = false; renderAgeGate();
+    const picks = [...document.querySelectorAll('#stage .age-pick')];
+    A(picks.length === AGE_BANDS.length, '选档页每档一张卡');
+    A(picks.every(p => p.querySelector('.age-icon') && p.querySelector('.age-card') && p.querySelector('.age-read')),
+      '每张档位卡应有图标、进入按钮与朗读按钮');
+    const beforeBand = state.band;
+    const readA3 = document.querySelector('#stage .age-read[data-b="a3"]');
+    A(readA3 && readA3.dataset.action === 'speak-band', '朗读按钮应带 speak-band 动作');
+    readA3.click();
+    A(state.band === beforeBand && session.view === 'gate', '点朗读不应进档');
+    /* 首次选 a3 自动开朗读；第二次选档不再覆盖用户的手动关闭。 */
+    state.band = null; state.settings.autoSpeak = false; applySettings();
+    const a3 = AGE_BANDS.find(b => b.id === 'a3');
+    ACTIONS['set-band']({ dataset: { b: 'a3', next: 'home' } });
+    A(state.settings.autoSpeak === true, '首次选 3-6 岁应自动读题');
+    state.settings.autoSpeak = false;
+    ACTIONS['set-band']({ dataset: { b: 'a6', next: 'home' } });
+    A(state.settings.autoSpeak === false, '非首次选档不应再打开自动朗读');
+    bandTo('a6'); renderHome();
   });
 
   test('从头再来后已完成的幕仍可回看与直达', () => {

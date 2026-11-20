@@ -1232,19 +1232,32 @@ html.high-contrast .sv-nav a { border-width: 2px; }
 
 /* ---------- 选年龄段 ---------- */
 .age-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+.age-pick { position: relative; display: flex; min-width: 0; }
+.age-pick.is-adult { grid-column: 1 / -1; }
 .age-card {
     text-align: left; background: var(--surface-2); border: 1.5px solid var(--line);
     border-radius: 16px; padding: 18px; min-height: 176px; display: grid; gap: 6px;
+    width: 100%; padding-right: 46px;
     transition: border-color .15s ease, background .15s ease, transform .15s ease, box-shadow .15s ease;
 }
 .age-card:hover {
     border-color: var(--accent); background: var(--accent-soft);
     transform: translateY(-2px); box-shadow: 0 12px 24px -22px rgba(21, 87, 76, .8);
 }
+.age-icon { font-size: calc(1.9rem * var(--scale)); line-height: 1.1; }
 .age-name { font-family: var(--font-display); font-size: calc(1.2rem * var(--scale)); font-weight: 600; letter-spacing: .03em; }
 .age-tag { font-size: calc(.78rem * var(--scale)); color: var(--accent); font-weight: 600; letter-spacing: .04em; }
 .age-desc { font-size: calc(.86rem * var(--scale)); color: var(--ink-2); line-height: 1.6; }
 .age-len { font-size: calc(.78rem * var(--scale)); color: var(--ink-3); margin-top: auto; }
+.age-go { font-size: calc(.78rem * var(--scale)); color: var(--accent); font-weight: 600; margin-top: 2px; }
+/* 朗读按钮贴右上角，独立于选档按钮，点它不会进档。 */
+.age-read {
+    position: absolute; top: 14px; right: 14px; width: 38px; height: 38px;
+    border: 1px solid var(--line); border-radius: 50%; background: var(--surface);
+    font-size: 1rem; cursor: pointer; z-index: 1;
+    min-width: 38px; min-height: 38px; padding: 0;
+}
+.age-read:hover { border-color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- 本领 / 微行动 / 延伸内容 ---------- */
 .skill-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1491,8 +1504,9 @@ html[data-band="a3"] .step { height: 40px; }
 /* ---------- 状态与选档 ---------- */
 .node.just-done .node-pin { animation: justDone 1.6s ease; }
 @keyframes justDone { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 4px var(--accent-soft); } }
-.age-card.adult-card { grid-column: 1 / -1; min-height: 0; background: var(--blue-soft); border-color: #cfe4ee; }
-.age-card.adult-card:hover { background: var(--accent-soft); }
+.age-pick.is-adult { min-height: 0; background: var(--blue-soft); border-color: #cfe4ee; border-radius: 16px; border: 1.5px solid #cfe4ee; }
+.age-pick.is-adult .age-card { background: var(--blue-soft); border-color: #cfe4ee; min-height: 0; }
+.age-pick.is-adult .age-card:hover { background: var(--accent-soft); }
 
 /* ---------- 急救入口：现在很难受 ---------- */
 /* 入口用暖色而不是红色：急救需要被看见，但不需要再增加一层警报感。 */
