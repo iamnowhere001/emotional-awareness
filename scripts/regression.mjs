@@ -285,9 +285,9 @@ S('旧档 a9 由 BAND_REMAP 落到 a6，老字号 1.06 仍合法',
 S('按深度层抽题，结果卡详细度绑当前题而不是绑年龄',
   /band\(\)\.tiers/.test(src) && /\(v\.tier \|\| 1\) === depth/.test(src) &&
   /lightResult = band\(\)\.id === 'a3' \|\| \(band\(\)\.tiers/.test(src));
-S('概念层 16 条各有承接句与实践卡，且只写一份',
-  (glossarySrc.match(/bridge:/g) || []).length === 16 &&
-  (glossarySrc.match(/practice:/g) || []).length === 16 &&
+S('概念层 20 条各有承接句与实践卡，且只写一份',
+  (glossarySrc.match(/bridge:/g) || []).length === 20 &&
+  (glossarySrc.match(/practice:/g) || []).length === 20 &&
   /function bridgeLine/.test(src) && /cDone\.practice/.test(src));
 S('实践卡与双人对照只在内存，不进存档',
   /session\.pocket = \{/.test(src) && /session\.duo = \{/.test(src) &&
@@ -337,6 +337,11 @@ S('SW 注册与预缓存失败都留控制台痕迹',
 S('安装入口按能力降级：有事件给按钮，没事件给手动路径',
   /beforeinstallprompt/.test(src) && /'install-app'/.test(src) && /装到主屏/.test(src) &&
   /添加到主屏/.test(src));
+/* 结构债务护栏：1.1.0 把 views-library.js / actions.js 拆到 700 行以下后，
+   任一块再触线就应再拆，而不是默默膨胀。逐文件数行，不含空行口径，取物理行数。 */
+S('逻辑脚本均无超 700 行的结构债务',
+  JS_FILES.every(f => readFileSync(join(root, f), 'utf8').split('\n').length <= 700));
+
 /* 发布门槛的条件 6 要求留痕：1.0.0 必须有对应的发布记录。 */
 S('1.0.0 发布记录已留痕', pkg.version !== '1.0.0' || existsSync(join(root, 'docs/release-1.0.0.md')));
 

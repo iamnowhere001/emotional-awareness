@@ -2,7 +2,7 @@
 
 > 一起认出心里的天气。按年龄分级的情绪启蒙小游戏：**纯前端 · 零依赖 · 不联网 · 不打分 · 不采集心情文本**。
 >
-> 当前版本 **1.0.0**（首个正式版，2026-11-20；六条发布门槛全绿，证据见 [docs/release-1.0.0.md](docs/release-1.0.0.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
+> 当前版本 **1.1.0**（2026-11-20：补岛 5 + 拆分超限逻辑文件；1.0.0 发布证据见 [docs/release-1.0.0.md](docs/release-1.0.0.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
 
 这不是心理测评，也不能代替专业帮助。它做的事只有一件：把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。
 
@@ -28,12 +28,12 @@
 | 年龄档 | **4 档**：`a3` 3-6 岁 / `a6` 6-12 岁（合并档，带基础 / 多想一步两层）/ `all` 亲子全年龄 / `adult` 成年。旧档 `a9` 由 `BAND_REMAP` 落到 `a6`，存档不丢 |
 | 关卡轨 | 2 条：儿童与亲子共用 `kid`；成年独立 `adult` |
 | 岛屿 | 每轨 4 座（儿童：察觉湾 / 调节林 / 联结港 / 安放角；成年：觉察滩 / 调节林 / 联结港 / 安放角） |
-| 站点 | 每轨 **17 站 = 16 关 + 终章** |
+| 站点 | 每轨 **21 站 = 20 关 + 终章**（5 岛）|
 | 玩法 | 13 种互动题型 + 终章，共 14 个 `type`；静修间另有 `sit` 引导 |
 | 题库变体 | 儿童 **91 组**，成年 **32 组**，合计 123 组；每档每关至少 2 组。儿童池按 `tier: 1 / 2` 分两层，6-12 岁合并档每关可抽 **3～5 组**（原每关 2 组） |
-| 内容库 | 概念层 16 条（站点 / 工具卡 / 词典 / 慢变量共用同一概念 id）· 词卡释义 27 条（按 16 个概念成组，其中 11 组是两轨双名）· 聊卡 10 · 微行动 8 · 装饰 6 · 漂流瓶 16 · 静修练习 10 · **冥想练习 10（5 族 × 2 档 / 6 场景 / 8 句 if-then）** · **心理学词典 162 条（4 大组 / 11 主题 / 45 个概念簇 / 4 类概念，每条带关联词条）** · **自助工具 31 张 + 认知扭曲 10 条速查** · **慢变量 6 个（方向层）+ 日常五件套 5 件（早起 / 冥想 / 阅读 / 写作 / 运动，各带最小剂量、再降一级、断了怎么接回）+ 练习 20 张（按 6 变量归属，数量不等）+ 时间预算 3 档 + 尺度 3 个 + 陷阱 12 个** · **急救入口 3 个短动作（约 1 分钟 / 20 秒 / 30 秒）+ 4 条本地求助信息** |
+| 内容库 | 概念层 20 条（站点 / 工具卡 / 词典 / 慢变量共用同一概念 id）· 词卡释义 35 条（按 20 个概念成组，其中多组是两轨双名）· 聊卡 10 · 微行动 8 · 装饰 6 · 漂流瓶 16 · 静修练习 10 · **冥想练习 10（5 族 × 2 档 / 6 场景 / 8 句 if-then）** · **心理学词典 162 条（4 大组 / 11 主题 / 45 个概念簇 / 4 类概念，每条带关联词条）** · **自助工具 31 张 + 认知扭曲 10 条速查** · **慢变量 6 个（方向层）+ 日常五件套 5 件（早起 / 冥想 / 阅读 / 写作 / 运动，各带最小剂量、再降一级、断了怎么接回）+ 练习 20 张（按 6 变量归属，数量不等）+ 时间预算 3 档 + 尺度 3 个 + 陷阱 12 个** · **急救入口 3 个短动作（约 1 分钟 / 20 秒 / 30 秒）+ 4 条本地求助信息** |
 
-两条轨的关卡 `id` 前缀不同（儿童 `1-1…4-4 / finale`，成年 `A1-1…A4-4 / A-finale`），进度天然隔离，`clearedInTrack()` 各算各的；成年档不显示也不发放贝壳。**词卡也按轨记录**（`state.cards = { kid, adult }`）：两轨同名的 5 张卡（觉察 / 身体信号 / 强度 / 火气分级 / 边界）在各自图鉴里独立解锁，不会因为玩过儿童档就点亮成年图鉴；另有 11 组概念两轨叫法不同（如 情绪粒度 / 命名）。图鉴在渲染层按 16 个概念合并成组并标出另一种叫法，**存档键值仍是原来的 5 + 11 张卡名，schema 不变**。
+两条轨的关卡 `id` 前缀不同（儿童 `1-1…5-4 / finale`，成年 `A1-1…A5-4 / A-finale`），进度天然隔离，`clearedInTrack()` 各算各的；成年档不显示也不发放贝壳。**词卡也按轨记录**（`state.cards = { kid, adult }`）：两轨同名的 5 张卡（觉察 / 身体信号 / 强度 / 火气分级 / 边界）在各自图鉴里独立解锁，不会因为玩过儿童档就点亮成年图鉴；另有若干组概念两轨叫法不同（如 情绪粒度 / 命名）。图鉴在渲染层按 20 个概念合并成组并标出另一种叫法，**存档键值仍是原来的卡名，schema 不变**。
 
 ### 题型与数据字段
 
@@ -86,14 +86,18 @@
 │   ├── bands.js                  # 4 个年龄档
 │   ├── levels-kid.js             # 儿童/亲子主线（岛 1-3 + 终章）
 │   ├── levels-kid-island4.js     # 岛 4 四站，插在终章之前
+│   ├── levels-kid-island5.js     # 岛 5 四站（羞耻/比较/孤单/求助），插在终章之前
 │   ├── levels-adult.js           # 成年独立关卡表
+│   ├── levels-adult-island5.js   # 成年岛 5 四站（A5-1…A5-4）
 │   ├── bank-kid-1-3.js           # 儿童题库（岛 1-3）
 │   ├── bank-kid-island4.js       # 儿童题库（岛 4）
+│   ├── bank-kid-island5.js       # 儿童题库（岛 5）
 │   ├── bank-adult-1-3.js         # 成年题库（岛 1-3）
 │   ├── bank-adult-island4.js     # 成年题库（岛 4）
+│   ├── bank-adult-island5.js     # 成年题库（岛 5）
 │   ├── bank-compose.js           # 拼装试点：4-3 / A4-3 的场景 × 想法 × 问法槽位
 │   ├── levels-adult-work.js      # 成年「工作间」支线：4 幕 + 每幕 2 组手写变体
-│   ├── glossary.js               # 概念层：16 个概念 + 站点/工具/词典/慢变量反链 + 共用边界说明
+│   ├── glossary.js               # 概念层：20 个概念 + 站点/工具/词典/慢变量反链 + 共用边界说明
 │   ├── library.js                # 词卡释义/聊卡/微行动/装饰/漂流瓶/静修间
 │   ├── meditate.js               # 静修间 2.0：5 族 / 10 条 sit 引导 / 6 场景 / 8 句 if-then（纯数据）
 │   ├── dictionary.js             # 心理学词典 162 条 + dictionaryMeta（纯数据，4 组 / 11 主题 / 45 个概念簇 / 4 类型）
@@ -125,7 +129,7 @@
 
 **为什么不用 ES module**：`content/*.js` 与 `js/*.js` 都用经典 `<script>` 顺序加载，是为了让双击 `index.html` 的 `file://` 场景也能跑（ES module 在 `file://` 下会被 CORS 拦住）。`index.html` 里的顺序是契约：
 
-`bands → glossary → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → meditate → dictionary → selfhelp → slowvars → help → js/core → js/util → js/shell → js/views-main → js/views-dictionary → js/views-selfhelp → js/views-slowvars → js/views-retreat → js/views-level → js/ui → js/actions-level → js/actions-library → js/actions-data → js/boot`
+`bands → glossary → levels-kid → levels-kid-island4 → levels-kid-island5 → levels-adult → levels-adult-island5 → bank-kid-1-3 → bank-kid-island4 → bank-kid-island5 → bank-adult-1-3 → bank-adult-island4 → bank-adult-island5 → bank-compose → levels-adult-work → library → meditate → dictionary → selfhelp → slowvars → help → js/core → js/util → js/shell → js/views-main → js/views-dictionary → js/views-selfhelp → js/views-slowvars → js/views-retreat → js/views-level → js/ui → js/actions-level → js/actions-library → js/actions-data → js/boot`
 
 > 这份顺序契约的单一来源是 `scripts/js-files.mjs`（逻辑脚本清单）+ `index.html` + `sw.js` 三处同步，实际顺序**以 `npm run doctor` 的输出为准**；新增内容文件还要同步 `scripts/lint-content.mjs` 的 `FILES`。详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) §2。
 
@@ -166,7 +170,7 @@
 
 `load()` → `readRaw()`（v5 优先，v5 损坏或不存在时依次回退 v4 / v3 / v2）→ `migrate()`。**以后加任何字段，都在 `migrate()` 里补一段白名单式默认值**，不要直接改 `DEFAULT_STATE` 就完事，否则老用户进度可能被静默重置。`migrate()` 还会逐项清掉无效数据：未知关卡 id、重复的 `cleared / awarded`、内容里已不存在的词卡与本领、越界或重复的 `decor` 下标、负数或小数的 `shells`、不在允许档位里的 `settings.scale`、不存在的拼装组合键、越界的支线 id；其余字段不受影响，所以旧档和现有 v5 档都不会被整体重置。
 
-**v4 → v5 只加两个字段**：`seen`（拼装题已出现过的组合键，按关分桶，每关最多 8 条，超出丢最旧）与 `sideCleared`（成年「工作间」支线完成记录，白名单只认 `W-1…W-4`）。主线 `cleared / awarded / cards / skills / shells / decor` 的迁移路径一字未改；`sideCleared` 不计入 17 站、不加贝壳 / 词卡 / 本领，也不参与终章解锁。`seen` 不是可见进度，界面上不显示任何组合计数；`restart-all` 不清它，「清空本机进度」才删。
+**v4 → v5 只加两个字段**：`seen`（拼装题已出现过的组合键，按关分桶，每关最多 8 条，超出丢最旧）与 `sideCleared`（成年「工作间」支线完成记录，白名单只认 `W-1…W-4`）。主线 `cleared / awarded / cards / skills / shells / decor` 的迁移路径一字未改；`sideCleared` 不计入 21 站、不加贝壳 / 词卡 / 本领，也不参与终章解锁。`seen` 不是可见进度，界面上不显示任何组合计数；`restart-all` 不清它，「清空本机进度」才删。
 
 **v3 → v4 只改词卡语义**：旧档的 `cards` 是不分轨的数组，`migrateCards()` 按以下顺序推断归属——① 只在一轨出现的卡，直接归该轨；② 两轨同名的卡，对应关卡有通关 / 领贝壳记录就归该轨，两轨都有记录则两边都算真拿到；③ 对不上记录时，只玩过一轨就归那一轨；④ 两轨都玩过但仍无法判定，归**儿童档**（宁可少给成年档，也不把儿童卡虚增成成年卡）。`cleared / awarded` 不受影响。
 
@@ -273,7 +277,7 @@
 
 | 边界 | 现状 | 为什么这样定 |
 | --- | --- | --- |
-| 内容不再扩 | 每轨 4 岛 17 站、词典 162 条、变体 123 组 | 内容不是瓶颈：单轨 5 轮才明显重复。岛 5（羞耻内疚 / 比较嫉妒 / 孤独归属）排 1.1.0 |
+| 内容仍可扩但有边界 | 每轨 5 岛 21 站、词典 162 条、儿童变体 111 组 + 成年 41 组 | 岛 5 已于 1.1.0 补齐（羞耻内疚 / 比较嫉妒 / 孤独归属 / 身体照料与求助）；单轨 5 轮重复率仍低，后续不再盲目加岛 |
 | 儿童档个别术语偏超龄、丧失意象待改写 | 已在 0.13.0 审核中记录，未改 | 属改内容量，需单独一轮文案审读，不在正式版前动 |
 | 无账号、无云同步、无打卡提醒 | 不做，也不排期 | 与「不联网 / 不采集 / 不制造压力」三条红线冲突；换设备用导出 JSON |
 | 朗读依赖系统语音 | 用 Web Speech API，无自建音频 | 零依赖与离线优先；不同设备音色不同，长文已做单段合并与保活 |

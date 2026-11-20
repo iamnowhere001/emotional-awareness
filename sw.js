@@ -20,9 +20,9 @@
    注册失败又被静默吞掉，两层各自静默叠加」。1.0.0 起两层都补了 console.warn，
    失败仍不打扰用户，但控制台可查。
 
-   1.0.0 无新增缓存逻辑，只把版本推进到正式版：缓存名随之变为 mood-island-1.0.0，
+   1.0.0 起无新增缓存逻辑，只随发版推进版本：缓存名随 VERSION 变化（现为 mood-island-1.1.0），
    旧缓存（含 0.19.0 及更早）在 activate 阶段被清掉。 */
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const CACHE = `mood-island-${VERSION}`;
 const ASSETS = [
   './index.html',
@@ -45,11 +45,15 @@ const ASSETS = [
   './content/glossary.js',
   './content/levels-kid.js',
   './content/levels-kid-island4.js',
+  './content/levels-kid-island5.js',
   './content/levels-adult.js',
+  './content/levels-adult-island5.js',
   './content/bank-kid-1-3.js',
   './content/bank-kid-island4.js',
+  './content/bank-kid-island5.js',
   './content/bank-adult-1-3.js',
   './content/bank-adult-island4.js',
+  './content/bank-adult-island5.js',
   './content/bank-compose.js',
   './content/levels-adult-work.js',
   './content/library.js',

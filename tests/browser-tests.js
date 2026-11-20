@@ -23,15 +23,38 @@ window.addEventListener('load', function () {
     A(b && b.name === '6-12 岁' && b.tiers === true);
     A(!AGE_BANDS.some(x => x.id === 'a9'));
   });
-  test('两条轨各 17 站 / 4 岛', () => {
-    A(KID.levels.length === 17 && ADULT.levels.length === 17);
-    A(KID.islands.length === 4 && ADULT.islands.length === 4);
+  test('两条轨各 21 站 / 5 岛', () => {
+    A(KID.levels.length === 21 && ADULT.levels.length === 21);
+    A(KID.islands.length === 5 && ADULT.islands.length === 5);
   });
-  test('题库变体 91 + 32', () => A(count(BANK) === 91 && count(BANK_ADULT) === 32));
+  test('题库变体 111 + 41', () => A(count(BANK) === 111 && count(BANK_ADULT) === 41));
   test('两轨 id 不重叠，终章都在最后', () => {
     const kidIds = new Set(KID.levels.map(l => l.id));
     A(ADULT.levels.every(l => !kidIds.has(l.id)));
-    A(KID.levels[16].type === 'finale' && ADULT.levels[16].type === 'finale');
+    A(KID.levels[20].type === 'finale' && ADULT.levels[20].type === 'finale');
+  });
+  test('岛 5 双轨各 4 站在每档都能抽题并渲染', () => {
+    const kid5 = KID.levels.filter(l => l.island === 5);
+    const adult5 = ADULT.levels.filter(l => l.island === 5);
+    A(kid5.length === 4 && adult5.length === 4, '岛 5 应各 4 站');
+    const themes = ['羞耻', '比较', '孤独', '身体'];
+    A(kid5.every((l, i) => l.name && l.goal && l.tip && l.card && l.skill && l.kind.includes(themes[i])),
+      '岛 5 四站应覆盖羞耻/比较/孤独/身体且有完整字段');
+    /* 直接抽题 + 渲染到临时容器：不碰 session/view/hash/history，零副作用。
+       逐档验证题库覆盖（每档至少 2 组变体都能被抽到）。 */
+    const probe = document.createElement('div');
+    const check = (lv, bandId) => {
+      state.band = bandId;
+      const v = pickVariant(lv.id);
+      A(v && v.b && v.b.includes(bandId), `${lv.id}/${bandId} 应抽到本档变体`);
+      const html = RENDERERS[lv.type](v);
+      probe.innerHTML = html;
+      A(probe.children.length > 0 && probe.textContent.trim().length > 0,
+        `${lv.id}/${bandId} 应有非空题面`);
+    };
+    ['a3', 'a6', 'all'].forEach(bandId => kid5.forEach(l => check(l, bandId)));
+    adult5.forEach(l => check(l, 'adult'));
+    state.band = null; applySettings();
   });
   test('静修 10 个 / 漂流瓶 16 题', () => A(RETREAT.length === 10 && BOTTLES.length === 16));
   test('静修每个练习都有状态分组与所需字段', () => {
@@ -511,11 +534,11 @@ window.addEventListener('load', function () {
   /* ---------- 双轨 ---------- */
   test('切到成年档重绑 LEVELS', () => {
     bandTo('adult');
-    A(LEVELS === ADULT.levels && TOTAL === 17 && isAdultTrack());
+    A(LEVELS === ADULT.levels && TOTAL === 21 && isAdultTrack());
   });
   test('切回儿童档重绑 LEVELS', () => {
     bandTo('a6');
-    A(LEVELS === KID.levels && TOTAL === 17 && !isAdultTrack());
+    A(LEVELS === KID.levels && TOTAL === 21 && !isAdultTrack());
   });
   test('进度按当前轨分开计数', () => {
     state.cleared = ['1-1', 'A1-1', 'A1-2'];
@@ -573,7 +596,7 @@ window.addEventListener('load', function () {
   });
   test('终章需走完全部 16 站', () => {
     A(isUnlocked(16) === false);
-    state.cleared = KID.levels.slice(0, 16).map(l => l.id);
+    state.cleared = KID.levels.slice(0, 20).map(l => l.id);
     A(isUnlocked(16) === true);
   });
   test('地图锁定文案与规则一致', () => {
@@ -600,7 +623,7 @@ window.addEventListener('load', function () {
     const next = [...document.querySelectorAll('#stage .node.next')];
     A(next.length === 1 && next[0].dataset.i === '0', '空白进度只应点亮第一站');
     A(next[0].textContent.includes('下一站'));
-    A(document.querySelectorAll('#stage .island-count').length === 4);
+    A(document.querySelectorAll('#stage .island-count').length === 5);
     A(document.getElementById('stage').textContent.includes('0 / 4 站'));
   });
   test('首页保留单一主 CTA，知识入口是低权重快捷', () => {
@@ -831,7 +854,7 @@ window.addEventListener('load', function () {
   test('未知或不可达的 hash 回落，不报错', () => {
     bandTo('a6'); state.cleared = []; save(); renderHome();
     session.levelIndex = 0;
-    routeTo(parseHash('#/level/' + KID.levels[16].id));
+    routeTo(parseHash('#/level/' + KID.levels[20].id));
     A(session.view === 'map' && location.hash === '#/map', '未解锁的站应回到地图');
     A(stage.textContent.includes('还没解锁'));
     routeTo(parseHash('#/nope'));
@@ -922,10 +945,10 @@ window.addEventListener('load', function () {
     A(JSON.stringify(state.cards) === beforeCards && JSON.stringify(state.skills) === beforeSkills && state.shells === 0,
       '支线不加词卡 / 本领 / 贝壳');
     A(state.awarded.length === 0);
-    A(TOTAL === 17 && clearedInTrack() === 1, '支线不计入 17 站');
+    A(TOTAL === 21 && clearedInTrack() === 1, '支线不计入 21 站');
     A(sideUnlocked(1), '完成第一幕后第二幕解锁');
     const card = document.getElementById('feedback-slot').textContent;
-    A(card.includes('不计入 17 站') && card.includes('不加贝壳、词卡或本领'), '完成卡应写明支线口径');
+    A(card.includes('不计入 21 站') && card.includes('不加贝壳、词卡或本领'), '完成卡应写明支线口径');
     A(!document.querySelector('#feedback-slot [data-action="next-chapter"]'));
     renderLevel(null, WORK[1], 1);
     A(play.side && currentLevel().id === 'W-2');
@@ -1021,7 +1044,7 @@ window.addEventListener('load', function () {
     A(txt.includes('不用调整呼吸'), '应写明不用调整呼吸');
   });
   test('概念层 16 条：两轨词卡名与反链都指向真实内容', () => {
-    A(GLOSSARY.length === 16 && new Set(GLOSSARY.map(g => g.id)).size === 16);
+    A(GLOSSARY.length === 20 && new Set(GLOSSARY.map(g => g.id)).size === 20);
     A(conceptOfLevel('A2-2') && conceptOfLevel('A2-2').id === 'reframe');
     A(conceptOfLevel('2-2') && conceptOfLevel('2-2').id === 'reframe', '两轨同一概念共用一条');
     A(conceptOfCard('命名') && conceptOfCard('命名').id === 'granularity');
@@ -1082,14 +1105,14 @@ window.addEventListener('load', function () {
     A(txt.includes('动作规格'), '结果卡应显示统一规格');
     A(!!document.querySelector('#stage [data-action="dict-jump"][data-t="内感受"]'), '结果卡应接词典');
   });
-  test('词卡图鉴按 16 组显示双名，state.cards 键值不变', () => {
+  test('词卡图鉴按 20 组显示双名，state.cards 键值不变', () => {
     bandTo('adult');
     state.cards = { kid: [], adult: ['觉察', '命名', '呼吸空间'] };
     save(); applySettings();
     openCodex();
     const cards = [...document.querySelectorAll('.codex-grid .codex-card')];
-    A(cards.length === 16, `图鉴应显示 16 组，实际 ${cards.length}`);
-    A(document.querySelector('.modal-title').textContent.includes('3 / 16'), '计数应按概念组');
+    A(cards.length === 20, `图鉴应显示 20 组，实际 ${cards.length}`);
+    A(document.querySelector('.modal-title').textContent.includes('3 / 20'), '计数应按概念组');
     A(cards.some(c => c.textContent.includes('也叫「情绪粒度」')), '双名概念应同时标出另一种叫法');
     A(JSON.stringify(state.cards) === JSON.stringify({ kid: [], adult: ['觉察', '命名', '呼吸空间'] }), '渲染层不得改写存档');
     closeModal();
@@ -1140,10 +1163,10 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('#sv-practices .dict-card').length === 20);
     renderMap();
   });
-  test('词典按概念读：16 个概念都能跳到已有词条', () => {
+  test('词典按概念读：20 个概念都能跳到已有词条', () => {
     bandTo('adult'); ACTIONS['open-dictionary']();
     const chips = [...document.querySelectorAll('#stage .concept-start .concept-chip')];
-    A(chips.length === 16, `概念入口应有 16 个，实际 ${chips.length}`);
+    A(chips.length === 20, `概念入口应有 20 个，实际 ${chips.length}`);
     const chip = chips.find(c => c.dataset.id === 'reframe');
     A(!!chip); chip.click();
     const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === '认知重评');
@@ -1283,12 +1306,12 @@ window.addEventListener('load', function () {
   });
   test('儿童终章有布置小岛，成年终章没有', () => {
     bandTo('a6');
-    state.cleared = KID.levels.slice(0, 16).map(l => l.id);
-    goLevel(16);
+    state.cleared = KID.levels.slice(0, 20).map(l => l.id);
+    goLevel(20);
     A(document.getElementById('stage').innerHTML.includes('island-canvas'));
     bandTo('adult');
-    state.cleared = ADULT.levels.slice(0, 16).map(l => l.id);
-    goLevel(16);
+    state.cleared = ADULT.levels.slice(0, 20).map(l => l.id);
+    goLevel(20);
     const h = document.getElementById('stage').innerHTML;
     A(!h.includes('island-canvas') && !h.includes('decor-slot'));
   });
@@ -1322,7 +1345,7 @@ window.addEventListener('load', function () {
     const i = byType('clue');
     goLevel(i);
     const steps = [...document.querySelectorAll('#step-track .step')];
-    A(steps.length === 17);
+    A(steps.length === 21);
     const cur = steps.filter(s => s.getAttribute('aria-current') === 'step');
     A(cur.length === 1 && Number(cur[0].dataset.i) === i, '只应标出当前这一站');
     renderMap();
@@ -1370,7 +1393,7 @@ window.addEventListener('load', function () {
     const adultCard = document.querySelector('.practice-card');
     A(adultCard && adultCard.textContent.includes(conceptOfLevel('A4-4').practice));
     bandTo('a6');
-    goLevel(16);
+    goLevel(20);
     session.clearedThisRun = 0;
     completeLevel('测试');
     A(!document.querySelector('.practice-card'));
@@ -1624,7 +1647,7 @@ window.addEventListener('load', function () {
     A(!!meta, '首页应有 meta description');
     A(meta.content.includes(`${DICTIONARY.length} 条心理学词典`), `meta 应写 ${DICTIONARY.length} 条，实际：${meta.content}`);
     A(!meta.content.includes('159 条'), '不应残留旧条数');
-    A(meta.content.includes('4 座岛 17 站'), '站点数应仍准确');
+    A(meta.content.includes('5 座岛 21 站'), '站点数应仍准确');
   });
 
   /* ---------- 红线与布局 ---------- */
@@ -1792,7 +1815,7 @@ window.addEventListener('load', function () {
     const bridge = document.querySelector('.level-bridge');
     A(bridge && bridge.textContent.includes('这一站接着'));
     A(bridge.textContent.includes(conceptOfLevel('1-2').bridge));
-    A(GLOSSARY.length === 16 && GLOSSARY.every(g => g.bridge && g.practice));
+    A(GLOSSARY.length === 20 && GLOSSARY.every(g => g.bridge && g.practice));
   });
   test('带回下一站的实践卡只出现一次，不写存档', () => {
     bandTo('a6'); session.depth = null; session.pocket = null;

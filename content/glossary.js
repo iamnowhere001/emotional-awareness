@@ -137,6 +137,38 @@ MI.glossary = [
     dose: { time: '约 1 分钟', steps: 2, stop: '说不出口就先写下来' },
     dict: '边界', tools: ['边界', '求助脚本'], slowvars: ['relationships'],
     stations: ['4-4', 'A4-4']
+  },
+  {
+    id: 'shame', kid: '把事和自己分开', adult: '羞耻与内疚',
+    line: '做错一件事，不等于变成不好的人；把事和人分开，才有得补。',
+    mechanism: '内疚指向具体的行为，通常还留有修补的余地；羞耻指向整个人，容易让人想躲起来。把「我做了什么」和「我是谁」分开说，可能把躲开换成补一句、改一步。',
+    dose: { time: '约 1 分钟', steps: 2, stop: '说不出就先在心里过一遍' },
+    dict: '自我关怀', tools: ['自我关怀'], slowvars: [],
+    stations: ['5-1', 'A5-1']
+  },
+  {
+    id: 'envy', kid: '看见比较', adult: '比较与嫉妒',
+    line: '嫉妒不必羞耻，它常常在指出你也很想要的东西。',
+    mechanism: '向上的社会比较会让人看到差距，也可能带来嫉妒。把「我不如人」改写成「我也想要那个」，可能把自我否定转成一个方向；感受本身不需要被判对错。',
+    dose: { time: '约 1 分钟', steps: 2, stop: '说不出想要什么就先承认「我有点羡慕」' },
+    dict: '社会比较', tools: ['比较与社交媒体'], slowvars: [],
+    stations: ['5-2', 'A5-2']
+  },
+  {
+    id: 'lonely', kid: '孤单分级', adult: '孤独与归属',
+    line: '孤单是「连接不够」的信号，不是「不值得被连接」的证据。',
+    mechanism: '孤独感说的是想要的连接和实际的连接之间有落差。给它一个刻度，再找这一档能做的事，可能比笼统地难受好下手；被懂需要时间，不必一次到位。',
+    dose: { time: '约 1 分钟', steps: 2, stop: '不想联系就先停，不必勉强' },
+    dict: '孤独感', tools: ['社会连接与共同调节'], slowvars: ['relationships'],
+    stations: ['5-3', 'A5-3']
+  },
+  {
+    id: 'care', kid: '照顾与开口', adult: '身体照料与求助',
+    line: '照顾身体是第一步，开口求助是本事，不是麻烦别人。',
+    mechanism: '从可观察的身体信号出发，认出需要，再走到一个具体动作和可以找的人，可能让「硬撑」变成「先照顾、再求助」。持续的不舒服需要认真对待，不是靠忍。',
+    dose: { time: '约 2 分钟', steps: 4, stop: '有危险信号立即就医，不必等这一趟做完' },
+    dict: '社会支持', tools: ['求助脚本'], slowvars: ['health'],
+    stations: ['5-4', 'A5-4']
   }
 ];
 
@@ -232,6 +264,26 @@ MI.glossary = [
       teach: ['4-4', 'A4-4'], requires: ['express', 'need'], dicts: ['边界', '非暴力沟通'],
       bridge: '上一站把「如果当时」说完整了，这一站把话说向别人：我需要什么，到哪里为止。',
       practice: '找一件不太想答应的小事，说一句「这个我先不接」，不需要补理由。'
+    },
+    shame: {
+      teach: ['5-1', 'A5-1'], requires: ['granularity', 'boundary'], dicts: ['自我关怀', '反刍'],
+      bridge: '上一站学会了把话说向别人，这一站把话转回自己：做错的事，和「我是谁」分开。',
+      practice: '想给自己下判决时，先改成一句「这件事我处理得不好」，停在这里。'
+    },
+    envy: {
+      teach: ['5-2', 'A5-2'], requires: ['reframe', 'granularity'], dicts: ['社会比较', '自尊'],
+      bridge: '上一站把自己从事里分了出来，这一站看比较：把「我不如人」换成「我也想要」。',
+      practice: '冒出「别人都比我好」时，补一句「我羡慕的到底是哪一个」，只认出它。'
+    },
+    lonely: {
+      teach: ['5-3', 'A5-3'], requires: ['need', 'perspective'], dicts: ['孤独感', '归属不确定性'],
+      bridge: '上一站从比较里认出了想要的东西，这一站认出另一种想要：和别人连上。',
+      practice: '觉得孤单时，给一个还联系着的人发一句很短的真实话，不用寒暄。'
+    },
+    care: {
+      teach: ['5-4', 'A5-4'], requires: ['body', 'boundary'], dicts: ['社会支持', '情绪调节'],
+      bridge: '上一站往别人那里迈了一步，这一站先回到身体：认出信号，也知道什么时候开口找人。',
+      practice: '身体不舒服时，先把哪儿、什么时候、多难受说清楚，再决定找谁。'
     }
   };
   MI.glossary.forEach(g => Object.assign(g, links[g.id] || {}));

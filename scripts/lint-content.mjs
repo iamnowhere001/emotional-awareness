@@ -16,11 +16,15 @@ const FILES = [
   'glossary',
   'levels-kid',
   'levels-kid-island4',
+  'levels-kid-island5',
   'levels-adult',
+  'levels-adult-island5',
   'bank-kid-1-3',
   'bank-kid-island4',
+  'bank-kid-island5',
   'bank-adult-1-3',
   'bank-adult-island4',
+  'bank-adult-island5',
   'bank-compose',
   'levels-adult-work',
   'library',
@@ -485,12 +489,12 @@ SV_HORIZONS.forEach((h, i) => {
 });
 
 /* ---------- 概念层 ----------
-   16 个概念是站点 / 工具卡 / 词典 / 慢变量的共同锚点。这里校验：
+   20 个概念是站点 / 工具卡 / 词典 / 慢变量的共同锚点（1.1.0 岛 5 增 4 个）。这里校验：
    id 唯一、两轨词卡名与 CODEX 一致、stations / tools / dict / slowvars 反链都真实存在；
    teach 覆盖两轨各一站、requires 不成环且教学顺序成立、dicts 只引用已有词条；
    工作间四幕用到的概念必须早于 MI.workGate 教完（直接拦住「用到但没教」的倒挂）。 */
 const GLOSSARY = MI.glossary || [];
-if (GLOSSARY.length !== 16) err(`概念层：应为 16 个概念，当前 ${GLOSSARY.length} 个`);
+if (GLOSSARY.length !== 20) err(`概念层：应为 20 个概念，当前 ${GLOSSARY.length} 个`);
 const seenConcept = new Set();
 const CONCEPT_BY_ID = new Map(GLOSSARY.map(g => [g.id, g]));
 const TRACK_ORDER = {
