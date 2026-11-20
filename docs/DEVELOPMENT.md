@@ -108,7 +108,7 @@
 
 **边界说明只有一份**：统一放在 `content/glossary.js` 的 `MI.safety`，词典 / 自助工具箱 / 慢变量 / 静修间共用，本文件不再写 `safety`。改完跑 `npm run lint`（检查数量、分类、字段、名称去重与结构）。只做科普与一般性练习，危机情况明确指向当地急救与专业支持。
 
-> `content/glossary.js` 是 L0 概念层，固定 **16 个概念**，字段 `id / kid / adult / line / mechanism / dose{time,steps,stop} / dict / tools / slowvars / stations`。站点 / 工具卡 / 词典 / 慢变量都通过反链挂到同一个 id，`js/core.js` 启动时建反向索引；`MI.safety` 是唯一的边界说明。加概念时同步 `CODEX` 里的两个卡名，并在 lint 校验下跑 `npm run lint`。
+> `content/glossary.js` 是 L0 概念层，固定 **20 个概念**，字段 `id / kid / adult / line / mechanism / dose{time,steps,stop} / dict / tools / slowvars / stations`。站点 / 工具卡 / 词典 / 慢变量都通过反链挂到同一个 id，`js/core.js` 启动时建反向索引；`MI.safety` 是唯一的边界说明。加概念时同步 `CODEX` 里的两个卡名，并在 lint 校验下跑 `npm run lint`。
 
 ### 3.7 加 / 改慢变量
 
@@ -147,7 +147,7 @@
 
 **拼装试点**只在 `4-3`（儿童 / 亲子）与 `A4-3`（成年）两关做通，数据在 `content/bank-compose.js`：`asks` 是两种问法，`scenes` 把想法按情境分组，`thoughts` 每条自带 3–4 个镜头、恰好 1 个 `ok`。物化后仍是现有 `reframe` 契约（只多一个可选 `question`），组合键是 `scene:thought:ask`，展开成 12 组。选道是纯函数，**不碰 `Math.random`**：同一份 `seen` 与种子必得同一组合；`seen` 落盘但不在界面显示，每关最多 8 条，超出丢最旧，`restart-all` 不清 `seen`。调试点：`pickVariant('4-3', { forceKey: 's1:t1:a1' })` 可强制复现，DOM 上 `[data-variant]` 能读到组合键。
 
-**工作间**是成年轨专题支线，数据在 `content/levels-adult-work.js`：四幕线性解锁（09:00 会前 / 11:00 汇报被否 / 15:00 冲突 / 19:30 下班反刍），走完 `A3-4` 开放第一幕，时间线视图是 `#/work`。它不计入 17 站，不加贝壳 / 词卡 / 本领，也不参与终章解锁；完成只写 `state.sideCleared`，儿童 / 亲子轨看不到入口。每幕 2 组手写变体，题型分别是 `clue / reframe / compose / chain`。
+**工作间**是成年轨专题支线，数据在 `content/levels-adult-work.js`：四幕线性解锁（09:00 会前 / 11:00 汇报被否 / 15:00 冲突 / 19:30 下班反刍），走完 `A3-4` 开放第一幕，时间线视图是 `#/work`。它不计入 21 站，不加贝壳 / 词卡 / 本领，也不参与终章解锁；完成只写 `state.sideCleared`，儿童 / 亲子轨看不到入口。每幕 2 组手写变体，题型分别是 `clue / reframe / compose / chain`。
 
 ---
 

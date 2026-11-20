@@ -705,6 +705,15 @@ window.addEventListener('load', function () {
     A(session.helpFrom === 'dict');
     ACTIONS['help-close']();
     A(session.view === 'dict', '从词典进入应回到词典');
+    /* 危机词条内的出口：展开「自杀风险信号」应看到按钮，点击后同样回到词典 */
+    const sosCard = document.querySelector('#dict-grid .dict-card[data-term="自杀风险信号"]');
+    A(!!sosCard, '词典应有「自杀风险信号」词条');
+    const sosBtn = sosCard.querySelector('[data-action="open-help"]');
+    A(!!sosBtn, '危机词条应带站内急救出口');
+    sosBtn.click();
+    A(session.view === 'help' && session.helpFrom === 'dict', '危机词条出口应进入急救页并记下来源');
+    ACTIONS['help-close']();
+    A(session.view === 'dict', '从危机词条进入应回到词典');
     renderHome();
   });
   test('儿童档只给「找一个大人」，成人口径给出本地求助信息', () => {

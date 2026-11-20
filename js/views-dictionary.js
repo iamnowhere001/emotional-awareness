@@ -347,6 +347,7 @@ function dictView() {
         <div class="dict-detail">
           <p>${esc(d.d)}</p>
           ${d.m ? `<p class="dict-mis"><b>常见误解</b>${esc(d.m)}</p>` : ''}
+          ${d.sos ? `<div class="dict-sos"><button class="help-btn" data-action="open-help">现在很难受？先缓一缓</button></div>` : ''}
           ${(d.r || []).length ? `<div class="dict-related"><b>接着看</b><div class="dict-related-links">${d.r.map(t => {
             const target = DICTIONARY.find(x => x.t === t);
             const cross = target && target.c !== d.c;

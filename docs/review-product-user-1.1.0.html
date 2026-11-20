@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心情闯关岛 · 产品与用户双视角审查（1.1.0）</title>
+<style>
+  :root{
+    --bg:#f5f7f8; --card:#ffffff; --line:#e2e7ea; --ink:#1c2429; --sub:#5d6a74;
+    --green:#2f6f5e; --green-l:#e8f2ee; --amber:#c47b28; --amber-l:#fbf1e4;
+    --red:#b8443a; --red-l:#fbecea; --blue:#35698f; --blue-l:#e9f1f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;line-height:1.7;font-size:15px}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 28px 96px}
+  header{border-bottom:3px solid var(--green);padding-bottom:28px;margin-bottom:36px}
+  .kicker{font-size:13px;letter-spacing:.12em;color:var(--green);font-weight:700;text-transform:uppercase}
+  h1{font-size:32px;line-height:1.3;margin:12px 0 8px;letter-spacing:-.01em}
+  .meta{color:var(--sub);font-size:13px}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--green);border-radius:8px;padding:24px 28px;margin:28px 0 40px;box-shadow:0 2px 8px rgba(20,40,35,.04)}
+  .verdict .lead{font-size:20px;font-weight:700;line-height:1.5;margin:0 0 10px}
+  .verdict p{margin:6px 0;color:var(--sub)}
+  h2{font-size:23px;margin:52px 0 6px;padding-top:20px;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:0;padding-top:0}
+  h3{font-size:17px;margin:30px 0 12px;color:var(--green)}
+  h4{font-size:15px;margin:20px 0 8px}
+  p{margin:10px 0}
+  .sub{color:var(--sub);font-size:14px}
+  .scards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin:24px 0}
+  .scard{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px 22px}
+  .scard .n{font-size:28px;font-weight:800;color:var(--green);line-height:1}
+  .scard .n small{font-size:14px;color:var(--sub);font-weight:500}
+  .scard h4{margin:10px 0 6px}
+  .scard p{font-size:14px;color:var(--sub);margin:0}
+  .scores{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:20px 0 28px}
+  .scores table{width:100%;border-collapse:collapse;font-size:14px}
+  .scores td{padding:9px 16px;border-bottom:1px solid #f0f2f4;vertical-align:middle}
+  .scores tr:last-child td{border-bottom:0}
+  .scores .dim{width:180px;font-weight:600}
+  .scores .bar{width:220px}
+  .track{height:8px;background:#eef1f3;border-radius:4px;overflow:hidden}
+  .fill{height:100%;border-radius:4px}
+  .g{background:var(--green)} .a{background:var(--amber)} .r{background:var(--red)}
+  .scores .val{width:56px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  .scores .note{color:var(--sub);font-size:13px}
+  table.data{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:14px;margin:16px 0}
+  table.data th{background:#eef3f1;text-align:left;padding:11px 14px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--line)}
+  table.data td{padding:11px 14px;border-bottom:1px solid #f0f2f4;vertical-align:top}
+  table.data tr:last-child td{border-bottom:0}
+  code{background:#eef1f3;padding:1px 5px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#334}
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+  .t-p0{background:var(--red-l);color:var(--red)} .t-p1{background:var(--amber-l);color:var(--amber)}
+  .t-p2{background:var(--blue-l);color:var(--blue)} .t-keep{background:var(--green-l);color:var(--green)}
+  .finding{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px 22px;margin:14px 0}
+  .finding .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .finding .top strong{font-size:16px}
+  .finding p{margin:6px 0}
+  .ev{font-size:13px;color:var(--sub);border-left:3px solid var(--line);padding-left:12px;margin-top:10px}
+  .ev b{color:#3b4750;font-weight:600}
+  .callout{background:var(--amber-l);border:1px solid #eed9bd;border-radius:8px;padding:18px 22px;margin:20px 0}
+  .callout.blue{background:var(--blue-l);border-color:#cfe0ec}
+  .callout.green{background:var(--green-l);border-color:#c9e0d7}
+  .callout h4{margin-top:0}
+  ol.prio{counter-reset:p;list-style:none;padding:0}
+  ol.prio li{position:relative;padding:16px 20px 16px 56px;background:var(--card);border:1px solid var(--line);border-radius:8px;margin:10px 0}
+  ol.prio li:before{counter-increment:p;content:counter(p);position:absolute;left:18px;top:16px;width:26px;height:26px;background:var(--green);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+  .foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--sub);font-size:13px}
+  strong.em{color:var(--red)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}.scores .bar,.scores .dim{width:auto}.wrap{padding:28px 18px 60px}h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Review · 1.1.0</div>
+  <h1>心情闯关岛 · 产品与用户双视角审查</h1>
+  <div class="meta">审查对象：本地工作区 v1.1.0（tag <code>v1.1.0</code> / commit <code>a089b88</code>）　·　日期：2026-11-20　·　方法：三条独立只读审查线（产品文档 / 代码体验 / 内容质量）交叉验证</div>
+</header>
+
+<div class="verdict">
+  <p class="lead">一个在「不做什么」上极其清醒、在「有没有用」上几乎空白的高完成度作品。</p>
+  <p>工程与安全水位明显高于内容真实感水位；代码把用户当人看，内容有时把用户当「题目受众」。最大的产品风险不是功能缺口，而是验证通道被主动关闭。</p>
+  <p class="sub">下文的评分是基于证据的<b>主观判断</b>，不是客观测量——欢迎逐条反驳。凡「有意不做」的设计取舍单独列出，不按缺陷计。</p>
+  <p style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b>修复状态（2026-11-20）：</b>「如果只做三件事」的<b>第 1、2 项已执行</b>——8 处数字漂移已修并新增 23 条 doctor 护栏、3 处儿童职场情境已改、词典危机词条已接通站内急救出口，verify 全绿（doctor 45 PASS / 242 PASS）。第 3 项（真实用户观察）需谢衣安排真人，未执行。另：复核发现初稿把 <code>bank-compose.js:60</code> 误列为儿童档，实为成年档反例，已从清单移除（见 §4.2 更正说明）。改动未提交。</p>
+</div>
+
+<h2>一、核心判断</h2>
+
+<div class="scards">
+  <div class="scard">
+    <div class="n">01</div>
+    <h4>这是「作品」多于「产品」</h4>
+    <p>六条红线、明确的取舍表、近乎洁癖的文档与回归纪律，都指向一个高度自洽的表达系统。但全库找不到用户研究、留存数据或竞品分析，且在 CHANGELOG 里明确放弃效果评估。价值主张从未被外部证伪，也从未被证实。</p>
+  </div>
+  <div class="scard">
+    <div class="n">02</div>
+    <h4>工程安全 ≫ 内容真实感</h4>
+    <p>代码层做得扎实：不打分、温柔重试、危机分流、无障碍全覆盖、隐私不可写兜底、白屏可读提示。内容层却把 6–12 岁孩子放进「接项目」「连着开会」的职场情境，成年档议题窄到几乎只剩工作压力。</p>
+  </div>
+  <div class="scard">
+    <div class="n">03</div>
+    <h4>取舍可以，代价要被看见</h4>
+    <p>「不打卡、不追踪、不做问卷」与红线自洽，不是疏漏。但「不制造压力」与「验证有效性」并非不可调和——当前选择是整体放弃验证。产品的天花板由此决定，而不是由内容量决定。</p>
+  </div>
+</div>
+
+<h2>二、产品视角</h2>
+<p class="sub">评分说明：10 分制，仅作横向比较；「验证」一项的低分是刻意标出的异常值。</p>
+
+<div class="scores">
+  <table>
+    <tr><td class="dim">定位清晰度</td><td class="bar"><div class="track"><div class="fill g" style="width:90%"></div></div></td><td class="val">9.0</td><td class="note">三处口径一致，一句话价值主张</td></tr>
+    <tr><td class="dim">目标用户定义</td><td class="bar"><div class="track"><div class="fill g" style="width:70%"></div></div></td><td class="val">7.0</td><td class="note">四档清晰；咨询师 / 课堂未纳入也未明确排除</td></tr>
+    <tr><td class="dim">核心假设验证</td><td class="bar"><div class="track"><div class="fill r" style="width:20%"></div></div></td><td class="val">2.0</td><td class="note">零用户证据，且主动关闭验证通道</td></tr>
+    <tr><td class="dim">功能完整度</td><td class="bar"><div class="track"><div class="fill g" style="width:80%"></div></div></td><td class="val">8.0</td><td class="note">红线内该有的都有，候选池明确不排期</td></tr>
+    <tr><td class="dim">留存与回访</td><td class="bar"><div class="track"><div class="fill a" style="width:40%"></div></div></td><td class="val">4.0</td><td class="note">主动放弃；仅靠内容供给，无成长反馈</td></tr>
+    <tr><td class="dim">差异化论证</td><td class="bar"><div class="track"><div class="fill a" style="width:50%"></div></div></td><td class="val">5.0</td><td class="note">红线本身即差异化，但无「选我」的论证</td></tr>
+    <tr><td class="dim">数据伦理与隐私</td><td class="bar"><div class="track"><div class="fill g" style="width:95%"></div></div></td><td class="val">9.5</td><td class="note">不采集 / 危机口径 / 导出迁移，教科书级</td></tr>
+    <tr><td class="dim">文档作为产品资产</td><td class="bar"><div class="track"><div class="fill a" style="width:60%"></div></div></td><td class="val">6.0</td><td class="note">严谨但数字漂移，1.1.0 刚引入多处</td></tr>
+  </table>
+</div>
+
+<h3>2.1 定位与价值主张 <span class="tag t-keep">强</span></h3>
+<p>「一起认出心里的天气」在 <code>README.md:3</code>、<code>manifest.webmanifest:2</code>、<code>README.md:7</code> 三处一致；六条红线（不打分、不采集、不联网、不宣称疗效、不打卡、不制造压力）贯穿文档。产品任务被定义为「把模糊的感觉看得更清楚一点，再带走一个用得上的小工具」，并明确否认「心理测评 / 诊断 / 治疗替代」（<code>README.md:226</code>）。这是同类科普产品里少有的边界清晰度。</p>
+
+<h3>2.2 核心假设：全部是信念，没有证据 <span class="tag t-p1">产品级空白</span></h3>
+<table class="data">
+  <tr><th>成立假设</th><th>文档表述</th><th>验证证据</th></tr>
+  <tr><td>情绪启蒙可游戏化</td><td>README:3；CHANGELOG:1009 记录原版「做唯一标准答案」被推翻</td><td>无用户测试数据</td></tr>
+  <tr><td>不打分也能留住人</td><td>README:223 红线 1；CHANGELOG:579「复玩是内容供给，不是用户任务」</td><td>无留存率 / 回访数据</td></tr>
+  <tr><td>不记录历史也能坚持</td><td>CHANGELOG:350「坚持靠短版门槛与场景线索」</td><td>仅「谢衣确认接受」，开发者本人拍板</td></tr>
+  <tr><td>家长愿意陪玩</td><td>每关 <code>adult</code> 家长提示全部落地（content-review-0.13.0:232）</td><td>无任何家长反馈或观察</td></tr>
+</table>
+<p>全库检索「用户反馈 / 可用性测试 / 访谈 / 问卷 / 留存」均无产品端证据。更关键的是 <code>CHANGELOG.md:352</code> 明确不做效果评估，理由是问卷与前后测会收集练习反馈——即<strong class="em">为了守住「不采集」红线，主动放弃了知道产品是否有效的能力</strong>。</p>
+
+<h3>2.3 留存：只有内容供给，没有成长回路</h3>
+<p>「不打卡 / 不连续登录 / 进度不会掉」写在 <code>README.md:227</code> 红线 5，<code>ROADMAP.md:72</code> 直接把打卡方案判为与红线冲突。现存回访动力只有：漂流瓶可换一题、每关多组变体、<code>seen</code> 暗记录（每关最多 8 条，界面不显示，<code>README.md:173</code>）。成长记录是通关式（cleared / cards / skills），刻意不记次数、天数、时长。</p>
+<div class="callout blue">
+  <h4>判断</h4>
+  <p>「不制造回来的压力」是对的，但「不制造压力」≠「不给任何反馈」。当前设计里，孩子通关后看不到「我收集到了什么」的即时回响（详见 3.4），这是可以在不违反红线的前提下补的回路。</p>
+</div>
+
+<h3>2.4 竞品与差异化：完全没有论证</h3>
+<p>文档未提及任何对标产品、市场规模、获客渠道。「为什么选它而不是别的情绪 App」的唯一答案是六条红线本身。而 <code>ROADMAP.md:73</code> 把金句 PNG、打印词卡、多语言判为「传播价值不等于产品价值」放进候选池不排期——这个判断可能正确，但它同时切断了低成本传播路径，且没有数据支撑。</p>
+
+<h3>2.5 数据伦理：最强的护城河</h3>
+<p>不保存天气选择、心情文本、主题筛选；localStorage 只存进度类字段（<code>README.md:164-167</code>）；导出导入做六层校验、覆盖前预览、一次撤销（<code>README.md:185-198</code>）；危机口径经人工复核，12356 不承诺全国 7×24、儿童档只引导找大人不含号码（<code>docs/crisis-review-1.0.0.md</code>）。这一块的水位显著高于同类产品。</p>
+
+<h2>三、用户视角</h2>
+<p class="sub">按「打开 → 上手 → 通关 → 回访」的真实路径评，并区分孩子与家长 / 大人两类使用者。</p>
+
+<div class="scores">
+  <table>
+    <tr><td class="dim">首次上手路径</td><td class="bar"><div class="track"><div class="fill g" style="width:70%"></div></div></td><td class="val">7.0</td><td class="note">两次点击到首关；但选档页纯文字、无引导</td></tr>
+    <tr><td class="dim">四档差异真实性</td><td class="bar"><div class="track"><div class="fill g" style="width:85%"></div></div></td><td class="val">8.5</td><td class="note">字号 / 语音 / 点击区 / tier 均为真差异</td></tr>
+    <tr><td class="dim">题型交互与不打分</td><td class="bar"><div class="track"><div class="fill g" style="width:85%"></div></div></td><td class="val">8.5</td><td class="note">无红叉无扣分，温柔重试做得实</td></tr>
+    <tr><td class="dim">认知负荷控制</td><td class="bar"><div class="track"><div class="fill g" style="width:75%"></div></div></td><td class="val">7.5</td><td class="note">有折叠 / 锚点；词典仍长达约 28533px</td></tr>
+    <tr><td class="dim">语音可用性</td><td class="bar"><div class="track"><div class="fill g" style="width:70%"></div></div></td><td class="val">7.0</td><td class="note">进站自动读默认关；iOS 需先点页面</td></tr>
+    <tr><td class="dim">情感安全</td><td class="bar"><div class="track"><div class="fill g" style="width:90%"></div></div></td><td class="val">9.0</td><td class="note">危机分流清晰，无疗效承诺 / 二次伤害</td></tr>
+    <tr><td class="dim">无障碍</td><td class="bar"><div class="track"><div class="fill g" style="width:90%"></div></div></td><td class="val">9.0</td><td class="note">键盘 / 读屏 / 色盲 / reduced-motion 全覆盖</td></tr>
+    <tr><td class="dim">稳定性与边界</td><td class="bar"><div class="track"><div class="fill g" style="width:85%"></div></div></td><td class="val">8.5</td><td class="note">隐私模式 / 多标签 / 离线 / 坏导入均有兜底</td></tr>
+    <tr><td class="dim">内容适龄真实性</td><td class="bar"><div class="track"><div class="fill r" style="width:55%"></div></div></td><td class="val">5.5</td><td class="note">儿童题库混入成人职场情境</td></tr>
+    <tr><td class="dim">成年档价值感</td><td class="bar"><div class="track"><div class="fill a" style="width:60%"></div></div></td><td class="val">6.0</td><td class="note">岛 4/5 与儿童同构，议题过窄</td></tr>
+  </table>
+</div>
+
+<h3>3.1 首次上手：顺，但低龄孩子进不来 <span class="tag t-p2">可修</span></h3>
+<p>路径是「选档 → 首页 → 开始上岛 → 第一关天气题」，共两次点击（<code>boot.js:225-231</code> → <code>views-main.js:12-29</code> → <code>actions-data.js:5-22</code> → <code>actions-level.js:7-15</code>）。没有任何交互式引导或示例，只有文字说明。选档页全文字、无语音无图标（<code>views-main.js:16-26</code>），3–6 岁不识字的孩子<strong>无法独立进入</strong>；进 a3 档后是 emoji 点选与大按钮，但朗读要手动点喇叭，而进站自动读默认关（<code>core.js:189</code> 的 <code>autoSpeak:false</code>）。</p>
+<div class="ev"><b>证据：</b><code>views-main.js:18-25</code> 选档 lead 为纯文字；<code>bands.js:11</code> a3 字号 1.18、语音默认 true，但 <code>core.js:189</code> autoSpeak 默认 false；<code>views-level.js:279-280</code> 需手动「读题目」。</div>
+
+<h3>3.2 不打分：守得最牢的红线 <span class="tag t-keep">强</span></h3>
+<p>点错只走 <code>nudge()</code>（<code>shell.js:232-244</code>）：「也是一种可能」「再看看」加轻微抖动，第二次才给提示；全库无红叉、无「错误 / 扣分 / 不及格」。内部确有答案比对，但只决定「完成」还是「温柔重试」；连拼句题选了不温和的句子也允许「就用这句，继续」（<code>actions-level.js:373-381</code>）。这一条做得很实，不是文档说说。</p>
+
+<h3>3.3 情感安全与危机分流 <span class="tag t-keep">强</span></h3>
+<p>顶栏常驻「现在很难受」并 sticky 吸顶（<code>index.html:43</code>、<code>style.css:64-67</code>），首页、地图、所有弹窗都有「先缓一缓」出口。儿童 / 成年口径分流明确（<code>core.js:177-180</code>）：孩子看到「先去找身边的大人，不要一个人待着」，大人看到 12356 / 120 / 110 / 急诊（<code>views-main.js:126-129,155-165</code>）。未发现疗效承诺或「必须原谅 / 想开就好」类二次伤害。</p>
+
+<h3>3.4 用户会卡住的六个地方 <span class="tag t-p2">体验</span></h3>
+<table class="data">
+  <tr><th>卡点</th><th>表现</th><th>证据</th></tr>
+  <tr><td>低龄入口依赖大人</td><td>选档纯文字 + 朗读需手动开</td><td><code>views-main.js:18-25</code> / <code>core.js:189</code></td></tr>
+  <tr><td>终章条件不直观</td><td>需走完前 20 站，地图仅一句说明</td><td><code>shell.js:251</code> / <code>views-main.js:292</code></td></tr>
+  <tr><td>词卡反馈被折叠</td><td>a3/a6 基础层把「收进图鉴」折进 details，孩子看不到收集回响</td><td><code>views-level.js:522-527</code></td></tr>
+  <tr><td>实践卡只出现一次</td><td>「带回下一站」不点就错过，无二次提示</td><td><code>views-level.js:265-269</code></td></tr>
+  <tr><td>拼句题初始禁用提交</td><td>须每行都选才知道能提交</td><td><code>views-level.js:144</code> / <code>actions-level.js:363</code></td></tr>
+  <tr><td>进度口径易混</td><td>显示「已走过 X / 17 站」（写死旧值），支线不计入，跨轨分开</td><td><code>shell.js:66,69</code></td></tr>
+</table>
+
+<h2>四、内容视角（用户价值的实际载体）</h2>
+
+<h3>4.1 覆盖与深度</h3>
+<p>五岛覆盖喜怒哀惧、羞耻、内疚、嫉妒、孤独，心理学内容的水位高得意外：162 条词典主动标注争议与 myth（情绪建构论「仍是正在争论的理论」<code>dictionary.js:32</code>、正念「效应量小到中等」<code>:73-74</code>、马斯洛「跨文化研究不支持严格顺序」<code>:163-165</code>），措辞保守。但<strong>缺自豪 / 希望 / 感恩 / 敬畏</strong>这类正向情绪主题；成年档的亲密关系仅 1 处、存在意义与哀伤在关卡层近乎空白。</p>
+
+<h3>4.2 适龄性硬伤 <span class="tag t-p0">P0</span></h3>
+<p>儿童题库混入成人职场情境，直接打断 6–12 岁孩子的代入感：</p>
+<div class="ev">
+  <b>bank-kid-island4.js:130</b>「老师问你能不能再接一个项目，你手上已经很满了」（a6）<br>
+  <b>bank-kid-1-3.js:877</b>「连着开了几个会，不想再说话」<br>
+  <b>bank-kid-island4.js:71</b>「在群里下不来台」
+</div>
+<p class="sub">这是 1.1.0 儿童文案降级那一轮漏掉的——当时聚焦临终意象与超龄术语，没有全量扫「成人职场语境」。同轮还留下 <code>bank-kid-island5.js:95</code>「觉得没人需要你」这类对孩子偏重的表述。</p>
+<p class="sub"><b>复核更正：</b>初稿把 <code>bank-compose.js:60</code>「我这辈子都不会原谅自己」误列为儿童档，实际它属于 A4-3（<code>b:['adult']</code>，<code>bank-compose.js:91</code>）。成年档里这是「要被否定的坏想法」反例，按设计保留，不属适龄性问题。</p>
+
+<h3>4.3 成年档深度名不副实 <span class="tag t-p1">P1</span></h3>
+<p>岛 4/5 与儿童档几乎同构（<code>levels-adult.js:88-111</code> vs <code>levels-kid-island4.js:7-34</code>），职场场景高度重复（方案被否、同事推活、周末加班）。真正成人化的部分存在但零散：反刍 / 倦怠 / 内耗、读心术 / 去灾难化 / 应该句式、维持行为（<code>bank-adult-1-3.js:143-151,229-264,277</code>）。工作间支线（4 幕：会前紧张 → 汇报被否 → 冲突表达 → 下班反刍，<code>levels-adult-work.js:7-127</code>）是成年档最有价值的设计，但藏在 A3-4 解锁门槛后、不计入主线、不给任何反馈。</p>
+
+<h3>4.4 变体与一致性</h3>
+<p>变体质量参差：有的确是不同情境（积木倒了 vs 妈妈拿出饼干），有的只是换词（天气四组都只是「选天气」）。tier 2 常是 tier 1 同场景加一张卡（<code>bank-kid-1-3.js:596</code> 与 <code>:644</code> 同为「群里发话没人接」）。个别语句问题：<code>bank-kid-island4.js:95</code> 同义重复、<code>:81-84</code> 指代错位。另有 <code>bank-compose.js:102-111,124-133</code> 与 <code>bank-adult-island4.js:42-55</code> 完全重复，而 <code>util.js:97</code> 优先取 compose，后者是不可见的死数据。</p>
+
+<h2>五、真问题清单（按优先级）</h2>
+
+<div class="finding">
+  <div class="top"><span class="tag t-p0">P0</span><strong>文档数字漂移 6 处，其中 1.1.0 刚引入 3 处</strong></div>
+  <p>同一份 README 里「每轨 4 座岛」与「21 站（5 岛）」并存，「91+32=123 组」与正文「111+41 组」并存，「儿童超龄术语待改写 / 未改」与实际已改并存。源码注释也停在旧值。</p>
+  <div class="ev"><b>README.md:30</b> 每轨 4 座岛　<b>README.md:33</b> 91+32=123　<b>README.md:282</b> 标注「未改」　<b>glossary.js:1</b> 16 个概念（实为 20）　<b>levels-kid.js:1</b> 16 站（实为 21）　<b>levels-adult-work.js:3</b> 17 站　<b>DEVELOPMENT.md:111</b> 固定 16 个概念</div>
+  <p class="sub">根因：doctor 只校验「当前版本章节 + ROADMAP 全文」的规模数字，正文描述与源码注释不在覆盖内。这是我在 1.1.0 收尾时改了正文表格、漏了其他地方。</p>
+</div>
+
+<div class="finding">
+  <div class="top"><span class="tag t-p0">P0</span><strong>儿童题库的成人职场情境</strong></div>
+  <p>适龄性硬伤，影响 6–12 岁核心用户。纯文案替换，不改结构、不动题库字段，风险低。</p>
+  <div class="ev"><b>bank-kid-island4.js:130</b> / <b>bank-kid-1-3.js:877</b> / <b>bank-kid-island4.js:71</b>（初稿第 4 处经复核属成年档反例，已从清单移除）</div>
+</div>
+
+<div class="finding">
+  <div class="top"><span class="tag t-p1">P1</span><strong>词典自杀风险词条不指向站内急救入口</strong></div>
+  <p>这是 0.13.0 审核时就记录的已知安全链路断点（<code>docs/archive/content-review-0.13.0.md:82</code>）：用户在词典里读到风险词条时，旁边没有一个直达「现在很难受」的出口。与产品的安全定位相比，这个断点的优先级应该高于任何新内容。</p>
+</div>
+
+<div class="finding">
+  <div class="top"><span class="tag t-p1">P1</span><strong>验证脚本的覆盖盲区</strong></div>
+  <p>回归脚本 79 项源码断言 + 163 项浏览器用例守住了结构与行为，但守不住「文档自述 vs 实际」的一致性——6 处漂移全在验证网之外。这是 P0-1 反复发生的机制性原因，改数字不改网，下次还会漂。</p>
+</div>
+
+<div class="finding">
+  <div class="top"><span class="tag t-p2">P2</span><strong>低龄入口 / 成年档深度 / 变体冗余</strong></div>
+  <p>三项都是「不致命但拉低价值感」：a3 选档与朗读默认（<code>views-main.js:18-25</code>、<code>core.js:189</code>）；成年档议题过窄（关卡层无亲密关系 / 哀伤 / 存在意义）；4-3 与 A4-3 双题库冗余使其中一份成死数据（<code>bank-compose.js:102-133</code> vs <code>bank-adult-island4.js:42-55</code>）。</p>
+</div>
+
+<h2>六、设计取舍（不建议改，但代价要认）</h2>
+<table class="data">
+  <tr><th>取舍</th><th>为什么合理</th><th>需要承认的代价</th></tr>
+  <tr><td>不打卡 / 不连续登录 / 进度不掉</td><td>与「不制造压力」红线一致，且避免把情绪练习变成任务</td><td>没有成长回路，通关后缺少回来的理由</td></tr>
+  <tr><td>不记录心情文本 / 不做问卷与前后测</td><td>隐私优先，且避免把表达变成数据</td><td>产品是否有效永远不可知，无法迭代价值主张</td></tr>
+  <tr><td>无账号 / 无云同步 / 无多语言</td><td>纯前端离线形态，换设备用导出 JSON</td><td>跨设备体验断裂；成年旧进度明确不映射（README:183）</td></tr>
+  <tr><td>选档需要大人参与</td><td>「亲子」定位下，3–6 岁由大人陪着选是合理的</td><td>但 3–6 岁档对外表述应诚实标注「需陪玩」，否则是能力错配</td></tr>
+  <tr><td>金句 PNG / 打印词卡 / 多语言放候选池</td><td>传播价值不等于产品价值，成本不低</td><td>切断了低成本自传播路径</td></tr>
+</table>
+
+<h2>七、如果只做三件事</h2>
+<ol class="prio">
+  <li><strong>修掉 6 处数字漂移，并把「文档自述 vs 实际」纳入 doctor 校验。</strong> 纯文案，零行为风险；同时堵住漂移复发的机制。这是当前唯一「确定是 bug」的部分，而且是我上一轮留下的。</li>
+  <li><strong>清掉儿童题库的成人职场情境（3 处，复核后），顺手把词典风险词条接上急救入口。</strong> 前者修适龄性，后者补安全链路，两项都是字符串级改动，收益直接落在核心用户身上。</li>
+  <li><strong>做一次最小验证，而不是补内容。</strong> 不必上问卷或前后测——可以是 3–5 位真实家长 / 成年用户的出声思考观察，只看两件事：孩子能不能自己走到第一关、大人能不能说清「这东西对我有什么用」。这是目前唯一能改变产品判断的动作，其余优化都只是在既有假设上打磨。</li>
+</ol>
+
+<div class="callout green">
+  <h4>一句话收尾</h4>
+  <p>这个应用的边界感、工程质量和安全水位，已经超过绝大多数同类作品；它现在缺的不是更多的岛和词卡，而是一次「把它交到真实用户手里、看会发生什么」的勇气。第 3 件事比前两件都难，但也只有它决定这是不是一个产品。</p>
+</div>
+
+<div class="foot">
+  审查方法：三条独立只读线（产品文档 / 代码体验 / 内容质量）并行取证，交叉验证后按「真问题 / 设计取舍」分类。所有引用均指向 v1.1.0 工作副本的文件与行号。本报告未修改任何应用代码或内容文件。<br>
+  报告文件：<code>docs/review-product-user-1.1.0.html</code>　·　生成于 2026-11-20
+</div>
+
+</div>
+</body>
+</html>

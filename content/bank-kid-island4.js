@@ -68,7 +68,7 @@ Object.assign(MI.bankKid, {
         { label: '有点不舒服', body: '心里过了一下，还没想开口', move: '先记下来：具体哪里被改了。' },
         { label: '上来了', body: '语气变硬，想立刻质问', move: '先把问题写清楚，再开口。' },
         { label: '中段', body: '开始想「他根本不把我当回事」', move: '把猜测和事实分开：只说看到的改动。' },
-        { label: '快满了', body: '只想让他在群里下不来台', move: '先不在群里说。等能私下谈再说。' },
+        { label: '快满了', body: '只想让他在大家面前下不来台', move: '先不当着同学的面说。等能私下谈再说。' },
         { label: '已经爆了', body: '话已经说出去了', move: '事后补一句：「刚才我语气重了，但这件事我还想谈。」' } ] }
   ],
 
@@ -127,11 +127,11 @@ Object.assign(MI.bankKid, {
         { label: '我感到', choices: [{ t: '我这周实在排满了', gentle: true }, { t: '你太烦了', gentle: false }, { t: '没事', gentle: false }] },
         { label: '我需要', choices: [{ t: '我需要这个周末自己待着', gentle: true }, { t: '我需要你别再问', gentle: false }, { t: '我不需要解释', gentle: false }] },
         { label: '能不能', choices: [{ t: '能不能下次我一定去，这次先不去', gentle: true }, { t: '以后别叫我', gentle: false }, { t: '随你', gentle: false }] } ] },
-    { b: ['a6'], tier: 2, scenario: '老师问你能不能再接一个项目，你手上已经很满了。',
+    { b: ['a6'], tier: 2, scenario: '老师让你再多做一张手抄报，可你已经答应了帮小组收作业。',
       rows: [
-        { label: '我看见', choices: [{ t: '我看见这件事需要有人接', gentle: true }, { t: '你们就知道找我', gentle: false }, { t: '算了，忍了', gentle: false }] },
-        { label: '我感到', choices: [{ t: '我现在的量已经排满了', gentle: true }, { t: '你们太过分了', gentle: false }, { t: '我没感觉', gentle: false }] },
-        { label: '我需要', choices: [{ t: '我需要先把手上这两件做完', gentle: true }, { t: '我需要立刻减负', gentle: false }, { t: '我不需要解释', gentle: false }] },
-        { label: '能不能', choices: [{ t: '能不能下周再定，或者分一部分给别人？', gentle: true }, { t: '以后别再找我', gentle: false }, { t: '随便吧', gentle: false }] } ] }
+        { label: '我看见', choices: [{ t: '我看见这件事也需要有人做', gentle: true }, { t: '你们就知道找我', gentle: false }, { t: '算了，忍了', gentle: false }] },
+        { label: '我感到', choices: [{ t: '我手上的事已经排满了', gentle: true }, { t: '你们太过分了', gentle: false }, { t: '我没感觉', gentle: false }] },
+        { label: '我需要', choices: [{ t: '我需要先把手上答应的两件做完', gentle: true }, { t: '我需要立刻减负', gentle: false }, { t: '我不需要解释', gentle: false }] },
+        { label: '能不能', choices: [{ t: '能不能这次先不接，或者分一部分给别人？', gentle: true }, { t: '以后别再找我', gentle: false }, { t: '随便吧', gentle: false }] } ] }
   ]
 });

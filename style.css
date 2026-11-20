@@ -860,6 +860,9 @@ html.high-contrast .dict-nav-group { border-width: 2px; }
 .k-method { background: var(--surface); border-color: var(--line-strong); color: var(--ink-2); }
 .k-myth { background: var(--warm-soft); border-color: #efd9b9; color: var(--warm); }
 .dict-related { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+/* 危机词条内的急救出口：与顶栏同一颗按钮，展开词条即见，返回时回到词典页。 */
+.dict-sos { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+.dict-sos .help-btn { width: 100%; }
 .dict-related b {
     display: block; font-size: calc(.76rem * var(--scale));
     color: var(--ink-3); margin-bottom: 6px;

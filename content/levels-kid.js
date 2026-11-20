@@ -1,4 +1,4 @@
-/* 儿童 / 亲子主线关卡表 · 正文 16 站 + 终章；岛 4 的四站在 levels-kid-island4.js 里补入
+/* 儿童 / 亲子主线关卡表 · 正文 20 关 + 终章 = 21 站；岛 4 / 岛 5 的四站分别在 levels-kid-island4.js / levels-kid-island5.js 里补入
    纯数据，不含逻辑。加载顺序见 index.html。 */
 window.MI = window.MI || {};
 MI.kid = {

@@ -2,7 +2,8 @@
 /* 一致性自检：node scripts/check-consistency.mjs（npm run doctor）
    零依赖、纯 Node、不启动浏览器。把「靠人工同步」的几组数字收成断言：
      版本六处 / index.html meta 规模数字 / 文档写死的测试规模 /
-     index.html 脚本清单（集合与顺序）/ sw.js 预缓存覆盖 / README 加载顺序契约。
+     index.html 脚本清单（集合与顺序）/ sw.js 预缓存覆盖 / README 加载顺序契约 /
+     文档写死的岛数 / 站数 / 变体数 / 概念数 / 词卡数 = 内容实测值。
    任一 FAIL → exit 1。与 regression.mjs 里的版本断言并存，互不改动。 */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -117,6 +118,67 @@ docs.forEach(([file, text]) => {
   check(`${file} 写死的规模数字`, bad.length === 0,
     bad.length ? bad.join('；') : (seen.length ? `${seen.join(' ')} 均一致` : '未写死数字（以 doctor 输出为准）'));
 });
+
+/* ---------- 3b. 文档写死的内容规模 = 内容实测值 ---------- */
+console.log('\n[内容规模数字与实测一致]');
+/* 1.1.0 收尾把 README 正文改成 5 岛 / 111+41，但同一份 README 的岛屿行
+   还留着「4 座」，源码注释停在 16 概念 / 16 站 / 17 站——doctor 当时只查
+   测试规模，没查内容规模，所以漂移漏网。这里对每份现状文档「全文」扫同一个
+   正则的「所有命中」：任一命中与实测不符即 FAIL，专治新旧值并存；
+   若文档改成不写死数字，正则不命中，天然通过（同上节口径）。 */
+const bankCount = o => Object.values(o || {}).reduce((s, a) => s + a.length, 0);
+const measured = {
+  islands: MI.kid && MI.kid.islands ? MI.kid.islands.length : NaN,
+  levels: MI.kid && MI.kid.levels ? MI.kid.levels.length : NaN,
+  bankKid: bankCount(MI.bankKid),
+  bankAdult: bankCount(MI.bankAdult),
+  glossary: Array.isArray(MI.glossary) ? MI.glossary.length : NaN,
+  codex: MI.library && MI.library.CODEX ? Object.keys(MI.library.CODEX).length : NaN
+};
+check('内容实测规模可解析', Object.values(measured).every(n => Number.isFinite(n) && n > 0),
+  JSON.stringify(measured));
+
+const devMd = read('docs/DEVELOPMENT.md');
+const kidLevelsSrc = read('content/levels-kid.js');
+const glossarySrc = read('content/glossary.js');
+const adultWorkSrc = read('content/levels-adult-work.js');
+/* 全文扫描：hits 为空 = 文档没写死这项数字，放行；否则每个命中都必须等于实测。 */
+const docNum = (label, text, re, expected) => {
+  const hits = [...text.matchAll(re)].map(m => Number(m[1])).filter(Number.isFinite);
+  const bad = hits.filter(n => n !== expected);
+  check(label, bad.length === 0,
+    bad.length ? `命中 ${hits.join('/')}，应为 ${expected}`
+      : hits.length ? `${hits.length} 处均为 ${expected}` : '未写死（以实测为准）');
+};
+
+/* 岛数 */
+docNum('README 岛屿数 = 实测', readmeMd, /每轨 (\d+) 座/g, measured.islands);
+docNum('README 站点行括注岛数 = 实测', readmeMd, /（(\d+) 岛）/g, measured.islands);
+docNum('README 边界表岛数 = 实测', readmeMd, /每轨 (\d+) 岛 \d+ 站/g, measured.islands);
+docNum('index.html meta 岛数 = 实测', html, /(\d+) 座岛/g, measured.islands);
+/* 站点数 */
+docNum('README 站点数 = 实测', readmeMd, /每轨 \*\*(\d+) 站/g, measured.levels);
+docNum('README 正关数 = 站点数-1', readmeMd, /(\d+) 关 \+ 终章/g, measured.levels - 1);
+docNum('README 边界表站点数 = 实测', readmeMd, /每轨 \d+ 岛 (\d+) 站/g, measured.levels);
+docNum('index.html meta 站点数 = 实测', html, /座岛 (\d+) 站/g, measured.levels);
+docNum('levels-kid.js 头注释正关数', kidLevelsSrc, /正文 (\d+) 关/g, measured.levels - 1);
+docNum('levels-kid.js 头注释站点数', kidLevelsSrc, /终章 = (\d+) 站/g, measured.levels);
+docNum('levels-adult-work.js 头注释站点数', adultWorkSrc, /不计入 (\d+) 站/g, measured.levels);
+docNum('DEVELOPMENT 工作间站点数', devMd, /不计入 (\d+) 站/g, measured.levels);
+/* 变体数 */
+docNum('README 儿童变体数 = 实测', readmeMd, /儿童 \*\*(\d+) 组\*\*/g, measured.bankKid);
+docNum('README 成年变体数 = 实测', readmeMd, /成年 \*\*(\d+) 组\*\*/g, measured.bankAdult);
+docNum('README 变体合计 = 实测', readmeMd, /合计 (\d+) 组/g, measured.bankKid + measured.bankAdult);
+docNum('README 边界表儿童变体数', readmeMd, /儿童变体 (\d+) 组/g, measured.bankKid);
+docNum('README 边界表成年变体数', readmeMd, /儿童变体 \d+ 组 \+ 成年 (\d+) 组/g, measured.bankAdult);
+/* 概念与词卡 */
+docNum('README 概念层条数 = 实测', readmeMd, /概念层 (\d+) 条/g, measured.glossary);
+docNum('README 词卡释义条数 = 实测', readmeMd, /词卡释义 (\d+) 条/g, measured.codex);
+docNum('glossary.js 头注释概念数', glossarySrc, /概念层 · (\d+) 个概念/g, measured.glossary);
+docNum('DEVELOPMENT 概念数', devMd, /固定 \*\*(\d+) 个概念\*\*/g, measured.glossary);
+/* 状态描述（同类漂移，非数字） */
+check('README 不再声称儿童档文案「未改」',
+  !/儿童档个别术语偏超龄、丧失意象待改写 \| 已在 0\.13\.0 审核中记录，未改/.test(readmeMd));
 
 /* ---------- 4. index.html 脚本清单（集合与顺序）+ sw.js 预缓存 ---------- */
 console.log('\n[脚本清单与预缓存]');
