@@ -69,10 +69,15 @@
 │   ├── util.js                   # 转义与洗牌 / 拼装选道 / 微型渲染件 / 设置应用
 │   ├── shell.js                  # 视图配置表 / 顶栏与进度 / hash 路由 / 反馈 / 解锁链 / 朗读
 │   ├── views-main.js             # 选年龄段 / 首页 / 急救 / 地图 / 工作间 / 静修列表
-│   ├── views-library.js          # 知识库公共骨架 / 词典 / 自助工具箱 / 慢变量 / 静修练习与 sit 引导
+│   ├── views-dictionary.js       # 知识库公共骨架 + 心理学词典
+│   ├── views-selfhelp.js         # 自助工具箱视图
+│   ├── views-slowvars.js         # 慢变量视图
+│   ├── views-retreat.js          # 静修间练习与 sit 引导
 │   ├── views-level.js            # RENDERERS / makePlay / renderLevel / 子渲染 / 通关结果卡
 │   ├── ui.js                     # 弹窗 / 导出导入 / 设置 / 词卡图鉴 / 本领 / 漂流瓶
-│   ├── actions.js                # ACTIONS 动作分发表
+│   ├── actions-level.js          # ACTIONS 主表：关卡 / 导航 / 急救 / 朗读 / 各题型
+│   ├── actions-library.js        # 追加：词典 / 自助 / 慢变量 / 静修间动作
+│   ├── actions-data.js           # 追加：选档 / 重开 / 安装 / 导出导入 / 设置 / 清空
 │   └── boot.js                   # 事件委托 / 离线注册 / 按 hash 进首屏（必须最后加载）
 ├── manifest.webmanifest          # PWA 清单：名称、起始页、图标（只在 http(s) 下被浏览器读取）
 ├── sw.js                         # service worker：按版本号预缓存静态资源，不含任何用户数据
@@ -120,11 +125,11 @@
 
 **为什么不用 ES module**：`content/*.js` 与 `js/*.js` 都用经典 `<script>` 顺序加载，是为了让双击 `index.html` 的 `file://` 场景也能跑（ES module 在 `file://` 下会被 CORS 拦住）。`index.html` 里的顺序是契约：
 
-`bands → glossary → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → meditate → dictionary → selfhelp → slowvars → help → js/core → js/util → js/shell → js/views-main → js/views-library → js/views-level → js/ui → js/actions → js/boot`
+`bands → glossary → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → meditate → dictionary → selfhelp → slowvars → help → js/core → js/util → js/shell → js/views-main → js/views-dictionary → js/views-selfhelp → js/views-slowvars → js/views-retreat → js/views-level → js/ui → js/actions-level → js/actions-library → js/actions-data → js/boot`
 
 > 这份顺序契约的单一来源是 `scripts/js-files.mjs`（逻辑脚本清单）+ `index.html` + `sw.js` 三处同步，实际顺序**以 `npm run doctor` 的输出为准**；新增内容文件还要同步 `scripts/lint-content.mjs` 的 `FILES`。详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) §2。
 
-顺序错了或文件缺失，`js/boot.js` 启动时会显示「内容没加载出来」的可读提示，不会白屏。九块逻辑脚本共用同一个全局词法作用域（`let/const` 跨脚本可见，不挂 `window`），因此**同一顶层名字只能声明一次**；`npm run check` 会把九块拼起来再解析一次，专门拦跨文件重复声明。
+顺序错了或文件缺失，`js/boot.js` 启动时会显示「内容没加载出来」的可读提示，不会白屏。十四块逻辑脚本共用同一个全局词法作用域（`let/const` 跨脚本可见，不挂 `window`），因此**同一顶层名字只能声明一次**；`npm run check` 会把十四块拼起来再解析一次，专门拦跨文件重复声明。
 
 ---
 

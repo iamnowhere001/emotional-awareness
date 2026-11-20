@@ -6,9 +6,14 @@ export const JS_FILES = [
   'js/util.js',
   'js/shell.js',
   'js/views-main.js',
-  'js/views-library.js',
+  'js/views-dictionary.js',
+  'js/views-selfhelp.js',
+  'js/views-slowvars.js',
+  'js/views-retreat.js',
   'js/views-level.js',
   'js/ui.js',
-  'js/actions.js',
+  'js/actions-level.js',
+  'js/actions-library.js',
+  'js/actions-data.js',
   'js/boot.js'
 ];

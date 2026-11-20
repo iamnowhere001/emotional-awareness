@@ -29,15 +29,15 @@
 | 文件 | 职责 |
 | --- | --- |
 | `scripts/js-files.mjs` | 逻辑脚本清单，加载顺序的**单一来源** |
-| `index.html` | 按清单顺序写 `<script src="…">`（当前 26 个脚本） |
+| `index.html` | 按清单顺序写 `<script src="…">`（当前 31 个脚本） |
 | `sw.js` | `ASSETS` 预缓存清单，与 `index.html` 一致 |
 
-新增 / 改名**逻辑文件**时同步以上三处；新增**内容文件**时还要把文件名加进 `scripts/lint-content.mjs` 顶部的 `FILES` 数组，并在 `index.html` 按依赖顺序插入 `<script>`。九块逻辑脚本共用同一个全局词法作用域（`let/const` 跨脚本可见，不挂 `window`），因此**同一顶层名字只能声明一次**；`npm run check` 会把九块拼起来再解析一次，专门拦跨文件重复声明。
+新增 / 改名**逻辑文件**时同步以上三处；新增**内容文件**时还要把文件名加进 `scripts/lint-content.mjs` 顶部的 `FILES` 数组，并在 `index.html` 按依赖顺序插入 `<script>`。十四块逻辑脚本共用同一个全局词法作用域（`let/const` 跨脚本可见，不挂 `window`），因此**同一顶层名字只能声明一次**；`npm run check` 会把十四块拼起来再解析一次，专门拦跨文件重复声明。
 
-**完整加载顺序（`index.html` 实际 26 项，以 `npm run doctor` 的输出为准）**：
+**完整加载顺序（`index.html` 实际 31 项，以 `npm run doctor` 的输出为准）**：
 
 - 内容（17）：`bands → glossary → levels-kid → levels-kid-island4 → levels-adult → bank-kid-1-3 → bank-kid-island4 → bank-adult-1-3 → bank-adult-island4 → bank-compose → levels-adult-work → library → meditate → dictionary → selfhelp → slowvars → help`
-- 逻辑（9）：`js/core → js/util → js/shell → js/views-main → js/views-library → js/views-level → js/ui → js/actions → js/boot`（`boot.js` 必须最后）
+- 逻辑（14）：`js/core → js/util → js/shell → js/views-main → js/views-dictionary → js/views-selfhelp → js/views-slowvars → js/views-retreat → js/views-level → js/ui → js/actions-level → js/actions-library → js/actions-data → js/boot`（`boot.js` 必须最后；`ACTIONS` 在主表文件定义，后两块用 `Object.assign` 追加）
 
 > `content/glossary.js`（L0 概念层）排在 `bands.js` 之后、`levels-kid.js` 之前，容易被漏写。`npm run doctor` 会校验这份契约，改动后以它的输出为准。
 
@@ -76,7 +76,7 @@
 
 ### 3.4 加一种题型
 
-需要动四处：`js/views-level.js` 的 `RENDERERS`（渲染）与 `makePlay`（初始化 play 状态）、`js/actions.js` 的 `ACTIONS`（交互处理）、`style.css`；以及 `lint-content.mjs` 的 `TYPES` / `NEED`。参考 `ladder` 这个题型，它是最小实现。
+需要动四处：`js/views-level.js` 的 `RENDERERS`（渲染）与 `makePlay`（初始化 play 状态）、`js/actions-level.js` 的 `ACTIONS` 主表（交互处理）、`style.css`；以及 `lint-content.mjs` 的 `TYPES` / `NEED`。参考 `ladder` 这个题型，它是最小实现。
 
 ### 3.5 加 / 改词典词条
 
@@ -116,7 +116,7 @@
 
 - `vars`：固定 **6 个**，字段 `id / name / sub / lead / why / misuse / move{t,d} / check`；`id` 用小写字母 / 数字 / 连字符，是练习卡与日常共同的关联键；
 - `daily`：日常五件套，固定 **5 件**，字段 `id / name / e / sub / dose{min,std} / when / why / cut / broken / v / link{kind,id}`。`dose.min` 是「今天也能做完」的量，`cut`（再降一级）与 `broken`（断了怎么接回）**必填**；`v` 必须指向某个 `vars[].id`；
-- `link`：**日常层不新增练习**，出口只有 `{kind:'card', id: 练习卡标题}`（页内卡）与 `{kind:'md', id: 静修间练习 id}`（直接进 `content/meditate.js` 引导）两种。加新出口要同时改 `js/views-library.js` 的 `svDailyLink()` 与 lint；
+- `link`：**日常层不新增练习**，出口只有 `{kind:'card', id: 练习卡标题}`（页内卡）与 `{kind:'md', id: 静修间练习 id}`（直接进 `content/meditate.js` 引导）两种。加新出口要同时改 `js/views-slowvars.js` 的 `svDailyLink()` 与 lint；
 - `practices`：练习卡，固定 **20 张**，字段 `t / e / v / when / how[] / note`，可选 `md`。**`v` 必须是某个 `vars[].id`**：选中变量时按 `v` 自动筛到相关卡片，每个变量至少 1 张，`how` 至少 2 步；
 - `budget` 时间预算固定 **3 档**（`t / d / picks[]`，`picks` 至少 2 项且必须是 `practices[].t`）、`horizons` 时间尺度固定 **3 个**（`t / d / asks[] / cards[]`）、`traps` 快变量陷阱固定 **12 条**（`t / d / eg`，名称不得与 10 条认知扭曲重复）。
 
