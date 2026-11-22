@@ -209,7 +209,9 @@ let session = {
      与 pocket（带回下一站的实践卡）一样只活在这一次打开里，不写存档、不计数。 */
   depth: null, pocket: null,
   /* 「两个人一起选」的临时状态：两次选择 + 对照，不判对错、不写存档。 */
-  duo: null
+  duo: null,
+  /* 「从头再来」的撤销快照：{ track, ids }，只在这次打开里、进下一站前有效，不写存档。 */
+  undoRestart: null
 };
 let lastVariant = {};
 let helpWord = null;

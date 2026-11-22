@@ -11,6 +11,7 @@ Object.assign(ACTIONS, {
     /* 换档回到按通关记录自动决定深度层；「带回下一站」的卡也只属于刚才那一趟。 */
     session.depth = null;
     session.pocket = null;
+    session.undoRestart = null;
     if (firstPick || !customScale) state.settings.scale = b.scale;
     if (firstPick || !state.settings.speakTouched) state.settings.speak = b.speak;
     /* 3-6 岁首次选档时自动读题：孩子不识字，进站就该听到题目。
@@ -24,12 +25,33 @@ Object.assign(ACTIONS, {
     session.navDir = '';
     if (el.dataset.next === 'map') renderMap(); else renderHome();
   },
+  /* 「从头再来」先确认：界面上的按钮一律走 restart-ask，确认后才调 restart-all。 */
+  'restart-ask': () => openModal(`<div class="modal-title">从头再来一轮？</div>
+    <div class="modal-body"><p>会把这一轨走过的 <b>${clearedInTrack()}</b> 站重新标成「还没走」，每站的题目也会换一批。</p>
+    <p>词卡、本领、贝壳和工作间都还留着。</p>
+    <p class="muted">重来之后、开始下一站之前，还可以撤销；关掉页面后就不再提供撤销。</p></div>
+    <div class="modal-actions"><button class="btn btn-secondary" data-action="close-modal">先不了</button>
+    <button class="btn btn-primary" data-action="restart-all">确认重来</button></div>`),
   'restart-all': () => {
-    /* 只重置当前轨的主线；另一条轨的进度、支线 sideCleared、拼装题的 seen 都不动。 */
+    /* 只重置当前轨的主线；另一条轨的进度、支线 sideCleared、拼装题的 seen 都不动。
+       清之前把这一轨的 cleared 存进 session（只在内存，不落盘），供 restart-undo 恢复。 */
     const mine = new Set(LEVELS.map(l => l.id));
+    session.undoRestart = { track: bandTrack(), ids: state.cleared.filter(id => mine.has(id)) };
     state.cleared = state.cleared.filter(id => !mine.has(id));
     session.clearedThisRun = 0; lastVariant = {}; save();
+    closeModal();
     session.tip = '新的一轮，当前轨的主线重新开始；词卡、本领、贝壳、工作间和已见过的题型都还留着。';
+    renderMap();
+  },
+  /* 撤销重来：把清掉的站并回去（期间若又走了别的站也保留），只认同一条轨。 */
+  'restart-undo': () => {
+    const u = session.undoRestart;
+    session.undoRestart = null;
+    if (u && u.track === bandTrack()) {
+      u.ids.forEach(id => { if (!state.cleared.includes(id)) state.cleared.push(id); });
+      save();
+      session.tip = '已撤销，刚才走过的站都回来了。';
+    }
     renderMap();
   },
   'open-settings': () => openSettings(),
@@ -53,6 +75,7 @@ Object.assign(ACTIONS, {
     state = pendingImport.state;
     pendingImport = null;
     importUndo = before;
+    session.undoRestart = null;
     save(); applySettings();
     closeModal();
     openModal(`<div class="modal-title">导入完成</div>
@@ -97,6 +120,6 @@ Object.assign(ACTIONS, {
     const keep = { band: state.band, settings: state.settings };
     removeAllSaves();
     state = clone(DEFAULT_STATE); state.band = keep.band; state.settings = keep.settings;
-    save(); session.clearedThisRun = 0; closeModal(); renderHome();
+    save(); session.clearedThisRun = 0; session.undoRestart = null; closeModal(); renderHome();
   },
 });

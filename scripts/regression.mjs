@@ -300,7 +300,7 @@ S('两个人的选择不判对错、不触发通关',
   /function paintDuo/.test(src) && /d\.first === d\.second/.test(src) &&
   /'duo-open'/.test(src) && !/completeLevel\([^\n]*duo/.test(src));
 S('新增样式类都在视图里有对应渲染',
-  ['level-bridge', 'level-depth', 'practice-card', 'duo-panel', 'weather-hint']
+  ['level-bridge', 'level-depth', 'practice-card', 'duo-panel', 'weather-hint', 'tool-more', 'bridge-more', 'undo-notice', 'home-adult', 'home-work', 'seg-isl', 'seg-fill']
     .every(c => css.includes('.' + c) && src.includes(c)));
 
 /* ---------- 1.0.0 收尾：健壮性改动必须留在代码里 ---------- */

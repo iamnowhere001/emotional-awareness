@@ -190,7 +190,7 @@ const RENDERERS = {
           </div>
           <p class="muted">这里没有输入框，也不会保存任何文字。说出来、或者只在心里过一遍，都可以。</p></div>
         <div class="actions"><button class="btn btn-primary" data-action="go-map">回到地图</button>
-          <button class="btn btn-secondary" data-action="restart-all">再走一轮（换一批题）</button></div>`;
+          <button class="btn btn-secondary" data-action="restart-ask">再走一轮（换一批题）</button></div>`;
     }
 
     const picks = state.decor || [];
@@ -212,7 +212,7 @@ const RENDERERS = {
         <button class="btn-read" data-action="talk-reroll">换一张</button>
         <p class="muted">不用回答，也不用聊出结论。聊聊就行，或者跳过。</p></div>
       <div class="actions"><button class="btn btn-primary" data-action="go-map">回到地图</button>
-        <button class="btn btn-secondary" data-action="restart-all">再走一轮（换一批题）</button></div>`;
+        <button class="btn btn-secondary" data-action="restart-ask">再走一轮（换一批题）</button></div>`;
   }
 };
 
@@ -265,7 +265,8 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
   /* 「带回下一站」的实践卡只在下一站出现一次：取用后即清，不落盘、不计数。
      从急救页返回时沿用同一份进行态，不重复消费。 */
   const pocket = !resumePlay && session.pocket && session.pocket.from !== lv.id ? session.pocket : null;
-  if (!resumePlay) { session.pocket = null; session.duo = null; }
+  /* 进了新的一站就算往前走了：「从头再来」的撤销到此失效（见 restart-undo）。 */
+  if (!resumePlay) { session.pocket = null; session.duo = null; session.undoRestart = null; }
   play.pocketShown = resumePlay ? (resumePlay.pocketShown || null) : pocket;
   const duoOpts = !play.side && lv.type !== 'finale' ? duoOptions(play.v) : [];
   if (sideIndex !== undefined) {
@@ -276,24 +277,30 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
   if (play.type === 'breath') play.running = false;
   const b = band();
   const side = !!play.side;
+  /* 关卡页减负（docs/design-home-toolbar.html 方案 A）：工具栏只留一行——
+     左「← 地图 / 工作间」，右「读给我听」与「更多」。年龄档与站号已在顶栏进度行显示，这里不再重复；
+     「换一道题」「两个人一起选」收进原生 <details>，零 JS、file:// 可用、键盘与读屏天然支持；
+     亲子档的双人选择是主玩法，留在外面。「多想一步」挪到深度说明行，开关挨着它说明的东西。 */
   const speakBtns = (state.settings.speak && lv.type !== 'finale')
-    ? `<button class="btn-read" data-action="speak-question" aria-label="朗读题目">🔊 读题目</button><button class="btn-read" data-action="speak-options" aria-label="朗读选项">🔊 读选项</button>` : '';
+    ? `<button class="btn-read btn-speak" data-action="speak-all" aria-label="朗读题目和选项">🔊 读给我听</button>` : '';
+  const duoBtn = duoOpts.length >= 2 ? '<button class="btn-read" data-action="duo-open">两个人一起选</button>' : '';
+  const duoOut = b.id === 'all';
+  const moreItems = `${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}${duoOut ? '' : duoBtn}`;
+  const moreMenu = moreItems
+    ? `<details class="tool-more"><summary class="btn-read" aria-label="更多操作">更多 ⋯</summary><div class="tool-more-menu">${moreItems}</div></details>` : '';
+  const depthOn = b.tiers && !side && lv.type !== 'finale';
   stage.innerHTML = `<div class="${viewClass()}" data-variant="${v && v.key ? esc(v.key) : ''}">
-    <div class="toolbar">${bandChip(`<span class="muted">${lv.type === 'finale' ? '终章' : side ? `工作间 · ${esc(lv.time || '')} · 支线` : `岛 ${lv.island} · 第 ${lv.num} 站`}</span>`)}
+    <div class="toolbar level-toolbar">
       <button class="btn-read" data-action="${side ? 'go-work' : 'go-map'}">← ${side ? '工作间' : '地图'}</button>
-      ${lv.type !== 'finale' ? '<button class="btn-read" data-action="reroll">换一道题</button>' : ''}
-      ${band().tiers && !side && lv.type !== 'finale'
-        ? `<button class="btn-read" data-action="set-depth" data-d="${depth === 1 ? 2 : 1}">${depth === 1 ? '想多想一步' : '回到基础题'}</button>` : ''}
-      ${duoOpts.length >= 2 ? '<button class="btn-read" data-action="duo-open">两个人一起选</button>' : ''}
-      ${speakBtns}
+      <span class="tool-spacer"></span>
+      ${speakBtns}${duoOut ? duoBtn : ''}${moreMenu}
     </div>
     <div class="level-head">
-      <div class="level-kicker"><span class="eyebrow">${esc(lv.kind)}</span></div>
+      <div class="level-kicker"><span class="eyebrow">${esc(lv.kind)}</span>${conceptHeadline(lv)}</div>
       <h2>${esc(lv.name)}</h2><p class="level-goal">${esc(lv.goal)}</p>
-      ${conceptHeadline(lv)}
       ${bridgeLine(lv, play.pocketShown)}
-      ${band().tiers && !side && lv.type !== 'finale'
-        ? `<p class="level-depth">${depth === 1 ? '基础题 · 先看清这件事' : '多想一步 · 线索更长，慢慢来'}</p>` : ''}
+      ${depthOn
+        ? `<p class="level-depth">${depth === 1 ? '基础题' : '多想一步 · 线索更长，慢慢来'} · <button class="link-btn" data-action="set-depth" data-d="${depth === 1 ? 2 : 1}">${depth === 1 ? '想多想一步？' : '回到基础题'}</button></p>` : ''}
     </div>
     <div id="duo-slot"></div>
     <div class="play-area">${RENDERERS[lv.type](v)}</div>
@@ -420,7 +427,11 @@ function bridgeLine(lv, pocket) {
   if (pocket && pocket.text) {
     parts.push(`<div class="bridge-row"><b>上一站带走的</b><span>${esc(pocket.text)}</span></div>`);
   }
-  if (c.bridge) parts.push(`<div class="bridge-row"><b>这一站接着</b><span>${esc(c.bridge)}</span></div>`);
+  /* 承接句折成一行，点开看全文；全轨第一站没有可「接着」的上一站，且没有带回来的动作时整块不画。 */
+  const firstOfTrack = LEVELS.indexOf(lv) === 0;
+  if (c.bridge && !(firstOfTrack && !parts.length)) {
+    parts.push(`<details class="bridge-more"><summary><b>这一站接着</b></summary><span>${esc(c.bridge)}</span></details>`);
+  }
   return parts.length ? `<div class="level-bridge">${parts.join('')}</div>` : '';
 }
 /* 通关结果默认按纯文本转义；只有确实要拼标签的调用方走 completeLevelHtml。
@@ -446,9 +457,13 @@ function paintResultCard(payload) {
   /* 结果卡出现后，toolbar 里「这一题进行中」的按钮要收掉：否则点 duo-open / set-depth
      只会静默 return 或重抽掉结果卡，看起来像坏掉。下一步 / 回地图由结果卡自己给。
      只限定 .toolbar，不动结果卡里的同名「这站再玩一次」按钮。 */
-  document.querySelectorAll('#stage .toolbar [data-action="duo-open"], #stage .toolbar [data-action="set-depth"], #stage .toolbar [data-action="reroll"]').forEach(b => {
+  document.querySelectorAll('#stage .toolbar [data-action="duo-open"], #stage .level-depth [data-action="set-depth"], #stage .toolbar [data-action="reroll"]').forEach(b => {
     b.disabled = true;
     b.hidden = true;
+  });
+  /* 「更多」里的项都收掉了，就把整个菜单收起，免得留一个点开是空的按钮。 */
+  document.querySelectorAll('#stage .toolbar .tool-more').forEach(d => {
+    if (!d.querySelector('.tool-more-menu > :not([hidden])')) { d.open = false; d.hidden = true; }
   });
   const actions = document.getElementById('level-actions');
   if (actions) actions.innerHTML = '';

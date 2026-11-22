@@ -40,33 +40,68 @@ function renderHome() {
   const b = band();
   const cleared = clearedInTrack();
   const hasAnyProgress = cleared > 0;
-  const islCount = islands().length;
   const nextIdx = nextStationIndex();
   const nextLv = nextIdx >= 0 ? LEVELS[nextIdx] : null;
+  /* 首页按年龄档分层（docs/design-home-toolbar.html 方案 B）：
+     - 孩子档（3-6 / 6-12）：只摆主路径与急救；换年龄段、词典、工具箱、慢变量收进页脚「给大人」。
+       自助工具箱 31 张卡未按年龄筛选、场景多为成年情境，孩子的即时安抚由急救入口承担。
+     - 3-6 岁：再去掉站数与卖点列表，下一站只报站名；主按钮旁给一个「读给我听」（不自动读，待定）。
+     - 亲子：知识入口保留，标题改「一起看看」。成年：静修间升为第二按钮，工作间开放后在首页给入口。
+     - 进度只说一遍：下一站卡里的「已走过 X / N 站」；「从头再来」挪进设置，先确认、可撤销。
+     「给大人」只是折叠，不设门槛——加验证就得存东西，和「不采集」冲突。 */
+  const kidHome = isKidTone();
+  const tiny = b.id === 'a3';
   const nextMeta = nextLv
     ? `<span class="home-next-kicker">${hasAnyProgress ? '接着上次 · 下一站' : '从这里开始'}</span>
-       <b>第 ${nextIdx + 1} / ${TOTAL} 站 · ${esc(nextLv.name)}</b>
-       <span class="home-next-meta">${esc(nextLv.kind)} · 已走过 ${cleared} / ${TOTAL} 站</span>`
+       <b>${tiny ? esc(nextLv.name) : `第 ${nextIdx + 1} 站 · ${esc(nextLv.name)}`}</b>
+       ${tiny ? '' : `<span class="home-next-meta">${esc(nextLv.kind)} · 已走过 ${cleared} / ${TOTAL} 站</span>`}`
     : `<span class="home-next-kicker">这一轨已经走完</span>
        <b>${TOTAL} 站都走过了</b>
        <span class="home-next-meta">可以回地图重温任意一站，或换一个年龄段。</span>`;
-  stage.innerHTML = `<div class="view home-hero">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="goto-band">换年龄段</button></div>
+  const ctaText = nextLv
+    ? (tiny ? (hasAnyProgress ? '继续上岛' : '开始上岛') : `${hasAnyProgress ? '继续上岛' : '开始上岛'} · 第 ${nextIdx + 1} 站`)
+    : '回地图挑一站';
+  const speakHome = tiny && state.settings.speak
+    ? '<button class="btn-read btn-speak" data-action="speak-home" aria-label="读一读首页">🔊 读给我听</button>' : '';
+  const retreatBtn = isAdultTrack() ? '<button class="btn btn-secondary" data-action="open-retreat">只做 1 分钟练习</button>' : '';
+  const workOpen = isAdultTrack() && WORK.length && (sideUnlocked(0) || WORK.some((w, i) => workReachable(i)));
+  const workCard = workOpen ? `<button class="home-work" data-action="go-work">
+          <span class="home-work-kicker">支线 · 已开放 · 不计进度</span>
+          <b>工作间：一个工作日的 ${WORK.length} 个时刻</b>
+          <span>会前、汇报被否、冲突、下班反刍。</span>
+        </button>` : '';
+  const knowledge = kidHome
+    ? `<details class="home-adult"><summary>给大人 · 换年龄段、词典与工具</summary>
+          <div class="home-adult-menu">
+            <button class="btn-read" data-action="goto-band">换年龄段</button>
+            <button class="btn-read" data-action="open-dictionary">心理学词典</button>
+            <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
+            <button class="btn-read" data-action="open-slowvars">慢变量</button>
+          </div></details>`
+    : `<div class="home-shortcuts">
+          <span class="muted">${isAdultTrack() ? '工具：' : '一起看看：'}</span>
+          <button class="btn-read" data-action="open-dictionary">心理学词典</button>
+          <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
+          <button class="btn-read" data-action="open-slowvars">慢变量</button>
+        </div>`;
+  stage.innerHTML = `<div class="view home-hero${tiny ? ' home-tiny' : ''}">
+    <div class="toolbar">${bandChip()}${kidHome ? '' : '<button class="btn-read" data-action="goto-band">换年龄段</button>'}</div>
     <div class="home-grid">
       <div class="home-main">
-        <span class="eyebrow">${islCount} 座岛 · ${TOTAL} 站 · 随时可以离开</span>
+        ${tiny ? '' : '<span class="eyebrow">随时可以离开</span>'}
         <h2>不赶走情绪，先认出它</h2>
         <p class="lead">这里不考你答得对不对，只帮你看清此刻的感觉，再带走一个用得上的小工具。</p>
         ${takeTip()}
         <div class="home-next">${nextMeta}</div>
         <div class="actions">
-          <button class="btn btn-primary" data-action="start">${nextLv ? `${hasAnyProgress ? '继续上岛' : '开始上岛'} · 第 ${nextIdx + 1} 站` : '回地图挑一站'}</button>
-          ${hasAnyProgress ? '<button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>' : ''}
+          <button class="btn btn-primary" data-action="start">${ctaText}</button>
+          ${speakHome}${retreatBtn}
         </div>
+        ${workCard}
         <div class="help-entry">
           <div class="help-entry-copy">
             <span class="help-entry-kicker">不用上岛 · 约 1 分钟</span>
-            <b>${isKidTone() ? '现在有点难受？' : '现在很难受？'}</b>
+            <b>${kidHome ? '现在有点难受？' : '现在很难受？'}</b>
             <span>先落地、给感受一个词、找一个人。不计进度，也不保存。</span>
           </div>
           <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
@@ -81,18 +116,12 @@ function renderHome() {
           <span class="hh-land"></span>
           <span class="hh-wave"></span><span class="hh-wave w2"></span>
         </div>
-        <div class="home-points">
+        ${tiny ? '' : `<div class="home-points">
           <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>不打分、不排名，也不比谁快。</span></div>
           <div class="home-point"><span class="dot"></span><span><b>一站一个玩法。</b>拼线索、调刻度、排顺序，动脑也动手。</span></div>
           <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.len)}。</span></div>
-        </div>
-        <div class="home-shortcuts">
-          <span class="muted">还没准备好上岛？</span>
-          ${isAdultTrack() ? '<button class="btn-read" data-action="open-retreat">1 分钟练习</button>' : ''}
-          <button class="btn-read" data-action="open-dictionary">心理学词典</button>
-          <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
-          <button class="btn-read" data-action="open-slowvars">慢变量</button>
-        </div>
+        </div>`}
+        ${knowledge}
       </aside>
     </div>
   </div>`;
@@ -205,6 +234,13 @@ const MAP_COMPASS = `<svg class="map-compass" viewBox="0 0 64 64" aria-hidden="t
   <path d="M32 40 L38 32 L32 56 L26 32 Z" fill="currentColor" opacity=".2"/>
   <text x="32" y="5" text-anchor="middle" font-size="7" fill="currentColor" opacity=".8">N</text>
 </svg>`;
+/* 「从头再来」后的撤销提示：只在同一条轨、且还有站可恢复时出现；进了新的一站即失效。 */
+function undoNotice() {
+  const u = session.undoRestart;
+  if (!u || u.track !== bandTrack() || !u.ids.length) return '';
+  return `<div class="notice undo-notice"><span>刚才重来了一轮。如果是点错了，可以恢复之前走过的 ${u.ids.length} 站。</span>
+    <button class="btn-read" data-action="restart-undo">撤销重来</button></div>`;
+}
 function renderMap() {
   clearAsyncTimers();
   session.view = 'map';
@@ -220,6 +256,7 @@ function renderMap() {
   let html = `<div class="${viewClass()}">
     ${interrupted ? '<div class="notice">刚才的呼吸练习被打断了，不用补上。想做的时候随时可以重新开始。</div>' : ''}
     ${takeTip()}
+    ${undoNotice()}
     <div class="map-head"><div><span class="eyebrow">岛屿地图 · ${esc(band().name)}</span>
       <h2 style="margin-top:10px">想去哪站，就去哪站</h2>
       <p class="lead">${list.length} 座岛连成一条航线。同一座岛里的站可以随便进出；走过的还能再走，每次题目会换一批。</p></div></div>
@@ -238,7 +275,7 @@ function renderMap() {
         <b>${TOTAL} 站都走过了</b>
         <span class="map-next-meta">想重温哪一站，直接点下面的站点就好。</span>
       </div>
-      <button class="btn btn-secondary" data-action="restart-all">从头再来一轮</button>
+      <button class="btn btn-secondary" data-action="restart-ask">从头再来一轮</button>
     </div>`}
     <div class="map-legend-row" aria-hidden="true">
       <div class="map-legend">

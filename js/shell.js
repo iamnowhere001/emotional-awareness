@@ -15,10 +15,26 @@ const VIEW_CONFIG = {
   dict: { progress: false, esc: 'map', title: null, band: true },
   selfhelp: { progress: false, esc: 'map', title: null, band: true },
   slowvars: { progress: false, esc: 'map', title: null, band: true },
-  /* 成年专题「工作间」：时间线视图，支线进度不算进 17 站 */
+  /* 成年专题「工作间」：时间线视图，支线进度不算进主线站数 */
   work: { progress: false, esc: 'map', title: null, band: true }
 };
 function viewCfg(v) { return VIEW_CONFIG[v] || {}; }
+/* 顶栏分岛进度的分组：按 LEVELS 的 island 字段归岛（终章 island 为 0，单独一段放最后）。
+   岛名取 islands() 里的 name，取不到就写「岛 N」。 */
+function progressGroups() {
+  const groups = [];
+  LEVELS.forEach((l, i) => {
+    const key = l.type === 'finale' ? 'finale' : l.island;
+    let g = groups.find(x => x.key === key);
+    if (!g) {
+      const isl = islands().find(x => x.n === l.island);
+      g = { key, finale: l.type === 'finale', name: l.type === 'finale' ? '终章' : `岛 ${l.island}${isl && isl.name ? ' ' + isl.name : ''}`, idx: [] };
+      groups.push(g);
+    }
+    g.idx.push(i);
+  });
+  return groups.filter(g => !g.finale).concat(groups.filter(g => g.finale));
+}
 /* 贝壳是否出现 / 发放由 bands.js 的 shells 字段决定，不在代码里按轨道 id 硬判 */
 function hasShells() { return band().shells !== false; }
 /* 当前轨走过的站数（两轨进度存在同一个数组里，各算各的） */
@@ -55,17 +71,27 @@ function updateTopbar() {
      只保留一句支线说明，主线的 cleared / TOTAL 一个都不动。 */
   const sideNow = session.view === 'level' && !!play.side;
   const track = document.getElementById('step-track');
-  if (track) track.innerHTML = sideNow ? '' : LEVELS.map((l, i) => {
-    const done = state.cleared.includes(l.id);
-    const cur = session.view === 'level' && session.levelIndex === i;
-    const unlocked = isUnlocked(i);
-    return `<button class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" data-action="open-level" data-i="${i}" ${unlocked ? '' : 'disabled'} ${cur ? 'aria-current="step"' : ''} title="${esc(l.id + ' · ' + l.name)}" aria-label="第 ${i + 1} 站 ${esc(l.name)}${done ? '，已走过' : ''}"></button>`;
+  /* 分岛进度（docs/design-home-toolbar.html 方案 C）：21 个 9px 的站点格改成「每座岛一段 + 终章一段」。
+     每段宽度够点（≥ 44px），填充比例 = 这座岛走过几站；点一段进这座岛「下一处没走过的站」，
+     全走过就进岛的第一站。仍复用 open-level，解锁判断仍走 isUnlocked，不另起一套规则。
+     只给当前所在的那一段标 aria-current。 */
+  if (track) track.innerHTML = sideNow ? '' : progressGroups().map(g => {
+    const doneN = g.idx.filter(i => state.cleared.includes(LEVELS[i].id)).length;
+    const total = g.idx.length;
+    const target = g.idx.find(i => isUnlocked(i) && !state.cleared.includes(LEVELS[i].id));
+    const goI = target !== undefined ? target : g.idx.find(i => isUnlocked(i));
+    const cur = session.view === 'level' && g.idx.includes(session.levelIndex);
+    const pct = total ? Math.round(doneN / total * 100) : 0;
+    const state_ = doneN === total ? 'done' : doneN > 0 ? 'part' : '';
+    const label = `${g.name}，走过 ${doneN} 站，共 ${total} 站${goI === undefined ? '，还没解锁' : ''}`;
+    return `<button class="seg-isl ${state_} ${cur ? 'current' : ''} ${g.finale ? 'is-finale' : ''}" data-action="open-level" data-i="${goI === undefined ? '' : goI}" ${goI === undefined ? 'disabled' : ''} ${cur ? 'aria-current="step"' : ''} title="${esc(label)}" aria-label="${esc(label)}"><span class="seg-fill" style="width:${pct}%"></span></button>`;
   }).join('');
   const pt = document.getElementById('progress-text');
+  const curLv = LEVELS[session.levelIndex];
   if (pt) pt.textContent = sideNow
     ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
-    : (vc.title === 'current' && LEVELS[session.levelIndex])
-      ? `第 ${session.levelIndex + 1} / ${TOTAL} 站 · ${LEVELS[session.levelIndex].name}`
+    : (vc.title === 'current' && curLv)
+      ? (curLv.type === 'finale' ? `终章 · ${curLv.name}` : `岛 ${curLv.island} · 第 ${curLv.num} 站 · ${curLv.name}`)
       : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
   syncHash();
 }

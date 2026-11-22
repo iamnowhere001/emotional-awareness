@@ -81,6 +81,8 @@ const ACTIONS = {
     const opts = duoOptions(play.v);
     if (opts.length < 2 || play.done) return;
     session.duo = { step: 1, first: null, second: null, opts };
+    /* 从「更多」里点开时，顺手把菜单收起，别让它压在双人面板上。 */
+    document.querySelectorAll('#stage .tool-more[open]').forEach(d => { d.open = false; });
     paintDuo();
     showFeedback('gentle', '先请第一个人挑一个，选完换另一个人。');
   },
@@ -169,6 +171,13 @@ const ACTIONS = {
   },
   'speak-question': () => speakTexts(questionTexts()),
   'speak-options': () => speakTexts(optionTexts()),
+  /* 关卡页合并后的唯一朗读按钮：先读题目再读选项，一次点击、一次出声授权。 */
+  'speak-all': () => speakTexts([...questionTexts(), ...optionTexts()]),
+  /* 3-6 岁首页的朗读：只读一句引导和下一站站名，不读卖点与说明。 */
+  'speak-home': () => {
+    const i = nextStationIndex();
+    speakTexts(['要开始上岛吗？点那个大按钮就好。', i >= 0 ? `下一站：${LEVELS[i].name}。` : '这一轨都走完了，可以回地图挑一站。']);
+  },
   /* 选档页读介绍：此时还没选定档位，直接读档名 + 一句话说明。
      按钮本身是一次真实点击，iOS 的「先交互才能出声」限制在这里自然满足。 */
   'speak-band': (el) => {

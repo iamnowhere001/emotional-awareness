@@ -570,6 +570,21 @@ window.addEventListener('load', function () {
     bandTo('a6');
     ACTIONS['restart-all']();
     A(!state.cleared.includes('1-1') && state.cleared.includes('A1-1'));
+    /* 重来后地图给一次撤销；撤销只认本轨，恢复后提示收起 */
+    A(!!document.querySelector('#stage [data-action="restart-undo"]'), '重来后地图上应给撤销');
+    A(!('undoRestart' in JSON.parse(localStorage.getItem(STORAGE_KEY))), '撤销快照不该落盘');
+    ACTIONS['restart-undo']();
+    A(['1-1', '1-2', 'A1-1'].every(id => state.cleared.includes(id)), '撤销后应恢复本轨走过的站');
+    A(session.undoRestart === null && !document.querySelector('#stage [data-action="restart-undo"]'), '撤销后提示应收起');
+    /* 界面上的「从头再来」都要先确认，不能直连 restart-all */
+    renderHome();
+    A(!document.querySelector('#stage [data-action="restart-ask"], #stage [data-action="restart-all"]'), '首页不再放从头再来');
+    openSettings();
+    A(!!overlay.querySelector('[data-action="restart-ask"]') && !overlay.querySelector('[data-action="restart-all"]'), '设置里的从头再来应走确认');
+    ACTIONS['restart-ask']();
+    A(!!overlay.querySelector('[data-action="restart-all"]') && state.cleared.includes('1-1'), '确认弹窗出现前不该清进度');
+    closeModal();
+    state.cleared = ['A1-1'];
   });
   test('换档 / 重开提示只出现一次，不串到下一屏', () => {
     bandTo('a6'); state.cleared = [];
@@ -630,7 +645,17 @@ window.addEventListener('load', function () {
     bandTo('a6');
     renderHome();
     A(document.querySelectorAll('#stage .actions .btn-primary').length === 1);
-    A(document.querySelectorAll('#stage .home-shortcuts .btn-read').length === 3);
+    /* 孩子档：知识入口与换档收进「给大人」，首页不直接摆 */
+    A(!document.querySelector('#stage .home-shortcuts'), '6-12 岁首页不直接摆知识入口');
+    A(['goto-band', 'open-dictionary', 'open-selfhelp', 'open-slowvars'].every(a => document.querySelector(`#stage .home-adult [data-action="${a}"]`)), '换档与知识入口应在给大人里');
+    A(!document.querySelector('#stage .toolbar [data-action="goto-band"]'), '孩子档工具栏不放换年龄段');
+    bandTo('a3'); renderHome();
+    A(document.querySelectorAll('#stage .actions .btn-primary').length === 1 && !!document.querySelector('#stage .home-adult'));
+    A(!document.querySelector('#stage .home-points') && !document.querySelector('#stage .home-next-meta'), '3-6 岁首页不显示卖点与站数');
+    bandTo('all'); renderHome();
+    A(document.querySelectorAll('#stage .home-shortcuts .btn-read').length === 3 && !document.querySelector('#stage .home-adult'), '亲子档保留知识入口');
+    A(!!document.querySelector('#stage .toolbar [data-action="goto-band"]'), '亲子档保留换年龄段');
+    bandTo('a6'); renderHome();
   });
   test('首页主按钮直达下一处已解锁未走站', () => {
     bandTo('a6');
@@ -929,6 +954,7 @@ window.addEventListener('load', function () {
     const before = state.seen['4-3'].slice();
     ACTIONS['restart-all']();
     A(state.seen['4-3'].join(',') === before.join(','), 'restart-all 不应清已见组合');
+    session.undoRestart = null;
   });
   test('工作间只在成年档出现，儿童轨看不到入口', () => {
     bandTo('adult'); state.cleared = [WORK_GATE]; renderMap();
@@ -1371,14 +1397,23 @@ window.addEventListener('load', function () {
   test('#overlay 不再整体 aria-live 播报', () => {
     A(!overlay.hasAttribute('aria-live'));
   });
-  test('进度格只有当前一站带 aria-current', () => {
+  test('进度格只有当前一座岛带 aria-current', () => {
     bandTo('a6');
     const i = byType('clue');
     goLevel(i);
-    const steps = [...document.querySelectorAll('#step-track .step')];
-    A(steps.length === 21);
-    const cur = steps.filter(s => s.getAttribute('aria-current') === 'step');
-    A(cur.length === 1 && Number(cur[0].dataset.i) === i, '只应标出当前这一站');
+    const segs = [...document.querySelectorAll('#step-track .seg-isl')];
+    A(segs.length === islands().length + 1, `应为每岛一段 + 终章一段，实际 ${segs.length}`);
+    A(!document.querySelector('#step-track .step'), '不再画每站一格');
+    const cur = segs.filter(s => s.getAttribute('aria-current') === 'step');
+    A(cur.length === 1 && cur[0].getAttribute('aria-label').startsWith(`岛 ${LEVELS[i].island}`), '只应标出当前所在的岛');
+    A(segs.every(s => /走过 \d+ 站，共 \d+ 站/.test(s.getAttribute('aria-label'))), '每段都应读出走过几站、共几站');
+    A(document.getElementById('progress-text').textContent.startsWith(`岛 ${LEVELS[i].island} · 第 ${LEVELS[i].num} 站`));
+    /* 点第一岛：进它下一处没走过的站；终章未开放时那一段不可点 */
+    state.cleared = [KID.levels[0].id]; renderMap();
+    document.querySelectorAll('#step-track .seg-isl')[0].click();
+    A(session.view === 'level' && session.levelIndex === 1, '点岛应进这座岛下一处没走过的站');
+    A(document.querySelector('#step-track .seg-isl.is-finale').disabled === true, '终章未开放时不可点');
+    state.cleared = [];
     renderMap();
     A(document.querySelectorAll('#step-track [aria-current]').length === 0);
   });
@@ -1429,10 +1464,11 @@ window.addEventListener('load', function () {
     completeLevel('测试');
     A(!document.querySelector('.practice-card'));
   });
-  test('进度格点击区不小于 30px', () => {
+  test('进度格点击区不小于 44×30', () => {
     bandTo('a6'); renderMap();
-    const s = document.querySelector('.step');
-    A(!!s && s.getBoundingClientRect().height >= 30);
+    const segs = [...document.querySelectorAll('#step-track .seg-isl')];
+    A(segs.length > 0 && segs.every(s => { const r = s.getBoundingClientRect(); return r.height >= 30 && r.width >= 44; }),
+      `每段应不小于 44×30，实际 ${segs.map(s => Math.round(s.getBoundingClientRect().width)).join('/')}`);
   });
 
   /* ---------- 静修间扩容 / 2.0 ---------- */
@@ -1495,10 +1531,15 @@ window.addEventListener('load', function () {
     A(!document.body.textContent.includes('连续天数'));
   });
   test('首页 1 分钟练习快捷入口只在成年轨', () => {
-    bandTo('adult'); renderHome();
-    A(!!document.querySelector('.home-shortcuts [data-action="open-retreat"]'));
+    const keepCleared = state.cleared.slice();
+    bandTo('adult'); state.cleared = []; renderHome();
+    A(!!document.querySelector('#stage .home-main .actions [data-action="open-retreat"]'), '成年首页静修间是第二按钮');
+    A(!document.querySelector('#stage .home-work'), '工作间未开放时首页不放入口');
+    state.cleared = [WORK_GATE]; renderHome();
+    A(!!document.querySelector('#stage .home-work[data-action="go-work"]'), '工作间开放后首页给入口');
+    state.cleared = keepCleared;
     bandTo('a6'); renderHome();
-    A(!document.querySelector('.home-shortcuts [data-action="open-retreat"]'));
+    A(!document.querySelector('#stage [data-action="open-retreat"]') && !document.querySelector('#stage .home-work'));
   });
   test('静修 2.0 在 390px 无横向溢出且为单列', () => {
     bandTo('adult'); mdScene = 'all'; renderRetreatList();
@@ -1988,10 +2029,18 @@ window.addEventListener('load', function () {
     session.levelIndex = 0; renderLevel();
     const duo = document.querySelector('#stage .toolbar [data-action="duo-open"]');
     A(!!duo && !duo.disabled, '未通关时双人按钮可用');
+    /* 工具栏一行：6-12 岁的双人与换题收进「更多」，深度开关挪到说明行，朗读合成一个 */
+    const bar = document.querySelector('#stage .toolbar');
+    A(!!bar.querySelector('.tool-more [data-action="duo-open"]') && !!bar.querySelector('.tool-more [data-action="reroll"]'), '双人与换题应在更多菜单里');
+    A(!bar.querySelector('[data-action="set-depth"]') && !!document.querySelector('#stage .level-depth [data-action="set-depth"]'), '深度开关应在说明行');
+    A(!bar.querySelector('[data-action="speak-question"], [data-action="speak-options"]'), '读题目 / 读选项应合并为读给我听');
+    A([...bar.children].filter(el => el.tagName === 'BUTTON').length <= 2, '工具栏外露按钮不超过「地图 + 读给我听」');
     completeLevel('回归用通关文案');
     A(play.done === true);
     const after = document.querySelector('#stage .toolbar [data-action="duo-open"]');
     A(!!after && after.disabled, '通关后双人按钮应禁用');
+    A(bar.querySelector('.tool-more').hidden === true, '更多里的项都收掉后，菜单整体收起');
+    A(document.querySelector('#stage .level-depth [data-action="set-depth"]').hidden === true, '通关后深度开关也收起');
     A(!document.querySelector('.duo-panel'), '不该出现双人面板');
     ACTIONS['duo-open']();
     A(session.duo === null, '通关后直接调 duo-open 也不该开启面板');

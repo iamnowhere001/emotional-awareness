@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心情闯关岛 · 首页与顶栏改版方案</title>
+<style>
+:root {
+  --page-ink: #24302c; --page-ink-2: #48554f; --page-ink-3: #6b746f;
+  --page-bg: #fbfaf6; --page-line: #dde0d5; --page-line-2: #b9c3b9;
+  --page-accent: #15574c; --page-accent-soft: #e2efe8;
+  --page-warm: #7a4415; --page-warm-soft: #fbf0e0;
+  --page-app-bg: #fffdf7; --page-app-2: #f9f7ef;
+  --page-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --page-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--page-sans); color: var(--page-ink); background: var(--page-bg); line-height: 1.7; font-size: 15px; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 48px 24px 80px; }
+header.doc { border-bottom: 2px solid var(--page-ink); padding-bottom: 24px; margin-bottom: 40px; }
+.meta { color: var(--page-ink-3); font-size: 13px; }
+h1 { font-size: clamp(26px, 4.4vw, 40px); line-height: 1.25; margin: 10px 0 14px; font-weight: 700; letter-spacing: -.01em; }
+.lede { font-size: 17px; color: var(--page-ink-2); max-width: 760px; }
+h2 { font-size: 22px; margin: 56px 0 6px; line-height: 1.35; }
+h2 .tag { font-size: 13px; font-weight: 600; color: var(--page-accent); margin-right: 10px; vertical-align: 3px; }
+h3 { font-size: 16px; margin: 28px 0 8px; }
+p { margin: 8px 0; max-width: 780px; }
+ul, ol { margin: 8px 0 8px 22px; max-width: 780px; }
+li { margin: 4px 0; }
+code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; background: #eef0ea; padding: 1px 5px; border-radius: 4px; }
+.sub { color: var(--page-ink-3); font-size: 14px; }
+.callout { border-left: 4px solid var(--page-warm); background: var(--page-warm-soft); padding: 14px 18px; margin: 18px 0; border-radius: 0 8px 8px 0; max-width: 780px; }
+.callout b { color: var(--page-warm); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 14px 0; }
+th { text-align: left; font-weight: 600; color: var(--page-ink-2); padding: 8px 10px; border-bottom: 1.5px solid var(--page-ink); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--page-line); vertical-align: top; }
+.tbl { overflow-x: auto; }
+.y { color: var(--page-accent); font-weight: 600; }
+.n { color: var(--page-ink-3); }
+.mv { color: var(--page-warm); font-weight: 600; }
+
+/* ---------- 手机线框 ---------- */
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; margin: 22px 0 8px; align-items: start; }
+.compare > div { min-width: 0; }
+.cap { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.cap.before { color: var(--page-ink-3); }
+.cap.after { color: var(--page-accent); }
+.phone { width: 300px; max-width: 100%; border: 1.5px solid var(--page-line-2); border-radius: 22px; background: var(--page-app-bg); overflow: hidden; position: relative; font-size: 12px; }
+.fold { position: absolute; left: 0; right: 0; border-top: 2px dashed #c05a3a; z-index: 3; }
+.fold span { position: absolute; right: 8px; top: -20px; font-size: 10.5px; color: #c05a3a; background: var(--page-app-bg); padding: 0 4px; }
+.tb { background: var(--page-app-2); border-bottom: 1px solid var(--page-line); padding: 10px 12px 8px; }
+.tb-row { display: flex; align-items: center; gap: 5px; }
+.mark { width: 20px; height: 20px; border-radius: 50%; background: var(--page-accent-soft); border: 1px solid var(--page-accent); flex: none; }
+.brand-t { font-weight: 700; font-size: 12.5px; flex: 1; }
+.pill { border: 1px solid var(--page-line-2); border-radius: 8px; padding: 3px 7px; font-size: 10.5px; background: #fff; white-space: nowrap; }
+.pill.help { background: var(--page-warm-soft); border-color: #e3c49c; color: var(--page-warm); font-weight: 700; }
+.pill.shell { background: var(--page-warm-soft); border-color: #eedcc0; color: var(--page-warm); border-radius: 20px; }
+.pill.acc { background: var(--page-accent); border-color: var(--page-accent); color: #fff; font-weight: 600; }
+.pill.chip { background: var(--page-accent-soft); border-color: #bcd8cb; color: var(--page-accent); border-radius: 20px; }
+.pill.ghost { border-style: dashed; color: var(--page-ink-3); }
+.dots { display: flex; gap: 2px; margin-top: 8px; align-items: center; }
+.dots i { flex: 1; height: 5px; border-radius: 2px; background: #e6e8e0; border: 1px solid #d3d8cd; }
+.dots i.cur { background: #fff; border: 1.5px solid var(--page-accent); height: 9px; }
+.dots i.on { background: var(--page-accent); border-color: var(--page-accent); }
+.dots .lbl { flex: none; font-size: 9.5px; color: var(--page-ink-2); margin-left: 6px; white-space: nowrap; }
+.segs { display: flex; gap: 4px; margin-top: 8px; align-items: center; }
+.segs b { flex: 1; height: 8px; border-radius: 3px; background: #e6e8e0; border: 1px solid #d3d8cd; }
+.segs b.half { background: linear-gradient(90deg, var(--page-accent) 50%, #e6e8e0 50%); border-color: var(--page-accent); }
+.segs b.full { background: var(--page-accent); border-color: var(--page-accent); }
+.segs .lbl { flex: none; font-size: 9.5px; color: var(--page-ink-2); margin-left: 4px; white-space: nowrap; }
+.bd { padding: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; align-items: center; }
+.row.spread { justify-content: space-between; flex-wrap: nowrap; }
+.row .grow { flex: 1; }
+.k { display: inline-block; font-size: 10px; color: var(--page-accent); background: var(--page-accent-soft); border-radius: 20px; padding: 2px 8px; }
+.tt { font-family: var(--page-serif); font-size: 21px; font-weight: 700; margin: 6px 0 4px; }
+.gl { color: var(--page-ink-3); font-size: 11px; }
+.box { border: 1px solid var(--page-line); background: var(--page-app-2); border-radius: 8px; padding: 7px 9px; margin: 7px 0; font-size: 10.5px; color: var(--page-ink-2); }
+.depth { font-size: 10.5px; color: var(--page-ink-2); margin: 6px 0; }
+.depth u { color: var(--page-accent); text-decoration: none; border-bottom: 1px solid var(--page-accent); font-weight: 600; }
+.q { font-size: 13.5px; margin: 12px 0 9px; color: var(--page-ink); background: #fff7d6; outline: 2px solid #ecd27a; border-radius: 4px; padding: 2px 4px; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.opts div { border: 1px solid var(--page-line-2); border-radius: 10px; height: 64px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; background: #fff; }
+.menu { border: 1px solid var(--page-line-2); background: #fff; border-radius: 10px; box-shadow: 0 8px 18px -10px rgba(0,0,0,.35); padding: 4px; position: absolute; right: 12px; top: 116px; width: 150px; z-index: 4; }
+.menu div { padding: 6px 8px; font-size: 11px; border-radius: 6px; }
+.menu div + div { border-top: 1px solid var(--page-line); }
+.cta { background: var(--page-accent); color: #fff; text-align: center; font-weight: 700; border-radius: 12px; padding: 12px; margin: 10px 0; font-size: 13px; }
+.cta.big { padding: 18px; font-size: 15px; }
+.next { border: 1px solid var(--page-line-2); border-left: 4px solid var(--page-accent); border-radius: 10px; padding: 8px 10px; margin: 8px 0; font-size: 11px; }
+.next b { display: block; font-size: 12.5px; }
+.helpc { border: 1px solid #eedcc0; border-left: 4px solid var(--page-warm); background: var(--page-warm-soft); border-radius: 10px; padding: 9px 10px; font-size: 11px; color: var(--page-warm); margin: 8px 0; }
+.helpc b { display: block; color: var(--page-ink); font-size: 12.5px; }
+.lead2 { font-size: 11.5px; color: var(--page-ink-2); }
+.foot { border-top: 1px dashed var(--page-line-2); margin-top: 10px; padding-top: 8px; font-size: 10.5px; color: var(--page-ink-3); }
+.anno { font-size: 13px; color: var(--page-ink-2); margin-top: 10px; max-width: 300px; }
+.anno li { margin: 3px 0; }
+
+.phase { display: grid; grid-template-columns: 110px 1fr; gap: 6px 18px; border-top: 1px solid var(--page-line); padding: 14px 0; max-width: 860px; }
+.phase .when { font-weight: 700; color: var(--page-accent); }
+.phase .when span { display: block; font-weight: 400; color: var(--page-ink-3); font-size: 13px; }
+@media (max-width: 520px) { .phase { grid-template-columns: 1fr; } .wrap { padding: 32px 16px 64px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="meta">心情闯关岛 · 交互方案 · 基于 v1.1.0 代码与 docs/acceptance-1.0.0 的 390px 截图 · 2026-11-22 · v2（已定 2 项决策）· 三期均已实现，待 verify</div>
+  <h1>先把关卡页的题目拉回首屏，再按年龄档给首页减负</h1>
+  <p class="lede">在 390px 宽的手机上，关卡页的题目要到屏幕一半以下（约 545px 处）才出现，上面被 8 个工具按钮和 5 行说明占满。首页的问题相对轻：主路径是通的，但进度信息重复了三次，而且"从头再来一轮"点一下就会清空主线进度，没有确认。本方案分三期，第一期只改关卡页顶部，收益最大，成本也最低。</p>
+</header>
+
+<h2><span class="tag">依据</span>手机上实际看到的三个问题</h2>
+<div class="tbl"><table>
+<tr><th>#</th><th>问题</th><th>证据</th><th>影响</th></tr>
+<tr><td>1</td><td><b>关卡页工具栏折成 3 行</b>：年龄档标签、"岛 1 · 第 1 站"、地图、换一道题、想多想一步、两个人一起选、读题目、读选项</td><td><code>views-level.js:282-289</code>；截图 <code>v100-390-level.png</code> 里工具栏占 y≈128–255</td><td>孩子最先看到的是一排按钮，而不是题目；按钮挨得近，容易误触"换一道题"</td></tr>
+<tr><td>2</td><td><b>题目前面有 5 行说明</b>：玩法标签、标题、目标、"概念 · 觉察"、"这一站接着"提示框、"基础题 · 先看清这件事"</td><td>同上截图，题目大约从 y≈545 开始，选项只露出两行</td><td>3-6 岁孩子不识字，这些说明对他们没用，反而把能点的东西推到了下面</td></tr>
+<tr><td>3</td><td><b>"从头再来一轮"没有确认，也不能撤销</b>，而且就放在首页主按钮旁边</td><td><code>actions-data.js</code> 里的 <code>restart-all</code> 会直接过滤掉当前轨的 <code>cleared</code> 并 <code>save()</code></td><td>点错一下，当前轨走过的站就全部清零。词卡和本领虽然还在，但这和"进度不丢"的原则矛盾</td></tr>
+<tr><td>4</td><td><b>顶栏进度条有 21 个点</b>，每个都是可点击的跳转按钮</td><td><code>shell.js</code> 中 <code>updateTopbar</code>；<code>.step</code> 的 <code>min-width:6px</code></td><td>在 390px 上每个点只有约 9px 宽，远小于 44px 的最小点击区域，很难点准</td></tr>
+</table></div>
+<p class="sub">截图来自 1.0.0 验收，当时是 17 站，现在是 21 站，进度条只会更挤。像素位置是从截图上估出来的，改完以后要按同样的视口重新截图对比。</p>
+
+<h2><span class="tag">方案 A · 第一期</span>关卡页顶部：工具栏收成一行，说明压到两行</h2>
+
+<div class="compare">
+  <div>
+    <div class="cap before">现在 · 6-12 岁 · 第 1 站</div>
+    <div class="phone" style="height:600px">
+      <div class="tb">
+        <div class="tb-row"><span class="mark"></span><span class="brand-t">心情闯关岛</span><span class="pill help">现在有点难受</span><span class="pill shell">贝壳 0</span><span class="pill">设置</span></div>
+        <div class="dots"><i class="cur"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span class="lbl">第 1 / 21 站 · 心情天气</span></div>
+      </div>
+      <div class="bd">
+        <div class="row"><span class="pill chip">6-12 岁 · 读短句 · 也能多想一步</span><span class="gl">岛 1 · 第 1 站</span></div>
+        <div class="row"><span class="pill">← 地图</span><span class="pill">换一道题</span><span class="pill">想多想一步</span></div>
+        <div class="row"><span class="pill">两个人一起选</span><span class="pill">🔊 读题目</span><span class="pill">🔊 读选项</span></div>
+        <span class="k">开场 · 自主选择</span>
+        <div class="tt">心情天气</div>
+        <div class="gl">随手挑一个今天的天气。不选也可以，随时能走。</div>
+        <div class="gl" style="margin-top:4px">概念 · 觉察</div>
+        <div class="box"><b>这一站接着</b>　这是第一站，不用先学会什么。只要留意一下「我现在有感觉」。</div>
+        <div class="depth">基础题 · 先看清这件事</div>
+        <div class="q">今天的心里像什么天气？随手选一个就好。</div>
+        <div class="opts"><div>☀️ 晴</div><div>⛅ 阴晴之间</div></div>
+      </div>
+      <div class="fold" style="top:520px"><span>示意：首屏底部（线框不按比例）</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="cap after">改后 · 同一站</div>
+    <div class="phone" style="height:600px">
+      <div class="tb">
+        <div class="tb-row"><span class="mark"></span><span class="brand-t">心情闯关岛</span><span class="pill help">现在有点难受</span><span class="pill">设置</span></div>
+        <div class="segs"><b class="half"></b><b></b><b></b><b></b><b></b><span class="lbl">岛 1 · 第 1 站 · 贝壳 0</span></div>
+      </div>
+      <div class="bd">
+        <div class="row spread"><span class="pill">← 地图</span><span class="grow"></span><span class="pill acc">🔊 读给我听</span><span class="pill">更多 ⋯</span></div>
+        <div class="gl" style="margin-top:6px">开场 · 自主选择 · 概念：觉察</div>
+        <div class="tt">心情天气</div>
+        <div class="gl">随手挑一个今天的天气。不选也可以，随时能走。</div>
+        <div class="depth">基础题 · <u>想多想一步？</u></div>
+        <div class="q">今天的心里像什么天气？随手选一个就好。</div>
+        <div class="opts"><div>☀️ 晴</div><div>⛅ 阴晴之间</div><div>🌦️ 阵雨</div><div>🌙 安静的夜</div></div>
+      </div>
+      <div class="fold" style="top:520px"><span>示意：首屏底部（线框不按比例）</span></div>
+    </div>
+  </div>
+</div>
+
+<h3>具体改法</h3>
+<ol>
+  <li><b>工具栏只留三个按钮，排成一行</b>：左边"← 地图"；右边"🔊 读给我听"和"更多 ⋯"。"更多"用原生的 <code>&lt;details&gt;&lt;summary&gt;</code> 实现，里面放"换一道题"和"两个人一起选"。这样不用加 JS，<code>file://</code> 下也能用，键盘和读屏也天然支持。</li>
+  <li><b>"读题目"和"读选项"合成一个按钮"读给我听"</b>：依次读题目和选项（新增 <code>speak-all</code>，等于 <code>questionTexts()</code> 加 <code>optionTexts()</code>）。原来两个 action 保留，以免外部引用失效。没开朗读（<code>speak:false</code>）的年龄档就不显示这个按钮，和现在一样。</li>
+  <li><b>"想多想一步"挪到"基础题 · …"那一行</b>，变成可以点的文字链接。它本来就是在说明题目深度，把开关放在说明旁边更好懂，工具栏也少一个按钮。</li>
+  <li><b>去掉工具栏里的年龄档标签和"岛 1 · 第 1 站"</b>，因为顶栏已经显示了当前站（见方案 C）。年龄档在首页和设置里都看得到。</li>
+  <li><b>玩法标签和"概念 · 觉察"合成一行灰字</b>："开场 · 自主选择 · 概念：觉察"。</li>
+  <li><b>"这一站接着"提示框</b>：折成一行，点开才看全文。只有全轨第一站、且没有带回来的动作时才整块不显示（实现时从"本岛第一站"收窄到"全轨第一站"，因为各岛第一站的承接句连着上一岛，删掉会断掉线索）。"上一站带走的"这一行照常显示，它是"带回下一站"闭环的一部分。</li>
+  <li><b>亲子档例外</b>：亲子档（<code>all</code>）主打一起玩，"两个人一起选"留在工具栏外面，不收进"更多"。</li>
+</ol>
+<div class="callout"><b>预期效果（估算）</b>：题目从约 545px 上移到约 370px，390×900 视口的首屏能看到四个选项。改完后用 360、390、414 三种宽度重新截图验证。</div>
+
+<h2><span class="tag">方案 B · 第二期</span>首页：按年龄档决定显示什么，清空进度要先确认</h2>
+<p>首页在手机上的主路径没有问题："开始上岛"和"先缓一缓"都在首屏。要改的是两件事：其一，进度说了三遍（"4 座岛 · 17 站"、"第 1 / 17 站"、"已走过 0 / 17 站"）；其二，不同年龄档看到的是同一套入口。</p>
+
+<div class="tbl"><table>
+<tr><th>首页元素</th><th>3-6 岁</th><th>6-12 岁</th><th>亲子</th><th>成年</th></tr>
+<tr><td>主按钮"开始上岛 / 继续上岛"</td><td class="y">保留，加大，进页面自动读一句</td><td class="y">保留</td><td class="y">保留</td><td class="y">保留</td></tr>
+<tr><td>"先缓一缓"急救卡</td><td class="y">保留，在首屏</td><td class="y">保留</td><td class="y">保留</td><td class="y">保留</td></tr>
+<tr><td>下一站信息框</td><td class="mv">只显示站名和插画，去掉"已走过 X / 21"</td><td class="y">保留，去掉重复的进度数字</td><td class="y">同 6-12 岁</td><td class="y">同 6-12 岁</td></tr>
+<tr><td>"4 座岛 · 21 站 · 随时可以离开"</td><td class="n">去掉</td><td class="mv">只留"随时可以离开"</td><td class="mv">同 6-12 岁</td><td class="mv">同 6-12 岁</td></tr>
+<tr><td>词典 / 工具箱 / 慢变量</td><td class="mv">收进页脚的"给大人"</td><td class="mv">收进页脚的"给大人"</td><td class="y">保留，标题改成"一起看看"</td><td class="y">保留</td></tr>
+<tr><td>静修间"1 分钟练习"</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">保留，成为第二个按钮</td></tr>
+<tr><td>工作间支线</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="mv">新增入口卡，走完 A3-4 后在首页出现（现在只在地图上）</td></tr>
+<tr><td>"换年龄段"</td><td class="mv">收进"给大人"</td><td class="mv">收进"给大人"</td><td class="y">保留在顶部</td><td class="y">保留在顶部</td></tr>
+<tr><td>"从头再来一轮"</td><td colspan="4" class="mv">四档都从首页挪进"设置 → 数据"，改成先确认、再清空；清空后给一次撤销，只在这次打开期间有效（存在 <code>session</code> 里，不落盘）</td></tr>
+</table></div>
+
+<div class="compare">
+  <div>
+    <div class="cap after">改后 · 3-6 岁首页</div>
+    <div class="phone" style="height:520px">
+      <div class="tb"><div class="tb-row"><span class="mark"></span><span class="brand-t">心情闯关岛</span><span class="pill help">现在有点难受</span><span class="pill">设置</span></div></div>
+      <div class="bd">
+        <div class="tt" style="font-size:19px">不赶走情绪，先认出它</div>
+        <div class="next"><span class="gl">下一站</span><b>🌤️ 心情天气</b></div>
+        <div class="cta big">🔊 开始上岛</div>
+        <div class="helpc"><b>现在有点难受？</b>先抱抱自己，找一个大人。</div>
+        <div class="cta" style="background:#fff;color:var(--page-warm);border:1px solid var(--page-warm);margin-top:0">先缓一缓</div>
+        <div class="foot">给大人：换年龄段 · 心理学词典 · 自助工具箱 · 慢变量</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap after">改后 · 成年首页</div>
+    <div class="phone" style="height:520px">
+      <div class="tb"><div class="tb-row"><span class="mark"></span><span class="brand-t">心情闯关岛</span><span class="pill help">现在很难受</span><span class="pill">设置</span></div></div>
+      <div class="bd">
+        <div class="row"><span class="pill chip">成年 · 心智整理</span><span class="pill">换年龄段</span></div>
+        <div class="tt" style="font-size:19px">不赶走情绪，先认出它</div>
+        <div class="next"><span class="gl">接着上次 · 岛 3</span><b>第 11 站 · 读心术</b></div>
+        <div class="cta">继续上岛</div>
+        <div class="cta" style="background:#fff;color:var(--page-accent);border:1px solid var(--page-accent);margin-top:0">只做 1 分钟练习</div>
+        <div class="next" style="border-left-color:var(--page-warm)"><span class="gl">支线 · 已解锁</span><b>工作间：一个工作日的四个时刻</b></div>
+        <div class="foot">工具：心理学词典 · 自助工具箱 · 慢变量</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="sub">"给大人"只是一个折叠起来的入口，不加密码、不做家长验证。目的只是让孩子不容易点到，而且加验证就得存数据，和"不采集"相冲突。</p>
+
+<h2><span class="tag">方案 C · 第三期</span>顶栏进度：21 个点改成 5 段岛屿进度</h2>
+<ul>
+  <li>进度条按岛分成 5 段，每段的填充比例表示这座岛走过了几站（见方案 A 改后图）。每段宽度约 45px，点一下跳到地图上对应的岛，不再直接跳到某一站。</li>
+  <li>右侧文字改为"岛 2 · 第 3 站"，在关卡页再加上站名。贝壳数挪到这一行，顶栏第一行只留品牌名、急救按钮和设置。</li>
+  <li>"现在很难受 / 现在有点难受"这个急救按钮在任何页面都固定在第一行，位置不变，这是安全底线。</li>
+  <li>工作间支线还是不显示主线进度，沿用现在的规则。</li>
+</ul>
+<p class="sub">这一期会改到 <code>updateTopbar</code> 的进度渲染。<b>更正</b>：早先估计"约 16 处断言要重写"，实际是把 <code>play.step</code>、<code>duo.step</code> 也算进去了；真正依赖进度格的只有 2 个用例（当前站的 <code>aria-current</code> 和点击区尺寸），已改写。<b>实现时与本节的差异</b>：贝壳数没有挪到进度行，因为首页不显示进度行，挪过去首页就看不到贝壳了；窄屏下进度文字换到段条下方。</p>
+
+<h2><span class="tag">约束</span>这次改版不碰的东西</h2>
+<ul>
+  <li><b>红线不变</b>：不新增存档字段，<code>SCHEMA_VERSION</code> 保持 5；"更多"菜单和"给大人"的展开状态只放在内存或 DOM 里，不写进 <code>localStorage</code>。</li>
+  <li><b>零构建</b>：只用原生 <code>&lt;details&gt;</code>，不引入任何组件库；继续用经典 <code>&lt;script&gt;</code> 按顺序加载，<code>file://</code> 下能完整运行。</li>
+  <li><b>无障碍</b>：收进"更多"的按钮保持原来的 <code>data-action</code> 和 <code>aria-label</code>；<code>summary</code> 能用键盘操作；<code>prefers-reduced-motion</code> 下菜单展开不做动画。</li>
+  <li><b>按行为单独提交</b>：按 ROADMAP 的规定，每一期单独一笔提交，出问题时可以逐笔排查。</li>
+</ul>
+
+<h2><span class="tag">测试影响</span>哪些回归用例要跟着改</h2>
+<div class="tbl"><table>
+<tr><th>用例</th><th>现在的断言</th><th>改版后</th></tr>
+<tr><td>首页保留单一主 CTA，知识入口是低权重快捷</td><td>6-12 岁 <code>.home-shortcuts .btn-read</code> 有 3 个</td><td class="mv">要改：6-12 岁这三个入口挪到"给大人"里。可以改成断言 <code>.home-adult .btn-read</code> 有 3 个，同时断言主 CTA 仍然只有 1 个</td></tr>
+<tr><td>首页 1 分钟练习快捷入口只在成年轨</td><td><code>.home-shortcuts [data-action="open-retreat"]</code></td><td class="y">成年档不受影响；选择器的类名改了的话要同步</td></tr>
+<tr><td>0.19 · 通关后工具栏的双人按钮被禁用</td><td><code>#stage .toolbar [data-action="duo-open"]</code></td><td class="y">把 <code>details</code> 放在 <code>.toolbar</code> 里面，选择器就不用改</td></tr>
+<tr><td>引用 <code>.step</code> 的约 16 处</td><td>站点按钮、解锁状态、<code>aria-current</code></td><td class="mv">第三期要整体重写，前两期不受影响</td></tr>
+<tr><td>新增</td><td>—</td><td class="y">"从头再来"需要先确认，撤销后 <code>cleared</code> 恢复原样；关卡页在 390px 下 <code>.q</code> 的 <code>offsetTop</code> 不超过 400</td></tr>
+</table></div>
+
+<h2><span class="tag">排期</span>分三期上线，每期单独验收</h2>
+<div class="phase"><div class="when">第一期<span>约半天（S）</span></div><div>方案 A：关卡页顶部，加上"从头再来"的确认和撤销（撤销只在本次打开期间有效）。后者是数据风险，跟着第一期一起修。验收：<code>npm run verify</code> 全部通过；在 360、390、414 三种宽度下各截一张关卡页图，放进 <code>docs/acceptance-1.1.x/</code>。</div></div>
+<div class="phase"><div class="when">第二期<span>约一轮（M）</span></div><div>方案 B：首页按年龄档显示内容，并加上成年档的工作间入口。验收：四个年龄档的首页各截一张图；3-6 岁档首页在首屏里能找到的可点击元素不超过 3 个（主按钮、急救、设置）。</div></div>
+<div class="phase"><div class="when">第三期<span>约一轮（M）</span></div><div>方案 C：顶栏改成分岛进度。验收：每段可点区域宽度 ≥ 44px；读屏能读出"岛 2，走过 3 站，共 4 站"。</div></div>
+<div class="callout"><b>建议</b>：第一期上线后，先做一次 3-5 人的观察测试，再决定第二期是否照这个方案做。那时最该看的是：孩子能不能自己从首页走到第一题，以及有没有人去点"更多"。</div>
+
+<h2><span class="tag">决定</span>已拍板两件，还剩一件</h2>
+<div class="tbl"><table>
+<tr><th>#</th><th>问题</th><th>结论</th><th>理由与落地</th></tr>
+<tr><td>1</td><td>6-12 岁档要不要在首页保留自助工具箱？</td><td class="y">已定（2026-11-22）：收进"给大人"</td><td>31 张卡没有按年龄档筛选，适用场景多是成年情境（"长期工作或照护后出现耗竭""白天靠咖啡撑""工作需要一直微笑"），还有一张讲伤害念头。孩子需要的即时安抚由急救入口承担。方案 B 表格里 6-12 岁那一格按此执行。</td></tr>
+<tr><td>2</td><td>3-6 岁档首页要不要默认自动朗读？</td><td class="mv">未定</td><td>可选：进首页读一句"要开始上岛吗？点大按钮"，和关卡页的自动朗读保持一致（iOS 要先有一次点击才会出声）；或者首页保持安静，只在主按钮上放喇叭图标。这一项影响第二期，不影响第一期。<br><b>第二期实现时的处理</b>：先按保守做法——不自动读，主按钮旁放「🔊 读给我听」（<code>speak-home</code>），点了才读；定了要自动读，只需在 <code>renderHome</code> 末尾按 <code>autoSpeak</code> 调一次。</td></tr>
+<tr><td>3</td><td>"从头再来"的撤销，有效期多长？</td><td class="y">已定（2026-11-22）：只在这次打开期间</td><td>清空前把当前轨的 <code>cleared</code> 存一份到 <code>session.undoRestart</code>（只放内存，不落盘），地图上的提示里给"撤销重来"按钮。实现时进一步收窄为<b>开始下一站之前</b>有效：进新的一站、换年龄段、导入或清空进度时快照即清；关掉页面或重新载入后也失效。不新增存档字段，<code>SCHEMA_VERSION</code> 保持 5。第一期实施。</td></tr>
+</table></div>
+
+</div>
+</body>
+</html>

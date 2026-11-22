@@ -1335,7 +1335,7 @@ html.high-contrast .island-count { background: #fff; }
     .age-card { min-height: 0; }
 }
 
-/* ---------- 分段进度（按轨 17 站，可直接跳站）
+/* ---------- 旧版分段进度 .step（1.1.x 起顶栏改用末尾的 .seg-isl；保留以免外部样式或旧截图对照失效）
    条形本身仍是一根细线，但按钮盒子撑到 30px 高，触摸/点击目标不再是一条 9px 的缝 ---------- */
 .step-track { display: flex; gap: 5px; flex: 1; min-width: 0; align-items: center; }
 .step {
@@ -1850,3 +1850,89 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 :root[data-theme="dark"]:not(.high-contrast) .bridge-row b,
 :root[data-theme="dark"]:not(.high-contrast) .practice-lead b { color: var(--accent-soft); }
 
+/* ---------- 关卡页工具栏：一行 + 「更多」菜单（docs/design-home-toolbar.html 方案 A） ---------- */
+.tool-spacer { flex: 1; min-width: 0; }
+.btn-speak { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.tool-more { position: relative; }
+.tool-more > summary { list-style: none; display: inline-flex; align-items: center; cursor: pointer; }
+.tool-more > summary::-webkit-details-marker { display: none; }
+.tool-more[open] > summary { border-color: var(--accent); color: var(--accent); }
+.tool-more-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 5;
+    min-width: 150px; display: grid; gap: 6px; padding: 8px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px;
+    box-shadow: 0 14px 30px -18px rgba(24, 40, 34, .5);
+}
+.tool-more-menu .btn-read { width: 100%; text-align: left; white-space: nowrap; }
+.tool-more-menu [hidden] { display: none; }
+/* 玩法标签与概念合成一行灰字 */
+.level-kicker { flex-wrap: wrap; gap: 6px 10px; }
+.level-kicker .concept-line { display: inline; margin-top: 0; }
+/* 承接句折叠成一行 */
+.bridge-more > summary { cursor: pointer; font-size: calc(.84rem * var(--scale)); color: var(--accent); line-height: 1.6; }
+.bridge-more > summary b { font-weight: 500; }
+.bridge-more > span { display: block; margin-top: 4px; font-size: calc(.84rem * var(--scale)); color: var(--ink-2); line-height: 1.6; overflow-wrap: anywhere; }
+.level-depth .link-btn { margin-left: 2px; }
+.undo-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+@media (forced-colors: active) {
+    .tool-more-menu { border: 1px solid CanvasText; }
+}
+
+/* ---------- 首页按年龄档分层（docs/design-home-toolbar.html 方案 B） ---------- */
+.home-adult { margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--line-strong); }
+.home-adult > summary { cursor: pointer; font-size: calc(.84rem * var(--scale)); color: var(--ink-3); min-height: 38px; display: flex; align-items: center; }
+.home-adult[open] > summary { color: var(--accent); }
+.home-adult-menu { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.home-work {
+    display: grid; gap: 2px; width: 100%; text-align: left; margin-top: 14px;
+    padding: 12px 14px; border-radius: 12px; background: var(--surface);
+    border: 1px solid var(--line-strong); border-left: 4px solid var(--warm);
+}
+.home-work:hover { border-color: var(--warm); }
+.home-work-kicker { font-size: calc(.76rem * var(--scale)); color: var(--warm); }
+.home-work b { font-size: calc(.98rem * var(--scale)); color: var(--ink); }
+.home-work span:last-child { font-size: calc(.84rem * var(--scale)); color: var(--ink-3); }
+.home-tiny .actions .btn-primary { font-size: calc(1.12rem * var(--scale)); padding-top: 16px; padding-bottom: 16px; min-width: 60%; }
+.home-tiny .home-next b { font-size: calc(1.15rem * var(--scale)); }
+@media (forced-colors: active) {
+    .home-work { border: 1px solid CanvasText; }
+}
+
+/* ---------- 顶栏分岛进度（docs/design-home-toolbar.html 方案 C）：每岛一段 + 终章一段 ----------
+   替代原来每站一格的 .step（21 格在 390px 上每格约 9px，点不准）。段的按钮盒子 ≥ 44px 宽、30px 高，
+   视觉上仍是一根细条；填充比例 = 这座岛走过的站数。 */
+.step-track { gap: 6px; }
+.seg-isl {
+    flex: 4 1 44px; min-width: 44px; height: 30px; padding: 0; border: 0; background: none;
+    position: relative; border-radius: 6px;
+}
+.seg-isl.is-finale { flex: 1 0 44px; }
+.seg-isl::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 9px;
+    transform: translateY(-50%); border-radius: 3px;
+    border: 1px solid #d8ded6; background: #eef1ec;
+}
+.seg-fill {
+    position: absolute; left: 0; top: 50%; height: 9px; transform: translateY(-50%);
+    border-radius: 3px; background: var(--accent); pointer-events: none;
+}
+.seg-isl.current::before { border: 2px solid var(--accent); background: var(--surface); }
+.seg-isl.done::before { border-color: var(--accent); }
+.seg-isl:disabled { opacity: .5; }
+.seg-isl:hover:not(:disabled)::before { border-color: var(--accent); }
+.seg-isl:focus-visible { outline-offset: -2px; }
+html[data-band="a3"] .seg-isl { height: 40px; }
+:root[data-theme="dark"]:not(.high-contrast) .seg-isl::before { background: #34463e; border-color: #4a5e54; }
+:root[data-theme="dark"]:not(.high-contrast) .seg-isl.current::before { background: var(--surface); border-color: var(--accent); }
+@media (forced-colors: active) {
+    .seg-isl::before { border: 1px solid CanvasText; background: Canvas; }
+    .seg-fill { background: Highlight; forced-color-adjust: none; }
+    .seg-isl:disabled::before { border-style: dashed; }
+}
+
+/* 窄屏：6 段 × 44px + 进度文字一行放不下，文字换到段条下方，段条占满整行 */
+@media (max-width: 640px) {
+    .progress-wrap { flex-wrap: wrap; row-gap: 2px; }
+    .step-track { flex: 1 1 100%; gap: 4px; }
+    #progress-text { flex: 1 1 100%; }
+}

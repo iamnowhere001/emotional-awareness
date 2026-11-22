@@ -242,7 +242,7 @@ function openSettings() {
         <button class="${s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="1">开启朗读</button>
         <button class="${!s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="0">关闭</button>
         <button class="${s.autoSpeak ? 'on' : ''}" data-action="toggle-flag" data-k="autoSpeak" data-v="${s.autoSpeak ? 0 : 1}">进站自动读题目</button>
-      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时点关卡里的「读题目」总是有效。</p></div>
+      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时点关卡里的「读给我听」总是有效。</p></div>
       <div class="setting-row"><strong>动效与对比</strong><div class="seg">
         <button class="${!s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="0">保留轻微动效</button>
         <button class="${s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="1">尽量减少动画</button>
@@ -260,6 +260,10 @@ function openSettings() {
           <button data-action="import-progress">导入进度</button>
         </div>
         <p class="muted" id="data-status" role="status"></p></div>
+      ${state.band && clearedInTrack() > 0 ? `<div class="setting-row"><strong>重新走一轮</strong>
+        <p>把这一轨走过的 ${clearedInTrack()} 站重新标成「还没走」，题目换一批；词卡、本领、贝壳和工作间都保留。</p>
+        <p class="muted">会先让你确认；重来之后、开始下一站之前还能撤销一次。</p>
+        <div class="seg"><button data-action="restart-ask">从头再来一轮</button></div></div>` : ''}
       <div class="setting-row"><strong>装到主屏</strong>
         ${(typeof deferredInstallPrompt !== 'undefined' && deferredInstallPrompt)
           ? '<p>装到主屏后可以像普通 App 一样打开，断网也能玩。</p><div class="seg"><button data-action="install-app">安装到主屏</button></div>'
