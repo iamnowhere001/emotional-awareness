@@ -115,7 +115,7 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('#dict-cats .dict-cat-num').length === catCount + 1);
     renderMap();
   });
-  test('词典可按概念类型筛选，并与主题、搜索叠加，清空后复原', () => {
+  test('词典可按词条类型筛选，并与主题、搜索叠加，清空后复原', () => {
     bandTo('a6');
     ACTIONS['open-dictionary']();
     const kindBtn = [...document.querySelectorAll('#dict-kinds .dict-kind-btn')].find(b => b.dataset.k === 'frontier');
@@ -620,17 +620,26 @@ window.addEventListener('load', function () {
     const h = document.getElementById('stage').innerHTML;
     A(!h.includes('先走完上一岛') && h.includes('先走过上一岛最后一站'));
   });
-  test('地图入口按用途分组，不再是一排等权重按钮', () => {
+  test('入口收进底栏，地图只留站点', () => {
     state.cleared = [];
     bandTo('adult');
     renderMap();
-    A(document.querySelectorAll('#stage .map-hub .hub-card').length === 9);
-    A(!!document.querySelector('#stage .map-hub .hub-help'), '急救入口应在地图「随时可用」组里');
-    A(!!document.querySelector('#stage .map-hub [data-action="go-work"]'), '成年地图应有工作间支线入口');
-    A(document.querySelectorAll('#stage .map-tools').length === 0);
-    const heads = [...document.querySelectorAll('#stage .hub-head h3')].map(e => e.textContent.trim());
-    A(heads.includes('随时可用') && heads.includes('知识与工具') && heads.includes('这一趟的收集'));
-    A(heads.includes('专题 · 工作间'), '工作间应是独立分组，不是塞进收集区');
+    A(document.querySelectorAll('#stage .map-hub, #stage .hub-card').length === 0, '地图不再挂入口卡');
+    const tabs = [...document.querySelectorAll('#tabbar .tab')];
+    A(tabs.length === 4 && tabs.every(t => t.getBoundingClientRect().height >= 44), '底栏四项且都够点');
+    A(tabs.map(t => t.dataset.tab).join('|') === 'map|help|tools|mine');
+    A(tabs[0].getAttribute('aria-current') === 'page', '在地图时「上岛」高亮');
+    /* 工具抽屉承接原来「随时可用 / 专题 / 知识与工具 / 收集」四组入口 */
+    ACTIONS['open-tools']();
+    const rows = [...document.querySelectorAll('#overlay .sheet-row')].map(r => r.dataset.to);
+    A(['open-dictionary', 'open-selfhelp', 'open-slowvars', 'open-bottle', 'open-retreat', 'go-work'].every(a => rows.includes(a)), '工具抽屉六个入口');
+    closeModal();
+    ACTIONS['open-mine']();
+    const mine = [...document.querySelectorAll('#overlay .sheet-row')].map(r => r.dataset.to);
+    A(['open-codex', 'open-skills', 'goto-band', 'open-settings'].every(a => mine.includes(a)), '我的抽屉四个入口');
+    closeModal();
+    /* 抽屉只是入口清单：打开再收起，不留下任何状态 */
+    A(session.view === 'map' && !document.getElementById('overlay').classList.contains('open'));
   });
   test('地图只标一个下一站，岛头显示走过站数', () => {
     state.cleared = [];
@@ -641,20 +650,21 @@ window.addEventListener('load', function () {
     A(document.querySelectorAll('#stage .island-count').length === 5);
     A(document.getElementById('stage').textContent.includes('0 / 4 站'));
   });
-  test('首页保留单一主 CTA，知识入口是低权重快捷', () => {
+  test('首页保留单一主 CTA，工具入口只留在底栏', () => {
     bandTo('a6');
     renderHome();
     A(document.querySelectorAll('#stage .actions .btn-primary').length === 1);
-    /* 孩子档：知识入口与换档收进「给大人」，首页不直接摆 */
-    A(!document.querySelector('#stage .home-shortcuts'), '6-12 岁首页不直接摆知识入口');
-    A(['goto-band', 'open-dictionary', 'open-selfhelp', 'open-slowvars'].every(a => document.querySelector(`#stage .home-adult [data-action="${a}"]`)), '换档与知识入口应在给大人里');
-    A(!document.querySelector('#stage .toolbar [data-action="goto-band"]'), '孩子档工具栏不放换年龄段');
+    /* 工具入口、急救卡、换档三样都搬走了：一屏只出现一次同一个动作 */
+    A(!document.querySelector('#stage .home-shortcuts') && !document.querySelector('#stage .home-adult'), '首页不重复工具入口');
+    A(!document.querySelector('#stage .help-entry'), '急救不再单独占一块卡，改由底栏常驻');
+    A(!document.querySelector('#stage [data-action="goto-band"]'), '换档收进顶栏档位 chip 与「我的」');
+    /* 下一站信息与主按钮在同一张卡里，站号只说一次 */
+    A(!!document.querySelector('#stage .home-next .actions'), '主按钮就在下一站卡里');
     bandTo('a3'); renderHome();
-    A(document.querySelectorAll('#stage .actions .btn-primary').length === 1 && !!document.querySelector('#stage .home-adult'));
+    A(document.querySelectorAll('#stage .actions .btn-primary').length === 1);
     A(!document.querySelector('#stage .home-points') && !document.querySelector('#stage .home-next-meta'), '3-6 岁首页不显示卖点与站数');
     bandTo('all'); renderHome();
-    A(document.querySelectorAll('#stage .home-shortcuts .btn-read').length === 3 && !document.querySelector('#stage .home-adult'), '亲子档保留知识入口');
-    A(!!document.querySelector('#stage .toolbar [data-action="goto-band"]'), '亲子档保留换年龄段');
+    A(document.querySelectorAll('#stage .actions .btn-primary').length === 1 && !document.querySelector('#stage .home-shortcuts'), '亲子档同样不重复工具入口');
     bandTo('a6'); renderHome();
   });
   test('首页主按钮直达下一处已解锁未走站', () => {
@@ -676,24 +686,24 @@ window.addEventListener('load', function () {
   });
 
   /* ---------- 急救入口 ---------- */
-  test('急救入口常驻顶栏，两轨措辞不同', () => {
+  test('急救入口常驻底栏，两轨措辞不同', () => {
     const btn = document.getElementById('help-entry');
-    A(!!btn && btn.dataset.action === 'open-help', '顶栏需要有常驻入口');
+    A(!!btn && btn.dataset.action === 'open-help', '底栏需要有常驻入口');
     bandTo('a6'); renderHome();
-    A(btn.textContent === '现在有点难受', `6-12 档应显示「现在有点难受」，实际「${btn.textContent}」`);
+    A(btn.textContent === '有点难受', `6-12 档应显示「有点难受」，实际「${btn.textContent}」`);
     ['a3', 'a6'].forEach(id => {
       bandTo(id); renderHome();
-      A(btn.textContent === '现在有点难受');
+      A(btn.textContent === '有点难受');
     });
     bandTo('adult'); renderHome();
-    A(btn.textContent === '现在很难受');
+    A(btn.textContent === '很难受');
     bandTo('all'); renderHome();
-    A(btn.textContent === '现在很难受', '亲子档走成人口径');
+    A(btn.textContent === '很难受', '亲子档走成人口径');
   });
-  test('首页首屏有急救卡片，点击进入急救视图', () => {
+  test('急救入口常驻底栏，点击进入急救视图', () => {
     bandTo('adult'); renderHome();
-    A(!!document.querySelector('#stage .help-entry'), '首页应有急救卡片');
-    /* 真的点顶栏按钮：走 document 级事件代理，验证 data-action 真的接上了 */
+    A(!!document.getElementById('help-entry'), '底栏急救入口在首页也常驻');
+    /* 真的点底栏按钮：走 document 级事件代理，验证 data-action 真的接上了 */
     document.getElementById('help-entry').click();
     A(session.view === 'help' && session.helpFrom === 'home');
     A(document.getElementById('progress-wrap').hidden === true, '急救页不显示关卡进度');
@@ -958,10 +968,14 @@ window.addEventListener('load', function () {
   });
   test('工作间只在成年档出现，儿童轨看不到入口', () => {
     bandTo('adult'); state.cleared = [WORK_GATE]; renderMap();
-    A(!!document.querySelector('#stage [data-action="go-work"]'), '成年地图应有工作间入口');
-    A(document.getElementById('stage').textContent.includes('工作间'));
+    ACTIONS['open-tools']();
+    A(!!document.querySelector('#overlay [data-to="go-work"]'), '成年档工具抽屉里应有工作间入口');
+    A(document.getElementById('overlay').textContent.includes('工作间'));
+    closeModal();
     bandTo('a6'); renderMap();
-    A(!document.querySelector('#stage [data-action="go-work"]'), '儿童轨不应出现工作间入口');
+    ACTIONS['open-tools']();
+    A(!document.querySelector('#overlay [data-to="go-work"]'), '儿童轨工具抽屉不应出现工作间');
+    closeModal();
   });
   test('工作间按幕解锁，完成只写 sideCleared 且不加任何奖励', () => {
     bandTo('adult');
@@ -1024,7 +1038,7 @@ window.addEventListener('load', function () {
     ACTIONS['reroll']();
     A(play.side === true && play.sideIndex === 0, '换题后仍是支线');
     A(currentLevel().id === 'W-1', '换题后仍读支线关卡');
-    A(document.getElementById('stage').textContent.includes('工作间 · 09:00 · 支线'));
+    A(document.getElementById('progress-text').textContent.includes('支线 · 工作间 09:00'), '顶部仍标出支线来源');
     completeLevel('这一幕走过了');
     A(state.cleared.join(',') === WORK_GATE, '支线换题后通关不得写主线 cleared');
     A(state.sideCleared.join(',') === 'W-1');
@@ -1051,10 +1065,14 @@ window.addEventListener('load', function () {
     save(); applySettings();
     A(!sideUnlocked(0), '只到 A2-4 不应解锁第一幕（表达还没教）');
     renderMap();
-    A(document.querySelector('.hub-work .hub-meta').textContent.includes(`走完 ${WORK_GATE} 后开放`), '入口应标为未开放');
+    ACTIONS['open-tools']();
+    A(document.querySelector('#overlay [data-to="go-work"]').textContent.includes(`走完 ${WORK_GATE} 后开放`), '入口应标为未开放');
+    closeModal();
     state.cleared.push(WORK_GATE); save(); renderMap();
     A(sideUnlocked(0), '走到 A3-4 才解锁第一幕');
-    A(document.querySelector('.hub-work .hub-meta').textContent.includes('个时刻'), '解锁后入口应可用');
+    ACTIONS['open-tools']();
+    A(document.querySelector('#overlay [data-to="go-work"]').textContent.includes('个时刻'), '解锁后入口应可用');
+    closeModal();
   });
   test('旧档已完成支线：解锁点后移后 sideCleared 仍可回看', () => {
     bandTo('adult');
@@ -1206,7 +1224,7 @@ window.addEventListener('load', function () {
     A(!!chip); chip.click();
     const card = [...document.querySelectorAll('#dict-grid .dict-card')].find(c => c.dataset.term === '认知重评');
     A(!!card && card.open, '点概念应展开对应词条');
-    A(card.textContent.includes('概念 · 观察与推测'), '词条卡应标出概念名');
+    A(card.textContent.includes('共用概念 · 观察与推测'), '词条卡应标出共用概念名');
     renderMap();
   });
   test('两份清单互链：10 条想法层 / 12 条节奏层', () => {
@@ -1532,12 +1550,14 @@ window.addEventListener('load', function () {
   });
   test('首页 1 分钟练习快捷入口只在成年轨', () => {
     const keepCleared = state.cleared.slice();
-    bandTo('adult'); state.cleared = []; renderHome();
+    const keepSide = state.sideCleared.slice();
+    bandTo('adult'); state.cleared = []; state.sideCleared = []; renderHome();
     A(!!document.querySelector('#stage .home-main .actions [data-action="open-retreat"]'), '成年首页静修间是第二按钮');
     A(!document.querySelector('#stage .home-work'), '工作间未开放时首页不放入口');
     state.cleared = [WORK_GATE]; renderHome();
     A(!!document.querySelector('#stage .home-work[data-action="go-work"]'), '工作间开放后首页给入口');
     state.cleared = keepCleared;
+    state.sideCleared = keepSide;
     bandTo('a6'); renderHome();
     A(!document.querySelector('#stage [data-action="open-retreat"]') && !document.querySelector('#stage .home-work'));
   });
@@ -1737,9 +1757,14 @@ window.addEventListener('load', function () {
     renderMap();
     A(document.documentElement.scrollWidth <= window.innerWidth + 1,
       `地图 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
-    const hubCols = getComputedStyle(document.querySelector('.hub-grid')).gridTemplateColumns.split(' ').length;
-    A(hubCols === 1, `地图入口卡在 390px 应为单列，实际 ${hubCols} 列`);
-    A([...document.querySelectorAll('.hub-card')].every(c => c.getBoundingClientRect().height >= 44));
+    /* 底栏四格等宽、每格够点；抽屉入口在窄屏是单列，不挤成两栏 */
+    const tabW = [...document.querySelectorAll('#tabbar .tab')].map(t => Math.round(t.getBoundingClientRect().width));
+    A(new Set(tabW).size === 1 && tabW[0] >= 60, `底栏四格应等宽够点，实际 ${tabW.join('/')}`);
+    A([...document.querySelectorAll('#tabbar .tab')].every(t => t.getBoundingClientRect().height >= 44));
+    ACTIONS['open-tools']();
+    A(getComputedStyle(document.querySelector('#overlay .sheet-grid')).gridTemplateColumns.split(' ').length === 1,
+      '抽屉入口在 390px 应为单列');
+    closeModal();
     ACTIONS['open-dictionary']();
     A(document.documentElement.scrollWidth <= window.innerWidth + 1,
       `词典 scrollWidth=${document.documentElement.scrollWidth} innerWidth=${window.innerWidth}`);
@@ -1795,9 +1820,13 @@ window.addEventListener('load', function () {
         renderMap();
         A(document.documentElement.scrollWidth <= w + 1,
           `${w}px 地图 scrollWidth=${document.documentElement.scrollWidth}`);
-        const hubCols = getComputedStyle(document.querySelector('.hub-grid')).gridTemplateColumns.split(' ').length;
-        A(hubCols === 1, `${w}px 地图入口卡应为单列，实际 ${hubCols} 列`);
-        A([...document.querySelectorAll('.hub-card')].every(c => c.getBoundingClientRect().height >= 44));
+        const tabW = [...document.querySelectorAll('#tabbar .tab')].map(t => Math.round(t.getBoundingClientRect().width));
+        A(new Set(tabW).size === 1 && tabW[0] >= 55, `${w}px 底栏四格应等宽够点，实际 ${tabW.join('/')}`);
+        A([...document.querySelectorAll('#tabbar .tab')].every(t => t.getBoundingClientRect().height >= 44));
+        ACTIONS['open-tools']();
+        A(getComputedStyle(document.querySelector('#overlay .sheet-grid')).gridTemplateColumns.split(' ').length === 1,
+          `${w}px 抽屉入口应为单列`);
+        closeModal();
 
         ACTIONS['open-dictionary']();
         A(document.documentElement.scrollWidth <= w + 1,

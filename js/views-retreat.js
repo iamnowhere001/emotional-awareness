@@ -35,7 +35,7 @@ function renderRetreatPractice(i, resumePlay) {
     <p class="sh-refs">${conceptRefLinks(rc)}</p>
   </div>` : '';
   stage.innerHTML = `<div class="view">
-    <div class="toolbar">${bandChip('<span class="muted">静修间</span>')}
+    <div class="toolbar"><span class="muted">静修间</span>
       <button class="btn-read" data-action="md-list">换一个练习</button>
       <button class="btn-read" data-action="go-map">结束，回地图</button></div>
     <h2>${esc(r.name)}</h2>
@@ -89,7 +89,7 @@ function renderMeditatePractice(id, resumePlay) {
     ${rc ? `<p class="sh-refs">${conceptRefLinks(rc)}</p>` : ''}
   </div>`;
   stage.innerHTML = `<div class="view">
-    <div class="toolbar">${bandChip('<span class="muted">静修间</span>')}
+    <div class="toolbar"><span class="muted">静修间</span>
       <button class="btn-read" data-action="md-list">换一个练习</button>
       <button class="btn-read" data-action="go-map">结束，回地图</button></div>
     <h2>${esc(p.name)}</h2>

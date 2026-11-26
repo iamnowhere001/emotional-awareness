@@ -56,18 +56,22 @@ function updateTopbar() {
   const bandEl = document.getElementById('topbar-band');
   if (bandEl) {
     bandEl.hidden = (!vc.band || !state.band);
-    bandEl.textContent = state.band ? `${band().name} · ${band().tag}` : '';
+    /* 档位只在这一处出现。窄屏只留档名（tag 太长会把品牌名挤掉），宽屏再带上 tag。 */
+    bandEl.innerHTML = state.band
+      ? `${esc(band().name)}<span class="band-tag"> · ${esc(band().tag)}</span>`
+      : '';
   }
   /* 顶栏入口在两轨用不同措辞：孩子看到「有点难受」，成年 / 亲子看到「很难受」。
-     未选档时按成人口径，避免把「找一个大人」直接推给一个成年人。 */
+     未选档时按成人口径，避免把「找一个大人」直接推给一个成年人。
+     急救入口在底栏，措辞仍随档位变。 */
   const helpBtn = document.getElementById('help-entry');
   if (helpBtn) {
     const kid = isKidTone();
-    helpBtn.textContent = kid ? '现在有点难受' : '现在很难受';
+    helpBtn.textContent = kid ? '有点难受' : '很难受';
     helpBtn.setAttribute('aria-label', kid ? '打开 1 分钟安抚：现在有点难受' : '打开 1 分钟安抚与求助：现在很难受');
   }
   document.getElementById('progress-wrap').hidden = !vc.progress;
-  /* 支线关卡里不画主线站点：17 个圆点会把「工作间只走一幕」误读成主线进度。
+  /* 支线关卡里不画主线站点：21 个圆点会把「工作间只走一幕」误读成主线进度。
      只保留一句支线说明，主线的 cleared / TOTAL 一个都不动。 */
   const sideNow = session.view === 'level' && !!play.side;
   const track = document.getElementById('step-track');
@@ -84,16 +88,36 @@ function updateTopbar() {
     const pct = total ? Math.round(doneN / total * 100) : 0;
     const state_ = doneN === total ? 'done' : doneN > 0 ? 'part' : '';
     const label = `${g.name}，走过 ${doneN} 站，共 ${total} 站${goI === undefined ? '，还没解锁' : ''}`;
-    return `<button class="seg-isl ${state_} ${cur ? 'current' : ''} ${g.finale ? 'is-finale' : ''}" data-action="open-level" data-i="${goI === undefined ? '' : goI}" ${goI === undefined ? 'disabled' : ''} ${cur ? 'aria-current="step"' : ''} title="${esc(label)}" aria-label="${esc(label)}"><span class="seg-fill" style="width:${pct}%"></span></button>`;
+    return `<button class="seg-isl ${state_} ${cur ? 'current' : ''} ${g.finale ? 'is-finale' : ''}" data-action="open-level" data-i="${goI === undefined ? '' : goI}" ${goI === undefined ? 'disabled' : ''} ${cur ? 'aria-current="step"' : ''} title="${esc(label)}" aria-label="${esc(label)}"><span class="seg-fill" style="width:${pct}%"></span><span class="seg-n" aria-hidden="true">${g.finale ? '终' : g.key}</span></button>`;
   }).join('');
   const pt = document.getElementById('progress-text');
   const curLv = LEVELS[session.levelIndex];
+  /* 关卡页只说「第几站」：站名已经在正文大标题上，进来再报一遍是重复。 */
   if (pt) pt.textContent = sideNow
     ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
     : (vc.title === 'current' && curLv)
-      ? (curLv.type === 'finale' ? `终章 · ${curLv.name}` : `岛 ${curLv.island} · 第 ${curLv.num} 站 · ${curLv.name}`)
+      ? (curLv.type === 'finale' ? `终章 · ${TOTAL} 站走完` : `岛 ${curLv.island} · 第 ${curLv.num} 站 · 共 ${TOTAL} 站`)
       : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
+  updateTabbar();
   syncHash();
+}
+/* 底栏高亮：只标当前所属的那一组，其余保持静默。
+   关卡算「上岛」，工作间是同一轨的支线也算上岛；知识三页与静修间算「工具」。 */
+const TAB_OF_VIEW = {
+  map: 'map', level: 'map', work: 'map',
+  help: 'help',
+  dict: 'tools', selfhelp: 'tools', slowvars: 'tools', retreat: 'tools'
+};
+function updateTabbar() {
+  const bar = document.getElementById('tabbar');
+  if (!bar) return;
+  /* 选档页还没有档位，四件事都无处可去，先收起底栏 */
+  bar.hidden = session.view === 'gate';
+  const want = TAB_OF_VIEW[session.view] || '';
+  Array.from(bar.querySelectorAll('.tab')).forEach(t => {
+    if (t.dataset.tab === want) t.setAttribute('aria-current', 'page');
+    else t.removeAttribute('aria-current');
+  });
 }
 function viewClass() {
   return session.navDir === 'back' ? 'view enter-back'
@@ -356,7 +380,6 @@ function optionTexts() {
   const sel = '#stage .opt, #stage .pair-item:not(:disabled), #stage .chip:not(:disabled), #stage .word-chip, #stage .weather-btn, #stage .breath-actions .btn, #stage .clue-card.flipped .clue-text';
   return Array.from(document.querySelectorAll(sel)).map(e => e.textContent.trim()).filter(Boolean).slice(0, 10);
 }
-function bandChip(extra) {
-  const b = band();
-  return `<span class="band-chip">${esc(b.name)} · ${esc(b.tag)}</span>${extra || ''}`;
-}
+/* 档位 chip 只在顶栏出现一次，且是可点的按钮（换年龄段）：
+   由 index.html 里的 #topbar-band 承载，updateTopbar 填 name + tag。
+   页内不再调用渲染件，所以这里没有 bandChip()。 */

@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#f6f5f0">
     <meta name="theme-color" content="#1e2724" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="按年龄分级的情绪启蒙小游戏：3-6 岁、6-12 岁、亲子全年龄与成年四档，各 5 座岛 21 站，按「认出感觉 → 换个角度 → 看见彼此 → 安放自己 → 回望自己」五岛展开，附 162 条心理学词典（4 组 11 主题，按概念簇分台阶）、自助工具箱与慢变量。不打分、不排名、不收集心情记录。">
+    <meta name="description" content="按年龄分级的情绪启蒙小游戏：3-6 岁、6-12 岁、亲子全年龄与成年四档，各 5 座岛 21 站，按「认出感觉 → 换个角度 → 看见彼此 → 安放自己 → 回望自己」五岛展开，附 162 条心理学词典词条（4 组 11 主题，按概念簇分台阶）、自助工具箱与慢变量。不打分、不排名、不收集心情记录。">
     <title>心情闯关岛 · 一起认出心里的天气</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -39,10 +39,9 @@
                 </div>
             </div>
             <div class="topbar-right">
-                <span class="band-chip" id="topbar-band" hidden></span>
-                <button class="icon-btn help-btn" id="help-entry" data-action="open-help" aria-label="打开 1 分钟安抚与求助">现在很难受</button>
+                <!-- 档位只在这里出现一次：点它换年龄段。页内不再重复同一枚 chip。 -->
+                <button class="band-chip" id="topbar-band" data-action="goto-band" aria-label="换年龄段" hidden></button>
                 <div class="shell-count" id="shell-count" aria-live="polite">贝壳 0</div>
-                <button class="icon-btn" data-action="open-settings" aria-label="打开设置">设置</button>
             </div>
             <div class="progress-wrap" id="progress-wrap" hidden>
                 <div class="step-track" id="step-track" role="group" aria-label="各岛进度，点一座岛进它下一处没走过的站"></div>
@@ -54,11 +53,22 @@
 
         <div id="overlay"></div>
 
-        <footer id="disclaimer">
-            这是一个关于情绪的小游戏，<strong>不是心理测评，也不能代替专业帮助</strong>。它不打分、不排名、不收集你的心情记录，也不宣称任何治疗效果。
+        <details id="disclaimer">
+            <summary>关于这个小游戏 · 边界与免责</summary>
+            <p>这是一个关于情绪的小游戏，<strong>不是心理测评，也不能代替专业帮助</strong>。它不打分、不排名、不收集你的心情记录，也不宣称任何治疗效果。
             呼吸与正念相关的练习只是一般的放松方式：可以睁眼、随时停止；若感到不适，请停下来并寻求专业支持。
-            如果有些感受一直让你难受，和信任的人聊聊，或寻求专业人士的帮助。
-        </footer>
+            如果有些感受长期让你难受，和信任的人聊聊，或寻求专业人士的帮助。</p>
+        </details>
+
+        <!-- 主导航：四件事覆盖全部入口，任何一屏都能一次点到。
+             急救从顶栏挪到这里，是因为底栏在每一屏都常驻，比挤在顶栏右侧更近手。
+             放在文档最后 + sticky：短页面贴在卡片下沿，长页面滚到哪都吸在视口底。 -->
+        <nav id="tabbar" aria-label="主导航">
+            <button class="tab" data-action="go-map" data-tab="map">上岛</button>
+            <button class="tab tab-help" id="help-entry" data-action="open-help" data-tab="help">现在很难受</button>
+            <button class="tab" data-action="open-tools" data-tab="tools">工具</button>
+            <button class="tab" data-action="open-mine" data-tab="mine">我的</button>
+        </nav>
     </div>
 
     <!-- 内容：纯数据，顺序敏感；新增岛/题库再加一行即可。

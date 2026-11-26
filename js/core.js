@@ -1,4 +1,4 @@
-/* 心情闯关岛 v1.1.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v1.2.0 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
@@ -91,7 +91,7 @@ const MD_FAMILY_BY_ID = MD_FAMILIES.reduce((m, f) => { m[f.id] = f; return m; },
 const MD_PRACTICE_BY_ID = MD_PRACTICES.reduce((m, p) => { m[p.id] = p; return m; }, {});
 const conceptOfMeditate = p => GLOSSARY_BY_ID[(MD_FAMILY_BY_ID[(p && p.family) || ''] || {}).concept || ''] || null;
 const DICTIONARY = MI.dictionary || [];
-/* 词典的组织方式也在数据里：主题分组、顺序与概念类型都不在逻辑里另写一份。 */
+/* 词典的组织方式也在数据里：主题分组、顺序与词条类型都不在逻辑里另写一份。 */
 const DICT_META = MI.dictionaryMeta || {};
 const DICT_GROUPS = DICT_META.groups || [];
 const DICT_KINDS = DICT_META.kinds || [];

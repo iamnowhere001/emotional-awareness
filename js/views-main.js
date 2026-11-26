@@ -16,7 +16,7 @@ function renderAgeGate() {
   stage.innerHTML = `<div class="view">
     <span class="eyebrow">第一步 · 之后随时能改</span>
     <h2 style="margin:12px 0 10px">先选一下，谁来玩</h2>
-    <p class="lead">不同年龄用的是不同题目：选项多少、线索长短、要不要读给你听，都会跟着变。6-12 岁这一档先玩基础题，走过一次后可以随时切到「多想一步」。孩子与亲子档共用一套站，成年档是单独的一套；两边进度各自保留，换档不会丢。</p>
+    <p class="lead">不同年龄用的题目不一样：选项多少、线索长短、要不要读给你听，都会跟着变。6-12 岁先玩基础题，走过一次后可以切到「多想一步」。孩子与亲子共用一套站，成年是单独一套；换档不会丢进度。</p>
     <div class="age-grid">${AGE_BANDS.map(b =>
       `<div class="age-pick">
         <button class="age-card ${b.id === 'adult' ? 'adult-card' : ''}" data-action="set-band" data-b="${b.id}" data-next="home">
@@ -27,7 +27,7 @@ function renderAgeGate() {
         </button>
         <button class="age-read" data-action="speak-band" data-b="${b.id}" aria-label="读一读「${esc(b.name)}」这一档的介绍">🔊</button>
       </div>`).join('')}</div>
-    <p class="home-note">前三档面向孩子与亲子共玩；最后一项是给自己的，另有一间不打卡的静修间。拿不准就选 6-12 岁那档，随时可以在「设置」里换。不会记录年龄，也不会上传任何信息。</p>
+    <p class="home-note">前三档给孩子或亲子一起玩，最后一项是大人自己的，另有一间不打卡的静修间。给孩子选不准年龄，就从 6-12 岁开始；随时能在「设置」里换。选的档位只留在本机，不记录生日，也不上传任何信息。</p>
   </div>`;
   updateTopbar();
   resetViewScroll();
@@ -42,14 +42,12 @@ function renderHome() {
   const hasAnyProgress = cleared > 0;
   const nextIdx = nextStationIndex();
   const nextLv = nextIdx >= 0 ? LEVELS[nextIdx] : null;
-  /* 首页按年龄档分层（docs/design-home-toolbar.html 方案 B）：
-     - 孩子档（3-6 / 6-12）：只摆主路径与急救；换年龄段、词典、工具箱、慢变量收进页脚「给大人」。
-       自助工具箱 31 张卡未按年龄筛选、场景多为成年情境，孩子的即时安抚由急救入口承担。
-     - 3-6 岁：再去掉站数与卖点列表，下一站只报站名；主按钮旁给一个「读给我听」（不自动读，待定）。
-     - 亲子：知识入口保留，标题改「一起看看」。成年：静修间升为第二按钮，工作间开放后在首页给入口。
-     - 进度只说一遍：下一站卡里的「已走过 X / N 站」；「从头再来」挪进设置，先确认、可撤销。
-     「给大人」只是折叠，不设门槛——加验证就得存东西，和「不采集」冲突。 */
-  const kidHome = isKidTone();
+  /* 首页做减法（1.2.0）：只保留「现在该干什么」和「这里是什么」两件事。
+     - 下一站信息与主按钮合成一张卡：原来卡里报一遍「第 1 站」、按钮再报一遍，同一个动作两处文案。
+     - 工具入口（词典 / 工具箱 / 慢变量）与急救卡一律删掉：它们已经在底栏「工具」和「很难受」里，
+       一屏出现两次同一个动作，是这一轮要清掉的冗余。
+     - 换年龄段也从这里撤走，收进顶栏档位 chip 与底栏「我的」——档位信息只在一个地方出现。
+     - 3-6 岁仍去掉站数与卖点列表，只报站名；主按钮旁给一个「读给我听」。 */
   const tiny = b.id === 'a3';
   const nextMeta = nextLv
     ? `<span class="home-next-kicker">${hasAnyProgress ? '接着上次 · 下一站' : '从这里开始'}</span>
@@ -58,9 +56,8 @@ function renderHome() {
     : `<span class="home-next-kicker">这一轨已经走完</span>
        <b>${TOTAL} 站都走过了</b>
        <span class="home-next-meta">可以回地图重温任意一站，或换一个年龄段。</span>`;
-  const ctaText = nextLv
-    ? (tiny ? (hasAnyProgress ? '继续上岛' : '开始上岛') : `${hasAnyProgress ? '继续上岛' : '开始上岛'} · 第 ${nextIdx + 1} 站`)
-    : '回地图挑一站';
+  /* 卡里已经写明站号，按钮只留动作，不再重复「第 N 站」 */
+  const ctaText = nextLv ? (hasAnyProgress ? '继续上岛' : '开始上岛') : '回地图挑一站';
   const speakHome = tiny && state.settings.speak
     ? '<button class="btn-read btn-speak" data-action="speak-home" aria-label="读一读首页">🔊 读给我听</button>' : '';
   const retreatBtn = isAdultTrack() ? '<button class="btn btn-secondary" data-action="open-retreat">只做 1 分钟练习</button>' : '';
@@ -70,43 +67,22 @@ function renderHome() {
           <b>工作间：一个工作日的 ${WORK.length} 个时刻</b>
           <span>会前、汇报被否、冲突、下班反刍。</span>
         </button>` : '';
-  const knowledge = kidHome
-    ? `<details class="home-adult"><summary>给大人 · 换年龄段、词典与工具</summary>
-          <div class="home-adult-menu">
-            <button class="btn-read" data-action="goto-band">换年龄段</button>
-            <button class="btn-read" data-action="open-dictionary">心理学词典</button>
-            <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
-            <button class="btn-read" data-action="open-slowvars">慢变量</button>
-          </div></details>`
-    : `<div class="home-shortcuts">
-          <span class="muted">${isAdultTrack() ? '工具：' : '一起看看：'}</span>
-          <button class="btn-read" data-action="open-dictionary">心理学词典</button>
-          <button class="btn-read" data-action="open-selfhelp">自助工具箱</button>
-          <button class="btn-read" data-action="open-slowvars">慢变量</button>
-        </div>`;
   stage.innerHTML = `<div class="view home-hero${tiny ? ' home-tiny' : ''}">
-    <div class="toolbar">${bandChip()}${kidHome ? '' : '<button class="btn-read" data-action="goto-band">换年龄段</button>'}</div>
     <div class="home-grid">
       <div class="home-main">
         ${tiny ? '' : '<span class="eyebrow">随时可以离开</span>'}
         <h2>不赶走情绪，先认出它</h2>
-        <p class="lead">这里不考你答得对不对，只帮你看清此刻的感觉，再带走一个用得上的小工具。</p>
+        <p class="lead">这里不考你答得对不对，只帮你看清情绪长什么样，再带走一个用得上的小工具。</p>
         ${takeTip()}
-        <div class="home-next">${nextMeta}</div>
-        <div class="actions">
-          <button class="btn btn-primary" data-action="start">${ctaText}</button>
-          ${speakHome}${retreatBtn}
+        <div class="home-next home-next-card">
+          ${nextMeta}
+          <div class="actions">
+            <button class="btn btn-primary" data-action="start">${ctaText}</button>
+            ${speakHome}${retreatBtn}
+          </div>
         </div>
         ${workCard}
-        <div class="help-entry">
-          <div class="help-entry-copy">
-            <span class="help-entry-kicker">不用上岛 · 约 1 分钟</span>
-            <b>${kidHome ? '现在有点难受？' : '现在很难受？'}</b>
-            <span>先落地、给感受一个词、找一个人。不计进度，也不保存。</span>
-          </div>
-          <button class="btn help-entry-btn" data-action="open-help">先缓一缓</button>
-        </div>
-        <p class="home-note">全程不联网；天气选择只留在这一次，不会被保存，也没有每日签到。${isAdultTrack() ? '成年档与儿童档的进度分开记。' : ''}</p>
+        <p class="home-note">全程不联网；第一站选过的天气不会保存，也没有每日签到。${isAdultTrack() ? '成年档与儿童 / 亲子档的进度分开记。' : ''}</p>
       </div>
       <aside class="home-side">
         <div class="home-horizon" aria-hidden="true">
@@ -119,9 +95,8 @@ function renderHome() {
         ${tiny ? '' : `<div class="home-points">
           <div class="home-point"><span class="dot"></span><span><b>没有标准答案。</b>不打分、不排名，也不比谁快。</span></div>
           <div class="home-point"><span class="dot"></span><span><b>一站一个玩法。</b>拼线索、调刻度、排顺序，动脑也动手。</span></div>
-          <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)} 出题。</b>${esc(b.len)}。</span></div>
+          <div class="home-point"><span class="dot"></span><span><b>按 ${esc(b.name)}出题。</b>${esc(b.len)}。</span></div>
         </div>`}
-        ${knowledge}
       </aside>
     </div>
   </div>`;
@@ -152,7 +127,7 @@ function renderHelp() {
   };
   const backLabel = backLabels[session.helpFrom] || '回到首页';
   stage.innerHTML = `<div class="view help-view">
-    <div class="toolbar">${state.band ? bandChip() : ''}<button class="btn-read" data-action="help-close">${backLabel}</button></div>
+    <div class="toolbar"><button class="btn-read" data-action="help-close">${backLabel}</button></div>
     <span class="eyebrow">${esc(HELP.eyebrow)}</span>
     <h2 class="help-title">${esc(HELP.title)}</h2>
     <p class="lead">${esc(HELP.lead)}</p>
@@ -245,10 +220,6 @@ function renderMap() {
   clearAsyncTimers();
   session.view = 'map';
   const list = islands();
-  const trackCards = LEVELS.map(l => l.card).filter(Boolean);
-  const trackSkills = LEVELS.map(l => l.skill).filter(Boolean);
-  const gotCards = trackCards.filter(c => cardsInTrack().includes(c)).length;
-  const gotSkills = trackSkills.filter(s => state.skills.includes(s)).length;
   /* 唯一一个「现在就能继续」的站：已解锁且没走过。终章也算，全部走完时它会被点亮。 */
   const nextIdx = LEVELS.findIndex((l, i) => isUnlocked(i) && !state.cleared.includes(l.id));
   const interrupted = session.interrupted;
@@ -257,11 +228,9 @@ function renderMap() {
     ${interrupted ? '<div class="notice">刚才的呼吸练习被打断了，不用补上。想做的时候随时可以重新开始。</div>' : ''}
     ${takeTip()}
     ${undoNotice()}
-    <div class="map-head"><div><span class="eyebrow">岛屿地图 · ${esc(band().name)}</span>
+    <div class="map-head"><div><span class="eyebrow">岛屿地图</span>
       <h2 style="margin-top:10px">想去哪站，就去哪站</h2>
-      <p class="lead">${list.length} 座岛连成一条航线。同一座岛里的站可以随便进出；走过的还能再走，每次题目会换一批。</p></div></div>
-    <div class="toolbar">${bandChip()}<span class="muted">${esc(band().len)}</span>
-      <button class="btn-read" data-action="goto-band">换年龄段</button></div>
+      <p class="lead">${list.length} 座岛连成一条航线。同一座岛里的站可以随便进出；走过的还能再走，每次题目会换一批。${esc(band().len)}。</p></div></div>
     ${nextIdx >= 0 ? `<div class="map-next">
       <div class="map-next-copy">
         <span class="map-next-kicker">下一站 · ${LEVELS[nextIdx].type === 'finale' ? '终章' : `岛 ${LEVELS[nextIdx].island}`}</span>
@@ -349,78 +318,10 @@ function renderMap() {
     </svg>
   </div>`;
   const mindful = !!band().mindful;
-  /* 入口按「什么时候会用到」分组：先随身工具，再知识，最后收集。
-     原来的 7 个按钮平铺，主次全靠阅读顺序；分组后主线和支线的权重一眼能分开。 */
-  html += `<div class="map-hub">
-    <section class="hub-block">
-      <div class="hub-head"><h3>随时可用</h3><span class="muted">不计进度 · 随时可停</span></div>
-      <div class="hub-grid">
-        <button class="hub-card hub-help" data-action="open-help">
-          <span class="hub-name">${isKidTone() ? '现在有点难受' : '现在很难受'}</span>
-          <span class="hub-desc">三个 1 分钟动作：先落地、给感受一个词、找一个人。</span>
-          <span class="hub-meta">不计进度 · 不保存 · 随时可停</span>
-        </button>
-        <button class="hub-card" data-action="open-bottle">
-          <span class="hub-name">今日漂流瓶</span>
-          <span class="hub-desc">从 ${BOTTLES.length} 个问题里抽一个，和自己聊一句；答案不保存。</span>
-          <span class="hub-meta">一题就够 · 不记录</span>
-        </button>
-        <button class="hub-card" data-action="${mindful ? 'open-retreat' : 'goto-band'}">
-          <span class="hub-name">静修间</span>
-          <span class="hub-desc">${MD_FAMILIES.length} 个练习族 × 2 档，或按此刻的场景挑一个。</span>
-          <span class="hub-meta">${mindful ? `${MD_PRACTICES.length + RETREAT.length} 个练习 · 不记录` : '成年档开放 · 现在可切换'}</span>
-        </button>
-      </div>
-    </section>
-    ${isAdultTrack() && WORK.length ? `<section class="hub-block">
-      <div class="hub-head"><h3>专题 · 工作间</h3><span class="muted">支线 · 不计入 ${TOTAL} 站</span></div>
-      <div class="hub-grid">
-        <button class="hub-card hub-work" data-action="go-work">
-          <span class="hub-name">工作间</span>
-          <span class="hub-desc">会前、汇报被否、冲突、下班反刍：四个工作日的时刻。</span>
-          <span class="hub-meta">${sideUnlocked(0) || WORK.some((w, i) => workReachable(i)) ? `${WORK.length} 个时刻 · 不加奖励` : `走完 ${WORK_GATE} 后开放`}</span>
-        </button>
-      </div>
-    </section>` : ''}
-    <section class="hub-block">
-      <div class="hub-head"><h3>知识与工具</h3><span class="muted">想查就查，不占进度</span></div>
-      <div class="hub-grid">
-        <button class="hub-card" data-action="open-dictionary">
-          <span class="hub-name">心理学词典</span>
-          <span class="hub-desc">${DICTIONARY.length} 条概念，按主题找、按类型挑，或直接搜。</span>
-          <span class="hub-meta">${DICT_GROUPS.length} 组 · ${DICT_CATS.length} 个主题 · 本地搜索</span>
-        </button>
-        <button class="hub-card" data-action="open-selfhelp">
-          <span class="hub-name">自助工具箱</span>
-          <span class="hub-desc">按此刻的状态，挑一张能马上用的小工具卡。</span>
-          <span class="hub-meta">${SH_TOOLS.length} 张卡 · ${SH_STATES.length} 种状态</span>
-        </button>
-        <button class="hub-card" data-action="open-slowvars">
-          <span class="hub-name">慢变量</span>
-          <span class="hub-desc">健康、关系、三观这些长期底盘，慢一点看。</span>
-          <span class="hub-meta">${SV_VARS.length} 个变量 · ${SV_PRACTICES.length} 张练习</span>
-        </button>
-      </div>
-    </section>
-    <section class="hub-block">
-      <div class="hub-head"><h3>这一趟的收集</h3><span class="muted">走过才会留下</span></div>
-      <div class="hub-grid two">
-        <button class="hub-card" data-action="open-codex">
-          <span class="hub-name">词卡图鉴</span>
-          <span class="hub-desc">每走过一站，会留下一张可以回看的词卡。</span>
-          <span class="hub-meta">${gotCards} / ${trackCards.length} 张</span>
-        </button>
-        <button class="hub-card" data-action="open-skills">
-          <span class="hub-name">本领清单</span>
-          <span class="hub-desc">这一程练过的小本领，都收在这里。</span>
-          <span class="hub-meta">${gotSkills} / ${trackSkills.length} 个</span>
-        </button>
-      </div>
-    </section>
-  </div>
-  <div class="map-foot"><button class="btn btn-ghost" data-action="open-settings">显示、朗读与数据</button></div>
-    <p class="home-note">没有每日签到，也没有连续登录奖励。想来就来，进度不会掉。${band().adult ? '每一站底下都留了一句给大人的话。' : ''}${mindful ? '呼吸与正念练习可以随时停止，不算中断。' : ''}${isAdultTrack() ? '成年档与儿童档的进度分开记，互不影响。' : ''}</p>
-  </div>`;
+  /* 地图只负责「站点在哪」。原来这一屏还挂着 9 张入口卡（随时可用 / 专题 / 知识与工具 / 收集），
+     把地图撑到 5 屏，又和首页的工具入口、顶栏的急救入口三处重复。
+     1.2.0 起入口一律收进底栏：地图到此为止，不再兼作工具箱。 */
+  html += `<p class="home-note">没有每日签到，也没有连续登录奖励。想来就来，进度不会掉。${band().adult ? "每一站底下都留了一句给大人的话。" : ""}${mindful ? "呼吸与正念练习可以随时停止，不算中断。" : ""}${isAdultTrack() ? "成年档与儿童 / 亲子档的进度分开记，互不影响。" : ""}</p>`;
   stage.innerHTML = html;
   updateTopbar();
   resetViewScroll();   /* 之后若 session.mapScroll 有值，rAF 会再恢复到那一站 */
@@ -460,14 +361,13 @@ function renderWork() {
     </button>`;
   }).join('');
   stage.innerHTML = `<div class="${viewClass()} work-view">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
     ${takeTip()}
     <span class="eyebrow">成年档 · 专题支线</span>
     <h2 style="margin-top:10px">工作间</h2>
     <p class="lead">四个时刻，沿着一个工作日往下走。它是支线：不计入 ${TOTAL} 站，也不加贝壳、词卡或本领；主线停在哪一站，出来还是那一站。</p>
     ${!open0 ? `<div class="notice">走完地图上的 ${WORK_GATE} 后开放第一幕。</div>` : ''}
     <div class="work-line">${stops}</div>
-    <p class="home-note">不用按顺序打卡，也不记录时长。想停就停，进度只留在本机。</p>
+    <p class="home-note">不用赶时间，也不记录时长。想停就停，进度只留在本机。</p>
   </div>`;
   updateTopbar();
   resetViewScroll();
@@ -519,10 +419,9 @@ function renderRetreatList() {
     </div>`;
   }).join('');
   stage.innerHTML = `<div class="view">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
     <span class="eyebrow">静修间 · 不计进度</span>
     <h2 style="margin:12px 0 10px">不用完成什么，坐一会儿就好</h2>
-    <p class="lead">${MD_FAMILIES.length} 个练习族、${MD_PRACTICES.length} 条引导，加上 ${RETREAT.length} 个情境练习。按此刻的场景挑一个，或者从最短的开始。没有连续天数、没有提醒、不记录你做过几次。</p>
+    <p class="lead">${MD_FAMILIES.length} 类练习、${MD_PRACTICES.length} 条引导，加上 ${RETREAT.length} 个情境练习。按此刻的场景挑一个，或者从最短的开始。没有连续天数、没有提醒、不记录你做过几次。</p>
     ${MD_PRACTICES.length ? `<section class="md-now" aria-labelledby="md-now-title">
       <h3 class="retreat-group-title" id="md-now-title">此刻</h3>
       <div class="md-scenes" role="group" aria-label="按此刻的场景挑一个">${sceneBtns}</div>
@@ -530,7 +429,7 @@ function renderRetreatList() {
     </section>` : ''}
     ${retreatSafety()}
     ${MD_PRACTICES.length ? `<section class="md-families" aria-labelledby="md-fam-title">
-      <h3 class="retreat-group-title" id="md-fam-title">练习族 · 每个只教一个动作</h3>
+      <h3 class="retreat-group-title" id="md-fam-title">五类练习 · 每个只教一个动作</h3>
       <div class="md-family-grid">${familyCards}</div>
     </section>` : ''}
     <details class="md-more">

@@ -20,7 +20,7 @@ Object.assign(ACTIONS, {
     if (firstPick && b.id === 'a3') state.settings.autoSpeak = true;
     save(); applySettings(); closeModal();
     session.tip = b.id === 'adult'
-      ? '已切换到「成年 · 心智整理」，换成一套成年人的站，另有一间静修间。儿童档的进度也还留着。'
+      ? '已切换到「成年 · 心智整理」，换成一套成年人的站，另有一间静修间。儿童 / 亲子档的进度也还留着。'
       : `已切换到「${b.name} · ${b.tag}」，题目会换一批，进度和词卡都还在。`;
     session.navDir = '';
     if (el.dataset.next === 'map') renderMap(); else renderHome();
@@ -55,6 +55,16 @@ Object.assign(ACTIONS, {
     renderMap();
   },
   'open-settings': () => openSettings(),
+  /* 底栏两个抽屉：先收抽屉再执行原动作，遮罩不会盖住新页面。
+     走 ACTIONS 查表而不是直接调函数，保持「所有入口都过同一张动作表」。 */
+  'open-tools': () => openToolsSheet(),
+  'open-mine': () => openMineSheet(),
+  'sheet-go': (el) => {
+    const to = el.dataset.to;
+    const fn = ACTIONS[to];
+    closeModal();
+    if (fn) fn(el);
+  },
   /* 安装到主屏：用先前暂存的 beforeinstallprompt 调起安装。
      deferredInstallPrompt 由 boot.js 在运行时赋值，存在此处只读取。 */
   'install-app': () => {
@@ -113,7 +123,7 @@ Object.assign(ACTIONS, {
     openSettings();
   },
   'clear-progress': () => openModal(`<div class="modal-title">确认清空？</div>
-    <div class="modal-body"><p>会清掉这台设备上记录的关卡进度、词卡、本领、贝壳和小岛摆设，无法撤销。年龄段和显示设置会保留。</p></div>
+    <div class="modal-body"><p>会清掉这台设备上记录的站点进度、词卡、本领、贝壳和小岛摆设，无法撤销。年龄段和显示设置会保留。</p></div>
     <div class="modal-actions"><button class="btn btn-secondary" data-action="open-settings">先不清了</button>
     <button class="btn btn-primary" data-action="clear-progress-confirm">确认清空</button></div>`),
   'clear-progress-confirm': () => {

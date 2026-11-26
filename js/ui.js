@@ -45,6 +45,50 @@ function openRest() {
     <div class="modal-actions"><button class="btn btn-primary" data-action="close-modal">好，继续</button>
     <button class="btn btn-ghost" data-action="go-map">先到这里，回地图</button></div>`);
 }
+
+/* ---------------------------------------------------------------- 底栏的两个抽屉
+   1.2.0 把地图上原先那 9 张入口卡收进「工具」「我的」：底栏常驻，任何一屏一次点到，
+   不用先回地图、再往下滚三千像素。抽屉只是一份入口清单——
+   不新增任何状态、不写存档、不记录看过什么；点一行等于点原来那张卡
+   （sheet-go 先收抽屉再执行原动作，避免遮罩盖住新页面）。 */
+function sheetRow(to, name, desc, meta) {
+  return `<button class="sheet-row" data-action="sheet-go" data-to="${to}">
+    <span class="sheet-name">${esc(name)}</span>
+    <span class="sheet-desc">${esc(desc)}</span>
+    ${meta ? `<span class="sheet-meta">${esc(meta)}</span>` : ''}
+  </button>`;
+}
+function openToolsSheet() {
+  const rows = [
+    sheetRow('open-dictionary', '心理学词典', '按主题、词条类型或直接搜。', `${DICTIONARY.length} 条 · 本地搜索`),
+    sheetRow('open-selfhelp', '自助工具箱', '按此刻的状态，挑一张能马上用的卡。', `${SH_TOOLS.length} 张卡`),
+    sheetRow('open-slowvars', '慢变量', '健康、关系、三观这些长期底盘，慢一点看。', `${SV_VARS.length} 个变量`),
+    sheetRow('open-bottle', '漂流瓶', '抽一个问题，和自己聊一句；答案不保存。', `${BOTTLES.length} 个问题`)
+  ];
+  if (band().mindful) rows.push(sheetRow('open-retreat', '静修间', '按此刻的场景挑一个练习，不算时间，也不打卡。', `${MD_PRACTICES.length + RETREAT.length} 个练习`));
+  if (isAdultTrack() && WORK.length) rows.push(sheetRow('go-work', '工作间', `一个工作日的 ${WORK.length} 个时刻，支线不计进度。`,
+    (sideUnlocked(0) || WORK.some((w, i) => workReachable(i))) ? `${WORK.length} 个时刻 · 不加奖励` : `走完 ${WORK_GATE} 后开放`));
+  openModal(`<div class="modal-title">工具</div>
+    <div class="modal-body"><p class="muted">想查就查，不占进度，也不记录你看了什么。</p>
+      <div class="sheet-grid">${rows.join('')}</div></div>
+    <div class="modal-actions"><button class="btn btn-secondary" data-action="close-modal">收起</button></div>`);
+}
+function openMineSheet() {
+  const cards = LEVELS.map(l => l.card).filter(Boolean);
+  const skills = LEVELS.map(l => l.skill).filter(Boolean);
+  const gotCards = cards.filter(c => cardsInTrack().includes(c)).length;
+  const gotSkills = skills.filter(s => state.skills.includes(s)).length;
+  openModal(`<div class="modal-title">我的</div>
+    <div class="modal-body">
+      <p class="muted">${esc(band().name)} · 已走过 ${clearedInTrack()} / ${TOTAL} 站${hasShells() ? ` · 贝壳 ${state.shells}` : ''}</p>
+      <div class="sheet-grid">
+        ${sheetRow('open-codex', '词卡图鉴', '走过一站，留下一张可以回看的词卡。', `${gotCards} / ${cards.length} 张`)}
+        ${sheetRow('open-skills', '本领清单', '这一程练过的小本领，都收在这里。', `${gotSkills} / ${skills.length} 个`)}
+        ${sheetRow('goto-band', '换年龄段', '四档的题目、进度与词卡各自独立，换了不会丢。', '')}
+        ${sheetRow('open-settings', '显示、朗读与数据', '字号、动效、朗读，以及导出与清空。', '')}
+      </div></div>
+    <div class="modal-actions"><button class="btn btn-secondary" data-action="close-modal">收起</button></div>`);
+}
 /* ---------------------------------------------------------------- 导出 / 导入
    导出把 README §5 的存档字段原样装进 JSON，带独立的 exportVersion。
    导入的文件属于外部输入：先校验来源与结构，再让用户确认覆盖；
@@ -123,7 +167,7 @@ function validateImport(text) {
   /* 不论导出时是哪个结构版本，都走同一条 migrate()：白名单过滤 + 旧档补齐 */
   const next = migrate(raw);
   if (!hasProgress(next)) {
-    return { ok: false, code: 'empty', message: '这份文件里没有可以导入的进度（没有年龄段、关卡、词卡、本领或贝壳）。当前进度没有被改动。' };
+    return { ok: false, code: 'empty', message: '这份文件里没有可以导入的进度（没有年龄段、站点、词卡、本领或贝壳）。当前进度没有被改动。' };
   }
   return { ok: true, state: next, exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '', exportVersion: ev };
 }
@@ -150,7 +194,7 @@ function formatExportTime(iso) {
 
 function importSummaryHtml(s) {
   return `<p>${esc(s.band)}</p>
-    <p>儿童轨 ${s.kid} 站 · 成年轨 ${s.adult} 站</p>
+    <p>儿童 / 亲子轨 ${s.kid} 站 · 成年轨 ${s.adult} 站</p>
     <p>词卡 ${s.cards} 张 · 本领 ${s.skills} 个 · 贝壳 ${s.shells}</p>`;
 }
 
@@ -242,7 +286,7 @@ function openSettings() {
         <button class="${s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="1">开启朗读</button>
         <button class="${!s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="0">关闭</button>
         <button class="${s.autoSpeak ? 'on' : ''}" data-action="toggle-flag" data-k="autoSpeak" data-v="${s.autoSpeak ? 0 : 1}">进站自动读题目</button>
-      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时点关卡里的「读给我听」总是有效。</p></div>
+      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时在题目页点「读给我听」仍然有效。</p></div>
       <div class="setting-row"><strong>动效与对比</strong><div class="seg">
         <button class="${!s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="0">保留轻微动效</button>
         <button class="${s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="1">尽量减少动画</button>
@@ -287,7 +331,7 @@ function openSettings() {
 }
 function openCodex() {
   /* 图鉴在渲染层按「概念」分组：同一件事在两套站里可能叫不同的名字（如 情绪粒度 / 命名），
-     这里合并成 16 组并同时标出另一种叫法；state.cards 的键仍是原来的显示名，存档与 schema 不动。 */
+     这里合并成 20 组并同时标出另一种叫法；state.cards 的键仍是原来的显示名，存档与 schema 不动。 */
   const bag = cardsInTrack();
   const adult = isAdultTrack();
   const groups = GLOSSARY.map(g => {
@@ -326,7 +370,7 @@ function openBottle() {
   if (BOTTLES.length > 1 && i === lastBottle) i = (i + 1) % BOTTLES.length;
   lastBottle = i;
   const b = BOTTLES[i];
-  openModal(`<div class="modal-title">今日漂流瓶 · 一题就好</div>
+  openModal(`<div class="modal-title">漂流瓶 · 一题就好</div>
     <div class="modal-body"><p>${esc(b.q)}</p><p class="muted">不记进度、不打卡，选哪一个都会给一句回应。</p></div>
     <div class="opt-grid" style="margin-top:16px" id="bottle-opts">${b.opts.map((o, i) => optBtn(i, o, '', 'bottle-choose')).join('')}</div>
     <div id="bottle-feedback"></div>

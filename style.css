@@ -165,6 +165,9 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 .home-next-kicker { font-size: calc(.72rem * var(--scale)); letter-spacing: .12em; color: var(--accent); font-weight: 600; }
 .home-next b { font-size: calc(1rem * var(--scale)); font-weight: 600; }
 .home-next-meta { font-size: calc(.82rem * var(--scale)); color: var(--ink-3); line-height: 1.6; }
+/* 下一站信息与主按钮合在同一张卡里：同一个动作不再挂两处文案 */
+.home-next-card { gap: 14px; }
+.home-next-card .actions { margin: 0; }
 /* 首页的一小片海：太阳、岛脊、两道浪线，只做气氛，不承载信息 */
 .home-horizon {
     position: relative; height: 118px; margin: 0 0 8px;
@@ -1121,19 +1124,84 @@ html.high-contrast .sv-nav a { border-width: 2px; }
 .talk-card p { margin-top: 8px; font-size: calc(.98rem * var(--scale)); }
 .quote-picks { display: grid; gap: 8px; margin-top: 12px; }
 
+/* 长导语默认折起来：首屏先给搜索框和起步路径 */
+.lead-more { margin: 0 0 16px; }
+.lead-more summary {
+    cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+    font-size: calc(.84rem * var(--scale)); color: var(--ink-2);
+    border-bottom: 1px dashed var(--line-strong); padding-bottom: 2px; min-height: 32px;
+}
+.lead-more summary::-webkit-details-marker { display: none; }
+.lead-more summary::after { content: "＋"; color: var(--line-strong); }
+.lead-more[open] summary::after { content: "－"; }
+.lead-more p.lead { margin-top: 10px; }
+
+/* ---------- 底栏 ----------
+   四件事覆盖全部入口，任何一屏一次点到；顶栏只留「身份 + 档位 + 贝壳」。
+   用 sticky 而不是 fixed：短页面时它贴在卡片下沿（不会孤零零挂在视口底），
+   长页面时滚到哪都吸在视口底部。宽度自然等于 #app，不另算一遍。 */
+#tabbar {
+    position: sticky; bottom: 0; z-index: 11;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px; padding: 4px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface-2); border-top: 1px solid var(--line);
+    border-radius: 0 0 22px 22px;
+    box-shadow: 0 -12px 26px -24px rgba(24, 40, 34, .6);
+}
+#tabbar[hidden] { display: none; }
+.tab {
+    appearance: none; background: none; border: 0; border-radius: 12px;
+    min-height: 46px; padding: 6px 4px;
+    font-size: calc(.84rem * var(--scale)); letter-spacing: .04em;
+    color: var(--ink-3);
+    transition: background .15s ease, color .15s ease;
+}
+.tab:hover { color: var(--accent); background: var(--accent-soft); }
+.tab[aria-current="page"] { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+/* 急救那格用暖色，和最难受时需要的东西在一起 */
+.tab-help { color: var(--warm); }
+.tab-help:hover, .tab-help[aria-current="page"] { color: var(--warm); background: var(--warm-soft); }
+
+/* 抽屉里的入口清单：一行一件事，说明在名字下面 */
+.sheet-grid { display: grid; gap: 8px; margin-top: 12px; }
+.sheet-row {
+    display: grid; gap: 2px; text-align: left; width: 100%;
+    padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--surface);
+    transition: border-color .15s ease, background .15s ease;
+}
+.sheet-row:hover { border-color: var(--accent); background: var(--accent-soft); }
+/* 打开抽屉时焦点落在第一行上：把焦点环收进自己的边框里，
+   看起来像「当前这一行」，而不是一个盖住整块的大绿框 */
+.sheet-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 12px; }
+.sheet-name { font-size: calc(.98rem * var(--scale)); font-weight: 600; }
+.sheet-desc { font-size: calc(.82rem * var(--scale)); color: var(--ink-2); line-height: 1.55; }
+.sheet-meta { font-size: calc(.75rem * var(--scale)); color: var(--ink-3); }
+
 /* ---------- footer ---------- */
+/* 免责说明每屏都在，展开时占掉小屏五分之一：默认收起成一行，要看再展开。
+   文字一个都没删，只是不再挡住每一屏的第一眼。 */
 #disclaimer {
-    padding: 18px 28px 22px; border-top: 1px solid var(--line);
+    padding: 14px 28px 18px; border-top: 1px solid var(--line);
     background: var(--surface-2); color: var(--ink-3);
     font-size: calc(.8rem * var(--scale)); line-height: 1.7;
 }
+#disclaimer summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+    min-height: 32px;
+}
+#disclaimer summary::-webkit-details-marker { display: none; }
+#disclaimer summary::after { content: "＋"; color: var(--line-strong); }
+#disclaimer[open] summary::after { content: "－"; }
+#disclaimer summary:hover { color: var(--ink-2); }
+#disclaimer p { margin-top: 8px; max-width: 62ch; }
 #disclaimer strong { color: var(--ink-2); font-weight: 600; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 640px) {
     body { padding: 10px 6px 20px; }
-    /* 顶栏在手机上只留「身份 + 三个操作」：档位标签在各页正文里已经有了，
-       放回顶栏只会把一行挤成三行。 */
+    /* 顶栏在手机上只留「身份 + 档位 + 贝壳」：急救与设置已经搬到底栏，
+       腾出来的宽度正好放回档位标签——它现在只在这一处出现，点一下就能换档。 */
     #topbar { padding: 10px 14px 9px; gap: 8px; }
     .brand { min-width: 0; gap: 8px; }
     .brand-mark { width: 30px; height: 30px; }
@@ -1141,13 +1209,17 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     .brand-mark::after { bottom: 13px; }
     .brand h1 { font-size: calc(.95rem * var(--scale)); letter-spacing: .04em; }
     .brand-sub { display: none; }
-    #topbar .band-chip { display: none; }
+    #topbar .band-chip { display: inline-block; font-size: calc(.72rem * var(--scale)); padding: 4px 9px; }
+    /* display 声明会盖掉 UA 的 [hidden]，这里必须显式补回 */
+    #topbar .band-chip[hidden] { display: none; }
+    /* 窄屏只留档名：tag 一长，品牌名就被挤掉半个字 */
+    #topbar .band-tag { display: none; }
     .topbar-right { gap: 4px; flex: none; }
     .topbar-right .icon-btn { padding: 5px 8px; font-size: calc(.78rem * var(--scale)); }
     .shell-count { font-size: calc(.78rem * var(--scale)); padding: 5px 8px; }
     .progress-wrap { gap: 8px; margin-top: 2px; }
     #stage { padding: 22px 16px 26px; }
-    #disclaimer { padding: 16px 18px; }
+    #disclaimer { padding: 14px 18px 16px; }
     .home-grid { grid-template-columns: 1fr; gap: 18px; }
     .home-hero h2 { font-size: calc(1.66rem * var(--scale)); }
     .home-next { margin-top: 16px; padding: 12px 14px; }
@@ -1205,7 +1277,11 @@ html.high-contrast .sv-nav a { border-width: 2px; }
 .band-chip {
     font-size: calc(.8rem * var(--scale)); color: var(--accent); background: var(--accent-soft);
     border: 1px solid #c7e2da; border-radius: 99px; padding: 4px 12px;
+    /* 它现在是按钮（点一下换年龄段），要脱掉浏览器默认样式 */
+    appearance: none; font-family: inherit; line-height: 1.5; cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
 }
+button.band-chip:hover { border-color: var(--accent); background: #d8ebe3; }
 .btn-read {
     background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2);
     border-radius: 10px; padding: 7px 12px; font-size: calc(.82rem * var(--scale)); min-height: 38px;
@@ -1907,15 +1983,23 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
     position: relative; border-radius: 6px;
 }
 .seg-isl.is-finale { flex: 1 0 44px; }
+/* 条里写岛号：0 进度时六根空灰条没有任何信息，用户看不出这是「五座岛 + 终章」的进度 */
 .seg-isl::before {
-    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 9px;
-    transform: translateY(-50%); border-radius: 3px;
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 15px;
+    transform: translateY(-50%); border-radius: 4px;
     border: 1px solid #d8ded6; background: #eef1ec;
 }
 .seg-fill {
-    position: absolute; left: 0; top: 50%; height: 9px; transform: translateY(-50%);
-    border-radius: 3px; background: var(--accent); pointer-events: none;
+    position: absolute; left: 0; top: 50%; height: 15px; transform: translateY(-50%);
+    border-radius: 4px; background: var(--accent); pointer-events: none;
 }
+.seg-n {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: calc(.66rem * var(--scale)); line-height: 1; letter-spacing: 0;
+    color: var(--ink-3); pointer-events: none;
+}
+.seg-isl.done .seg-n { color: #fff; }
+.seg-isl.part .seg-n { color: var(--accent); }
 .seg-isl.current::before { border: 2px solid var(--accent); background: var(--surface); }
 .seg-isl.done::before { border-color: var(--accent); }
 .seg-isl:disabled { opacity: .5; }
@@ -1924,6 +2008,8 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 html[data-band="a3"] .seg-isl { height: 40px; }
 :root[data-theme="dark"]:not(.high-contrast) .seg-isl::before { background: #34463e; border-color: #4a5e54; }
 :root[data-theme="dark"]:not(.high-contrast) .seg-isl.current::before { background: var(--surface); border-color: var(--accent); }
+/* 深色下 --accent 是浅绿，走完那段要反过来用深字 */
+:root[data-theme="dark"]:not(.high-contrast) .seg-isl.done .seg-n { color: #141b19; }
 @media (forced-colors: active) {
     .seg-isl::before { border: 1px solid CanvasText; background: Canvas; }
     .seg-fill { background: Highlight; forced-color-adjust: none; }

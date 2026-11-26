@@ -62,7 +62,7 @@ function conceptStartPanel(title, sub, ids, action, collapsed) {
       <span>${esc(conceptRequires(g).map(r => conceptName(r)).join('、') || '起点')}</span>
       <em>${tlv ? `教在第 ${tlv.num} 站` : ''}${uses ? `　·　${uses}` : ''}</em></button>`;
   }).join('');
-  /* 词典的 16 张概念卡曾把首屏占满，真正的 162 条词条被推到一屏之外：
+  /* 词典的 20 张概念卡曾把首屏占满，真正的 162 个词条被推到一屏之外：
      词典默认收起成一行的入口，工具箱 / 慢变量仍按原样平铺。 */
   if (collapsed) {
     return `<details class="concept-start concept-start-folded" aria-label="${esc(title)}">
@@ -82,7 +82,7 @@ function renderLibraryView(cfg) {
   session.view = cfg.view; session.navDir = 'forward';
   if (!cfg.ready()) {
     stage.innerHTML = `<div class="${viewClass()}">
-      <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+      <div class="toolbar"><button class="btn-read" data-action="go-map">回到地图</button></div>
       <h2>${esc(cfg.missingTitle)}</h2>
       <p class="lead">${esc(cfg.missingLead)}</p>
     </div>`;
@@ -119,10 +119,14 @@ function renderLibraryView(cfg) {
     </section>`
     : catalog;
   stage.innerHTML = `<div class="${viewClass()}">
-    <div class="toolbar">${bandChip()}<button class="btn-read" data-action="go-map">回到地图</button></div>
+    <!-- 回地图交给底栏「上岛」；长列表底部另有一个 .module-foot 出口，这里不再占一行 -->
     <span class="eyebrow">${esc(cfg.eyebrow)}</span>
     <h2 style="margin:12px 0 10px">${esc(cfg.title)}</h2>
-    <p class="lead">${esc(cfg.lead)}</p>
+    ${cfg.lead
+      ? (cfg.leadCollapsed
+        ? `<details class="lead-more"><summary>这一页怎么用</summary><p class="lead">${esc(cfg.lead)}</p></details>`
+        : `<p class="lead">${esc(cfg.lead)}</p>`)
+      : ''}
     ${cfg.notice ? `<p class="notice">${esc(cfg.notice)}</p>` : ''}
     ${cfg.nav || ''}
     ${cfg.safety ? `<div class="retreat-safety">${esc(cfg.safety)}</div>` : ''}
@@ -229,8 +233,8 @@ const DICT_START_PATH = [
 ];
 function dictStartPathHtml() {
   return `<section class="dict-start-path" aria-label="五分钟起步路径">
-    <h3 class="sh-section-title">第一次来？按这 ${DICT_START_PATH.length} 条读</h3>
-    <p class="muted sh-section-sub">从「这门学科在说什么」走到「带着不舒服也能往前」。点一条直接展开它，不用从头翻 ${DICTIONARY.length} 条。</p>
+    <h3 class="sh-section-title">第一次来？先读这 ${DICT_START_PATH.length} 条</h3>
+    <p class="muted sh-section-sub">从「这门学科在说什么」走到「带着不舒服也能往前」。点一条就直接展开，不用从头翻 ${DICTIONARY.length} 条。</p>
     <ol class="dict-path-list">
       ${DICT_START_PATH.map((x, i) => `<li><button class="dict-path-btn" data-action="dict-jump" data-t="${esc(x.t)}" title="${esc(x.why)}"><span class="dict-path-num">${i + 1}</span><b>${esc(x.t)}</b></button></li>`).join('')}
     </ol>
@@ -248,7 +252,7 @@ function syncDictSelection() {
   document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
   const desc = document.getElementById('dict-kind-desc');
   if (desc) desc.textContent = dictKind === 'all'
-    ? '类型和主题可以叠着筛；也可以直接搜。'
+    ? '词条类型和主题可以叠着筛；也可以直接搜。'
     : (DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '';
   const reset = document.getElementById('dict-reset');
   if (reset) reset.hidden = !dictFiltersActive();
@@ -265,16 +269,19 @@ function dictCountText(n) {
 function dictView() {
   const clusterMap = dictClusterMap();
   const kindDesc = dictKind === 'all'
-    ? '类型和主题可以叠着筛；也可以直接搜。'
+    ? '词条类型和主题可以叠着筛；也可以直接搜。'
     : ((DICT_KINDS.find(k => k.id === dictKind) || {}).desc || '');
   return {
     view: 'dict',
     ready: () => DICTIONARY.length > 0 && DICT_CATS.length > 0 && DICT_KINDS.length > 0,
     missingTitle: '词典内容没有加载出来',
     missingLead: '检查 index.html 是否在 library.js 之后、js/core.js 之前引入 content/dictionary.js。打开浏览器控制台可以看到具体是哪个文件 404。',
-    eyebrow: `心理学词典 · ${DICTIONARY.length} 条 · ${DICT_GROUPS.length} 组 · ${DICT_CATS.length} 个主题`,
+    eyebrow: `心理学词典 · ${DICTIONARY.length} 个词条 · ${DICT_GROUPS.length} 组 · ${DICT_CATS.length} 个主题`,
     title: '把常用的心理学词，说清楚一点',
-    lead: `按「先看见自己的状态 → 再理解心智怎么运作 → 从自己走向他人 → 数字时代与证据素养」四组排。每组、每个主题都有一句导语，长主题再切成几个概念簇；也可以直接搜，或按主题 / 概念类型叠加筛选。只做科普，不提供诊断或个体化建议。`,
+    /* 四行导语默认摊在第一屏，把搜索框和起步路径都挤到第二屏；
+       收进折行后，首屏先给「搜什么、从哪读」。 */
+    leadCollapsed: true,
+    lead: `按「先看见自己的状态 → 再理解心智怎么运作 → 从自己走向他人 → 数字时代与证据素养」四组排列。每组、每个主题都有一句导语，长主题再切成几个概念簇；也可以直接搜，或按主题 / 词条类型叠加筛选。只做科普，不提供诊断或个体化建议。`,
     nav: `<details class="dict-index">
       <summary>按组浏览 · ${DICT_GROUPS.length} 组 · 从「我此刻怎么了」开始</summary>
       <nav class="dict-nav" aria-label="本页目录">
@@ -284,7 +291,7 @@ function dictView() {
     search: `<div class="dict-controls">
       <label class="dict-search" for="dict-search">
         <span class="visually-hidden">搜索词条</span>
-        <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜名词、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
+        <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜词条、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
       </label>
     </div>`,
     prelude: `${dictStartPathHtml()}
@@ -295,8 +302,8 @@ function dictView() {
       'dict-concept',
       true
     )}
-    <section class="dict-start" aria-label="按概念类型筛选">
-      <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按概念类型筛选">
+    <section class="dict-start" aria-label="按词条类型筛选">
+      <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按词条类型筛选">
         <button class="dict-kind-btn ${dictKind === 'all' ? 'on' : ''}" data-action="dict-kind" data-k="all" aria-pressed="${dictKind === 'all'}">全部<span>${DICTIONARY.length}</span></button>
         ${DICT_KINDS.map(k => `<button class="dict-kind-btn ${dictKind === k.id ? 'on' : ''}" data-action="dict-kind" data-k="${esc(k.id)}" aria-pressed="${dictKind === k.id}" title="${esc(k.desc)}"><b>${esc(k.name)}</b><span>${dictCountBy(d => d.k === k.id)}</span></button>`).join('')}
       </div>
@@ -331,7 +338,7 @@ function dictView() {
       const hay = [d.t, d.e, d.c, dictKindName(d.k), d.s, d.d, d.m || ''].join(' ').toLowerCase();
       /* 词条若挂到概念层，就在卡头标出概念名；不改变词条内容，只是多一条回链。 */
       const cc = conceptOfDict(d.t);
-      const conceptBadge = cc ? `<span class="dict-concept-badge">概念 · ${esc(conceptName(cc))}</span>` : '';
+      const conceptBadge = cc ? `<span class="dict-concept-badge">共用概念 · ${esc(conceptName(cc))}</span>` : '';
       const cl = clusterMap.get(d.t);
       return `<details class="dict-card" data-term="${esc(d.t)}" data-cat="${esc(d.c)}" data-kind="${esc(d.k)}"${cl ? ` data-cluster="${esc(cl.id)}"` : ''} data-search="${esc(hay)}">
         <summary>
@@ -369,7 +376,7 @@ function dictView() {
     active: dictFiltersActive, countText: dictCountText, syncSelection: syncDictSelection,
     countId: 'dict-count', unit: '条', idleHint: ' · 点卡片展开释义',
     emptyId: 'dict-empty', emptyText: '没有匹配的词条。换个关键词，或点「清空筛选」看看。',
-    note: '词条按成人阅读深度编写；和孩子一起看时，挑他问到的那个就好。同一概念簇里的词按「先懂什么、再看什么」排，带小箭头的「接着看」会跳到别的主题。有争议的地方会写明边界，不把“研究平均”说成“对每个人都适用”。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
+    note: '词条按成人阅读深度编写；和孩子一起看时，挑孩子问到的那个就好。同一概念簇里的词按「先懂什么、再看什么」排；「接着看」会跳到别的主题，带箭头表示跨主题。有争议的地方会写明边界，不把研究中的平均效应说成对每个人都适用。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
   };
 }
 function renderDictionary() { renderLibraryView(dictView()); }
