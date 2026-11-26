@@ -88,6 +88,9 @@ function renderLibraryView(cfg) {
     </div>`;
     updateTopbar();
     resetViewScroll();
+    /* 未解锁时也是一次整屏换页：标题与播报照样要跟着走，
+       否则从词典切到「还没解锁」的自助工具箱，读屏还停在上一页。 */
+    afterViewEnter(cfg.view);
     return;
   }
   const cats = [...new Set(cfg.items.map(cfg.catOf))];
@@ -106,9 +109,9 @@ function renderLibraryView(cfg) {
   }).join('');
   const catalog = `
     <div class="${cfg.catsClass}" id="${cfg.catsId}" role="group" aria-label="${esc(cfg.catsLabel)}">
-      ${catBtns.map(x => `<button class="dict-cat ${cfg.currentCat() === x.c ? 'on' : ''}" data-action="${cfg.catsAction}" data-c="${esc(x.c)}">${cfg.catNameHtml ? cfg.catNameHtml(x.c) : esc(x.name)}</button>`).join('')}
+      ${catBtns.map(x => `<button class="dict-cat ${cfg.currentCat() === x.c ? 'on' : ''}" data-action="${cfg.catsAction}" data-c="${esc(x.c)}" aria-pressed="${cfg.currentCat() === x.c}">${cfg.catNameHtml ? cfg.catNameHtml(x.c) : esc(x.name)}</button>`).join('')}
     </div>
-    <p class="dict-count muted" id="${cfg.countId}" aria-live="polite">${cfg.items.length} ${cfg.unit}${cfg.idleHint}</p>
+    ${cfg.countAtTop ? '' : `<p class="dict-count muted" id="${cfg.countId}" aria-live="polite">${cfg.items.length} ${cfg.unit}${cfg.idleHint}</p>`}
     <div class="${['dict-grid', cfg.gridClass].filter(Boolean).join(' ')}" id="${cfg.gridId}">${cards}</div>
     <p class="dict-empty" id="${cfg.emptyId}" hidden>${esc(cfg.emptyText)}</p>`;
   const catalogBlock = cfg.sectionClass
@@ -140,7 +143,7 @@ function renderLibraryView(cfg) {
   updateTopbar();
   resetViewScroll();
   applyLibraryFilter(cfg);
-  stage.focus({ preventScroll: true });
+  afterViewEnter(cfg.view);
 }
 
 function applyLibraryFilter(cfg) {
@@ -194,6 +197,8 @@ function applyLibraryFilter(cfg) {
   const empty = document.getElementById(cfg.emptyId);
   if (empty) empty.hidden = n !== 0;
   if (cfg.syncSelection) cfg.syncSelection();
+  /* 各库的收尾动作（词典用它把「起步路径」在 0 结果时收起）。 */
+  if (cfg.afterFilter) cfg.afterFilter(n, !!active);
 }
 
 /* ---------------------------------------------------------------- 心理学词典
@@ -249,7 +254,7 @@ function syncDictSelection() {
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
-  document.querySelectorAll('#dict-cats .dict-cat').forEach(b => b.classList.toggle('on', b.dataset.c === dictCat));
+  document.querySelectorAll('#dict-cats .dict-cat').forEach(b => markPressed(b, b.dataset.c === dictCat, 'on'));
   const desc = document.getElementById('dict-kind-desc');
   if (desc) desc.textContent = dictKind === 'all'
     ? '词条类型和主题可以叠着筛；也可以直接搜。'
@@ -262,8 +267,10 @@ function dictCountText(n) {
   if (dictCat !== 'all') parts.push(dictCat);
   if (dictKind !== 'all') parts.push(dictKindName(dictKind));
   if (dictQuery.trim()) parts.push(`「${dictQuery.trim()}」`);
+  /* 1.2.1：先说「找到几条」，再说筛了什么。原来的「筛出 7 / 162 条」把两个数并列，
+     用户要自己算；而且这行在筛选器下方，搜不到时第一屏根本看不见。 */
   return parts.length
-    ? `筛出 ${n} / ${DICTIONARY.length} 条 · ${parts.join(' + ')}`
+    ? `找到 ${n} 条 · ${parts.join(' + ')}`
     : `${DICTIONARY.length} 条 · 点卡片展开释义，底部可以接着看相关词条`;
 }
 function dictView() {
@@ -288,27 +295,34 @@ function dictView() {
         ${DICT_GROUPS.map((g, i) => `<a class="dict-nav-group" href="#dict-group-${esc(g.id)}"><b>第 ${i + 1} 组 · ${esc(g.name)}</b><em>${esc(g.desc)}</em><span>${(g.cats || []).reduce((s, c) => s + dictCountBy(d => d.c === c), 0)} 条</span></a>`).join('')}
       </nav>
     </details>`,
+    /* 计数与「清空筛选」紧贴搜索框：搜不到时这两样必须在第一屏，
+       1.2.0 把它们放在筛选器下方，0 结果时用户看不到任何反馈。 */
     search: `<div class="dict-controls">
       <label class="dict-search" for="dict-search">
         <span class="visually-hidden">搜索词条</span>
         <input id="dict-search" type="search" autocomplete="off" aria-controls="dict-grid" aria-describedby="dict-count" placeholder="搜词条、英文或释义，例如：依恋、FoMO" value="${esc(dictQuery)}">
       </label>
+      <div class="dict-status-row">
+        <p class="dict-count" id="dict-count" aria-live="polite">${esc(dictCountText(DICTIONARY.length))}</p>
+        <button class="btn-read dict-reset" id="dict-reset" data-action="dict-reset"${dictFiltersActive() ? '' : ' hidden'}>清空筛选</button>
+      </div>
     </div>`,
-    prelude: `${dictStartPathHtml()}
+    /* 「第一次来？先读这 5 条」与「按概念读」包一层：0 结果时整块收起，
+       让空状态成为第一屏唯一的内容。类型筛选不收起——用户要靠它把结果找回来。 */
+    prelude: `<div id="dict-paths">${dictStartPathHtml()}
     ${conceptStartPanel(
       '按概念读',
       `${GLOSSARY.length} 个概念是站点、工具卡、词典共用的一套叫法。点一个，直接跳到它对应的已有词条；小字是它先依赖的概念。`,
       GLOSSARY.map(g => g.id),
       'dict-concept',
       true
-    )}
+    )}</div>
     <section class="dict-start" aria-label="按词条类型筛选">
       <div class="dict-kinds" id="dict-kinds" role="group" aria-label="按词条类型筛选">
         <button class="dict-kind-btn ${dictKind === 'all' ? 'on' : ''}" data-action="dict-kind" data-k="all" aria-pressed="${dictKind === 'all'}">全部<span>${DICTIONARY.length}</span></button>
         ${DICT_KINDS.map(k => `<button class="dict-kind-btn ${dictKind === k.id ? 'on' : ''}" data-action="dict-kind" data-k="${esc(k.id)}" aria-pressed="${dictKind === k.id}" title="${esc(k.desc)}"><b>${esc(k.name)}</b><span>${dictCountBy(d => d.k === k.id)}</span></button>`).join('')}
       </div>
       <p class="dict-kind-desc" id="dict-kind-desc">${esc(kindDesc)}</p>
-      <button class="btn-read dict-reset" id="dict-reset" data-action="dict-reset"${dictFiltersActive() ? '' : ' hidden'}>清空筛选</button>
     </section>`,
     items: DICTIONARY,
     catOf: d => d.c,
@@ -370,12 +384,17 @@ function dictView() {
         <span>${esc(cl.name)}</span><span class="dict-cluster-count">${cl.count} 条</span>
       </h4>`;
     },
+    countAtTop: true,
+    afterFilter(n, active) {
+      const paths = document.getElementById('dict-paths');
+      if (paths) paths.hidden = active && n === 0;
+    },
     gridId: 'dict-grid', gridClass: '', cardClass: 'dict-card',
     catsId: 'dict-cats', catsClass: 'dict-cats', catsLabel: '按主题筛选', catsAction: 'dict-cat',
     currentCat: () => dictCat, query: () => dictQuery, queryKind: () => dictKind,
     active: dictFiltersActive, countText: dictCountText, syncSelection: syncDictSelection,
     countId: 'dict-count', unit: '条', idleHint: ' · 点卡片展开释义',
-    emptyId: 'dict-empty', emptyText: '没有匹配的词条。换个关键词，或点「清空筛选」看看。',
+    emptyId: 'dict-empty', emptyText: '没有找到匹配的词条。换个更短的关键词，或点搜索框下面的「清空筛选」。',
     note: '词条按成人阅读深度编写；和孩子一起看时，挑孩子问到的那个就好。同一概念簇里的词按「先懂什么、再看什么」排；「接着看」会跳到别的主题，带箭头表示跨主题。有争议的地方会写明边界，不把研究中的平均效应说成对每个人都适用。搜索与筛选只在当前页面内生效，不保存、不上传，返回地图也会清掉。'
   };
 }

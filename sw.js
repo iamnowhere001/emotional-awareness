@@ -22,7 +22,7 @@
 
    1.0.0 起无新增缓存逻辑，只随发版推进版本：缓存名随 VERSION 变化（现为 mood-island-1.2.0），
    旧缓存（含 0.19.0 及更早）在 activate 阶段被清掉。 */
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const CACHE = `mood-island-${VERSION}`;
 const ASSETS = [
   './index.html',

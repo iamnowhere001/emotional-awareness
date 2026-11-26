@@ -2,7 +2,7 @@
 
 > 一起认出心里的天气。按年龄分级的情绪启蒙小游戏：**纯前端 · 零依赖 · 不联网 · 不打分 · 不采集心情文本**。
 >
-> 当前版本 **1.2.0**（2026-11-26：导航收口——底栏四项 + 工具 / 我的两个抽屉，删掉同屏重复的档位、急救与入口卡；1.0.0 发布证据见 [docs/release-1.0.0.md](docs/release-1.0.0.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
+> 当前版本 **1.2.1**（2026-11-26：1.2.0 审查后的收口修复——通关完成态、终章落进度、路由播报与标题、首次选档文案；1.2.0 的导航收口见 [CHANGELOG.md](CHANGELOG.md)，1.0.0 发布证据见 [docs/release-1.0.0.md](docs/release-1.0.0.md)）｜后续安排见 [ROADMAP.md](ROADMAP.md)
 
 这不是心理测评，也不能代替专业帮助。它做的事只有一件：把模糊的感觉看得更清楚一点，再带走一个用得上的小工具。
 
@@ -108,8 +108,11 @@
 │   ├── lint-content.mjs          # 内容自检（用 vm 按加载顺序执行 content/*.js）
 │   ├── js-files.mjs              # 逻辑脚本清单（加载顺序的单一来源）
 │   ├── check-syntax.mjs          # 逐个 + 拼接解析 js/*.js，抓跨文件重复顶层声明
+│   ├── check-size.mjs            # 首屏体积预算：raw / gzip / brotli 各比一次上限
+│   ├── minify.mjs                # 极保守压缩：只删注释与缩进，不改标识符、不动换行
+│   ├── build.mjs                 # 产出 dist/（上线用；根目录仍是可直接双击的源码）
 │   ├── regression.mjs            # 无头 Chrome 浏览器回归（注入测试页，不改源文件）
-│   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用
+│   └── serve.mjs                 # 零依赖静态服务，导出 createStaticServer() 供回归复用；文本资源现压 br / gzip
 ├── tests/
 │   └── browser-tests.js          # 浏览器回归用例（数量以 npm run doctor 输出为准），由 regression.mjs 注入 390×900 iframe
 ├── docs/
@@ -117,7 +120,7 @@
 │   ├── release-1.0.0.md          # 1.0.0 发布记录：六条门槛证据 + §5.3 清单
 │   ├── crisis-review-1.0.0.md    # 危机号码与服务范围复核记录
 │   └── archive/                  # 历史审核与验收快照（含 audit-0.19.0.html）
-├── package.json                  # check / lint / doctor / serve / test:e2e / verify
+├── package.json                  # check / lint / size / doctor / serve / build / test:e2e / verify
 ├── .gitignore
 ├── README.md  CHANGELOG.md  ROADMAP.md
 ```
@@ -163,12 +166,15 @@
 | --- | --- |
 | 当前键 | `mood-island-v5` |
 | 旧键 | `mood-island-v4`（0.10.0 及更早）、`mood-island-v3`（0.7.0 及更早）、`mood-island-v2`（读到后自动迁移；正常升级时**旧键保留**以便回退，「清空本机进度」会连旧键一起删除） |
+| 坏档留底 | `mood-island-v5-corrupt`：四个键都解析不出来时，把原始字符串连同原键名与时间戳存到这里，首屏提示一次；留底后删掉坏键，避免每次打开都重报。「清空本机进度」也会删它 |
 | schema 版本 | `SCHEMA_VERSION = 5` |
 | 字段 | `version, band, cleared, awarded, cards{kid[],adult[]}, skills, shells, decor, seen{关id:[组合键]}, sideCleared[], settings{scale, motion, speak, speakTouched, autoSpeak, contrast}` |
 | id 改名 | `ID_REMAP = { '3-5': 'finale' }`，旧终章进度不会丢 |
 | 档位改名 | `BAND_REMAP = { 'a9': 'a6' }`，6-9 与 9-12 合并后旧档 / 旧导出 JSON 里的 `a9` 落到 `a6`；其余字段一字不动，`SCALE_VALUES` 显式保留老档可能设过的 `1.06` |
 
 `load()` → `readRaw()`（v5 优先，v5 损坏或不存在时依次回退 v4 / v3 / v2）→ `migrate()`。**以后加任何字段，都在 `migrate()` 里补一段白名单式默认值**，不要直接改 `DEFAULT_STATE` 就完事，否则老用户进度可能被静默重置。`migrate()` 还会逐项清掉无效数据：未知关卡 id、重复的 `cleared / awarded`、内容里已不存在的词卡与本领、越界或重复的 `decor` 下标、负数或小数的 `shells`、不在允许档位里的 `settings.scale`、不存在的拼装组合键、越界的支线 id；其余字段不受影响，所以旧档和现有 v5 档都不会被整体重置。
+
+**全坏时不再静默归零**：四个键都存在但都解析不出来时，`readRaw()` 记下原始字符串，`load()` 把它搬到 `mood-island-v5-corrupt` 并在首屏顶部提示一次——「读不出来 / 原始内容没有删掉 / 可以去设置里导入」。坏键在留底后删除，否则每次打开都会重新判一次坏档、再弹一次提示。
 
 **v4 → v5 只加两个字段**：`seen`（拼装题已出现过的组合键，按关分桶，每关最多 8 条，超出丢最旧）与 `sideCleared`（成年「工作间」支线完成记录，白名单只认 `W-1…W-4`）。主线 `cleared / awarded / cards / skills / shells / decor` 的迁移路径一字未改；`sideCleared` 不计入 21 站、不加贝壳 / 词卡 / 本领，也不参与终章解锁。`seen` 不是可见进度，界面上不显示任何组合计数；`restart-all` 不清它，「清空本机进度」才删。
 
@@ -209,12 +215,29 @@
 | --- | --- |
 | `npm run check` | `node scripts/check-syntax.mjs`：逐个 + 拼接解析 `js/*.js`，顺带拦跨文件重复顶层声明 |
 | `npm run lint` | 内容自检，不引依赖、不启浏览器 |
+| `npm run size` | 首屏体积预算：把 index.html 引用的全部脚本 + 样式 + manifest 加总，raw / gzip / brotli 各比一次预算 |
 | `npm run doctor` | `node scripts/check-consistency.mjs`：跨文档与加载顺序一致性自检，以它的输出为准 |
-| `npm run serve [端口]` | 本地静态服务，默认 5173；传参写 `npm run serve -- 8080` |
+| `npm run serve [端口]` | 本地静态服务，默认 5173；传参写 `npm run serve -- 8080`。文本资源按 `Accept-Encoding` 现做 br / gzip |
+| `npm run build` | `node scripts/build.mjs`：产出 `dist/`（只压 JS / CSS，路径与清单不变），上线用这份 |
 | `npm run test:e2e` | 无头 Chrome 回归（浏览器用例 + 源码检查，数量以 `npm run doctor` 输出为准；跑在真 390×900 iframe 里），约 1.5 秒 |
-| `npm run verify` | check + lint + doctor + test:e2e，**每次提交前至少跑这个** |
+| `npm run test:e2e:dist` | 先 `build`，再把**同一套用例**跑在 `dist/` 上：压缩器是否等价，由这一步证明 |
+| `npm run verify` | check + lint + size + doctor + test:e2e，**每次提交前至少跑这个** |
 
 `test:e2e` 需要本机 Chrome / Chromium（找不到时设 `CHROME_PATH`）；命令细节与排错见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) §4。
+
+### 6.1 上线与压缩
+
+`file://` 双击仍然直接用根目录的源码，不需要任何构建。上线时：
+
+1. **托管方必须开 Brotli 或 gzip**。GitHub Pages / Netlify / Vercel / Cloudflare Pages 默认就开；自建 nginx 加一行
+   `gzip on; gzip_types text/css application/javascript application/json image/svg+xml;`。
+   不开压缩时 39 个请求约 692 KB，弱网首开 14 秒级；开了之后约 208 KB。
+2. 想要再省 10%：`npm run build` 后用 `dist/` 部署。`dist/` 是同一套文件、同样的相对路径，
+   只是 JS / CSS 去掉了注释与缩进（`scripts/minify.mjs`，不改标识符、不动换行）。
+3. 改完压缩器或内容之后，`npm run test:e2e:dist` 必须仍然全绿——那是「压缩后行为不变」的唯一证据。
+4. 首屏还有骨架屏（`index.html` 里的 `.stage-skeleton`）：脚本没下载完时先给一块形状，不至于对着空白等。
+
+体积增长由 `npm run size` 把关：预算写死在 `scripts/check-size.mjs`，超了要么瘦身，要么改预算并在 CHANGELOG 说明理由。
 
 ---
 
@@ -233,16 +256,17 @@
 
 ## 8. 键盘与无障碍
 
-- 选项左侧徽标是 **1 / 2 / 3…**，直接对应数字键。`1`–`9` 覆盖所有使用 `.opt` 的选择题（线索单选、换视角 `reframe`、终章金句、静修「第一反应」）以及漂流瓶弹窗里的选项；梯子的档位号也能按。天气、配对、滑杆、排序、拼句、记忆牌没有数字键，仍用 Tab / 点击。线索卡的「线索 N」编号与答案序号冲突，**数字键一律选答案**，翻线索卡用 Tab + Enter。
+- 选项左侧徽标是 **1 / 2 / 3…**，直接对应数字键。`1`–`9` 覆盖所有使用 `.opt` 的选择题（线索单选、换视角 `reframe`、终章金句、静修「第一反应」）以及漂流瓶弹窗里的选项；梯子的档位号也能按。天气、配对、滑杆、排序、拼句、记忆牌没有数字键，仍用 Tab / 点击。线索卡的「线索 N」编号与答案序号冲突，**数字键一律选答案**，翻线索卡用 Tab + Enter。带数字徽标的题型会在选项下方显示一行「也可以用键盘：按 1–4 选答案，Tab 切换，Esc 回地图」，范围按实际徽标数量生成；触屏设备（`hover: none` + `pointer: coarse`）自动隐藏。
 - `Esc` 关弹窗 / 回地图，`←` `→` 在已解锁的站之间切换（仅关卡视图）。地址栏的 `#/…` 只是当前屏的同步结果，不参与 Esc / 返回的判断。
 - 心理学词典的卡片用原生 `details / summary`：Tab 可聚焦，Enter / 空格展开；搜索框可输入，分类按钮、类型按钮与「接着看」都是普通按钮，类型按钮带 `aria-pressed`，`Esc` 回地图。词典另有 3 项大组页内目录锚点，点关联词条跳转后焦点落到目标卡片的 `summary`；分区标题是 `<h3>`，筛空时随卡片一起隐藏。自助工具箱与慢变量同样用 `details / summary`，状态、变量与分类都是普通按钮，`Esc` 回地图。慢变量另有 4 项页内目录锚点；变量 / 状态面板带局部 `aria-live="polite"`，只切分类时不会重复播报说明。
 - 静修间的场景按钮带 `aria-pressed`，步骤点只是装饰、不进朗读；练习页每次只显示一步，不用整页 `aria-live` 播报，避免打断用户自己的节奏。
 - 弹窗的 `role="dialog"` 用 `aria-labelledby` 指向实际标题元素（没有标题才退回 `aria-label="对话框"`）；焦点进入弹窗、关闭后归还，Tab 焦点陷阱；`#overlay` 本身不再挂 `aria-live`，避免整个弹窗被重复播报。反馈区与记忆牌进度、贝壳数仍用局部 `aria-live="polite"`。
-- 顶栏进度按岛分段（每岛一段 + 终章一段，每段不小于 44×30），段内直接写岛号 / 「终」，0 进度时也读得懂；只给当前所在的那一段标 `aria-current="step"`，每段读出「走过几站、共几站」；记忆牌按「未翻开 / 已翻开 / 已配对」给出 `aria-label`；词典、自助、慢变量的英文词条都标 `lang="en"`，避免中文语音引擎误读。
+- 顶栏进度按岛分段（每岛一段 + 终章一段，每段按钮盒 44×44；320px 上宽度收到 41px，仍高于 40px 下限），段内直接写岛号 / 「终」，0 进度时也读得懂；只给当前所在的那一段标 `aria-current="step"`，每段读出「走过几站、共几站」；记忆牌按「未翻开 / 已翻开 / 已配对」给出 `aria-label`；词典、自助、慢变量的英文词条都标 `lang="en"`，避免中文语音引擎误读。
 - 隐私写入失败提示带 `role="status"`。
 - 字号三档、减少动画开关、高对比模式；`3-6 岁` 档自动放大按钮与点击目标。
-- 进度格视觉是 9px 细条，但按钮盒撑到 30px（3-6 档 40px），保证触摸目标。
+- **触控目标基线 44×44**：进度段、档位 chip、词典三组 chip、慢变量目录、关卡工具栏、「想多想一步？」、弹窗关闭键、可折叠标题与滑杆都在这个基线上；行内文字链接靠上下内边距撑热区（行内元素的上内边距不进行盒，正文行距不变）。回归用例会在 320px 下把整页可点元素扫一遍，低于 44×40 直接判红。
 - **导航只有两处**：顶栏（品牌 + 档位 chip【点它换年龄段】+ 贝壳）与底栏（上岛 / 很难受 / 工具 / 我的）。同一件事只在一个地方出现一次——档位、急救、工具入口都不在页面正文里重复；底栏用 `sticky`，短页面贴在卡片下沿、长页面吸在视口底部。词卡图鉴、本领清单、慢变量、静修间、工作间都收在「工具」「我的」两个抽屉里，从词典去工具箱不必先回地图。
+- **窄屏顶栏固定两行**：第一行品牌 + 档位 chip + 贝壳，第二行段条 + 进度。320px 上顶栏 109px、加底栏占视口 26%（1.2.0 是 160px / 34%）。宽度不够时档位 chip 只留数字段（`3-6` / `6-12` / `亲子` / `成年`），进度文字换成 `0/21` 短式，整句仍留在 DOM 里给读屏。
 - **急救入口在所有屏都够得到**：底栏吸底常驻；弹窗遮罩会盖住底栏，所以每个弹窗内另有一个「先缓一缓」直达出口。整屏重建统一回到页面顶部，但从急救返回已通关的关卡时保留结果卡位置。
 - **结果卡按当前题的深度分级**：3-6 档、以及 6-12 岁档的基础层默认只见一句话、收集与下一步，机制 / 规格 / 生活迁移折进「给大人看」；切到「多想一步」或亲子 / 成年档保持完整六行。首站天气主按钮默认可用，不选也能一次点走。词典「按概念读」的 16 张卡默认收起，不再挤掉首屏。
 - 跟随系统 `prefers-color-scheme` 切换深浅色，只换一层 CSS 变量，不新增设置项、不写存档、不联网；高对比模式优先级更高，两套覆盖不叠加。

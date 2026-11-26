@@ -117,6 +117,28 @@ button:disabled { cursor: default; }
 .view { animation: rise .32s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
+/* 首屏骨架：脚本下载期间先给出「正在准备」的形状，别让人对着空白等十几秒。
+   第一次整屏渲染会把它整块替换掉，所以这里不需要任何清理逻辑。 */
+.stage-skeleton { display: grid; gap: 14px; padding-bottom: 24px; }
+.sk-line, .sk-card {
+    display: block; border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--line);
+}
+.sk-eyebrow { width: 34%; height: 12px; }
+.sk-title { width: 72%; height: 30px; }
+.sk-lead { width: 100%; height: 14px; }
+.sk-lead.short { width: 62%; }
+.sk-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 6px; }
+.sk-card { height: 108px; }
+/* 只在用户没要求减少动效时才呼吸；其余情况就是一排静止的灰块。 */
+@media (prefers-reduced-motion: no-preference) {
+    .sk-line, .sk-card { animation: sk-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes sk-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (forced-colors: active) {
+    .sk-line, .sk-card { background: Canvas; border-color: CanvasText; }
+}
+
 h2 {
     font-family: var(--font-display);
     font-size: calc(1.62rem * var(--scale)); font-weight: 600;
@@ -448,6 +470,15 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 .scenario p { font-size: calc(1.04rem * var(--scale)); line-height: 1.8; }
 .prompt { font-weight: 600; margin-bottom: 16px; font-size: calc(1.04rem * var(--scale)); line-height: 1.6; }
 .play-area { margin-top: 4px; }
+/* 通关后答题区进入完成态：提交行收起、其余内容降到 55% 明度，顶部给一句说明。
+   不做 display:none——保留题目让用户还能回看自己答的是什么，只是不能再改。 */
+.play-area.is-complete > *:not(.play-done-note) { opacity: .55; }
+.play-area.is-complete .actions { display: none; }
+.play-done-note {
+    margin: 0 0 12px; padding: 9px 13px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: calc(.86rem * var(--scale)); font-weight: 600;
+}
 .section-label { font-size: calc(.8rem * var(--scale)); color: var(--ink-3); margin: 18px 0 10px; }
 
 /* ---------- option cards ---------- */
@@ -472,6 +503,14 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
     font-size: calc(.76rem * var(--scale)); color: var(--ink-3);
 }
 .opt.selected .opt-key { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* 数字键的可见提示：徽标写着 1/2/3，但界面上从没说过「可以按」。一句低对比小字，
+   位置就在选项正下方。触屏设备藏掉——那里没有键盘，这句话只是噪音。 */
+.kbd-hint {
+    margin: 12px 0 0; font-size: calc(.78rem * var(--scale)); color: var(--ink-3);
+    line-height: 1.6; letter-spacing: .01em;
+}
+.kbd-hint[hidden] { display: none; }
+@media (hover: none) and (pointer: coarse) { .kbd-hint { display: none; } }
 .opt-desc { display: block; color: var(--ink-3); font-size: calc(.82rem * var(--scale)); margin-top: 3px; line-height: 1.55; }
 
 /* ---------- weather ---------- */
@@ -506,7 +545,7 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 
 /* ---------- thermometer ---------- */
 .thermo { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
-.thermo input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 34px; }
+.thermo input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 44px; }
 .thermo-labels { display: flex; justify-content: space-between; color: var(--ink-3); font-size: calc(.78rem * var(--scale)); }
 .thermo-value { text-align: center; font-size: calc(1.1rem * var(--scale)); font-weight: 600; color: var(--accent); margin: 10px 0 4px; }
 
@@ -552,6 +591,8 @@ h3 { font-size: calc(1.04rem * var(--scale)); font-weight: 600; letter-spacing: 
 .chip {
     padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--line-strong);
     background: var(--surface); font-size: calc(.86rem * var(--scale)); text-align: left;
+    /* 1.2.1：10px 上下内边距实际只有 43.6px，四舍五入差 0.4px 达标不了，显式钉到 44 */
+    min-height: 44px;
 }
 .chip:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
 .chip.active { border-color: var(--accent); border-width: 2px; background: var(--accent-soft); }
@@ -623,9 +664,9 @@ body.modal-open { overflow: hidden; }
     animation: rise .25s ease both;
     overscroll-behavior: contain;
 }
-.modal-title { font-size: calc(1.2rem * var(--scale)); font-weight: 600; margin-bottom: 12px; padding-right: 44px; }
+.modal-title { font-size: calc(1.2rem * var(--scale)); font-weight: 600; margin-bottom: 8px; padding-right: 44px; }
 .modal-close {
-    position: absolute; top: 12px; right: 12px; width: 40px; height: 40px;
+    position: absolute; top: 12px; right: 12px; width: 44px; height: 44px;
     display: grid; place-items: center; border-radius: 50%;
     border: 1px solid var(--line-strong); background: var(--surface);
     color: var(--ink-2); font-size: calc(1.16rem * var(--scale)); line-height: 1;
@@ -643,15 +684,49 @@ body.modal-open { overflow: hidden; }
 .modal-body { color: var(--ink-2); font-size: calc(.92rem * var(--scale)); line-height: 1.75; }
 .modal-body p + p { margin-top: 12px; }
 .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
-.setting-row { border-top: 1px solid var(--line); padding: 16px 0; }
+.setting-row { border-top: 1px solid var(--line); padding: 10px 0; }
 .setting-row:first-of-type { border-top: none; }
-.setting-row > strong { display: block; margin-bottom: 8px; font-size: calc(.94rem * var(--scale)); }
+.setting-row > strong { display: block; margin-bottom: 6px; font-size: calc(.94rem * var(--scale)); }
+
+/* 设置弹窗拆成三块（1.2.1）：1.2.0 是一个 1829px 的单列，导出 / 清空埋在 1500px 以下。
+   默认只展开「显示」，另外两块的标题行直接说明里面有什么，不用先滚到底才知道。 */
+.settings-block { border-top: 1px solid var(--line); }
+.settings-block:first-of-type { border-top: none; }
+/* 标题与「展开 / 收起」占第一行，说明文字另起一行：
+   挤在一行时，390px 下说明会折成两行、把「收起」顶到第三行。 */
+.settings-block > summary {
+    display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 10px;
+    padding: 9px 2px; cursor: pointer;
+    font-weight: 600; font-size: calc(.94rem * var(--scale));
+}
+.settings-block > summary > .sb-title { grid-column: 1; grid-row: 1; }
+.settings-block > summary > .sb-hint { grid-column: 1; grid-row: 2; }
+.settings-block > summary::after {
+    content: "展开"; grid-column: 2; grid-row: 1; font-weight: 500;
+    color: var(--ink-3); font-size: calc(.78rem * var(--scale));
+}
+.settings-block[open] > summary::after { content: "收起"; }
+.settings-block > summary:hover::after { color: var(--accent); }
+.sb-hint { font-weight: 400; color: var(--ink-3); font-size: calc(.8rem * var(--scale)); }
+.sb-body { padding-bottom: 0; }
+/* 档位说明默认收起：它是参考信息，不是每次进设置都要读一遍的东西。
+   设置弹窗因此能在 390×844 里一屏放下三块，不用先滚过五段说明。 */
+.band-more { margin: 6px 0 0; }
+/* 危险操作放在数据块底部，用暖色边框而不是只靠文字：它不可撤销。 */
+.setting-danger > strong { color: var(--warm); }
+.seg button.btn-danger { border-color: var(--warm); background: var(--warm-soft); color: var(--warm); }
+.seg button.btn-danger:hover { background: var(--warm); color: var(--surface); }
 .seg { display: flex; gap: 8px; flex-wrap: wrap; }
 .seg button {
     padding: 8px 14px; border-radius: 10px; border: 1.5px solid var(--line-strong);
     background: var(--surface); font-size: calc(.84rem * var(--scale));
+    /* 8px 上下内边距实际落 43px，差 1px 不达标；显式钉住，不跟字体度量赌 */
+    min-height: 44px;
 }
 .seg button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+/* 选中态不只靠底色：再画一个勾，色觉障碍或灰度环境下也能分辨。
+   勾是伪元素，不进无障碍树；选中状态由 aria-pressed 表达。 */
+.seg button.on::before { content: "✓"; margin-right: 6px; font-weight: 700; }
 /* 导入预览：文件里的进度与当前设备并排核对；窄屏自动叠成一列 */
 .import-compare { display: grid; gap: 10px; margin: 12px 0; }
 .import-compare > div {
@@ -685,15 +760,23 @@ body.modal-open { overflow: hidden; }
 .dict-cat {
     padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--line-strong);
     background: var(--surface); color: var(--ink-2);
-    font-size: calc(.8rem * var(--scale)); min-height: 36px;
+    font-size: calc(.8rem * var(--scale)); min-height: 44px;
 }
 .dict-cat:hover { border-color: var(--accent); color: var(--accent); }
 .dict-cat.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .dict-count { font-size: calc(.8rem * var(--scale)); margin: 2px 0 12px; }
+/* 计数与「清空筛选」贴在搜索框下面一行（1.2.1）：
+   1.2.0 把它们放在筛选器下方，搜不到时第一屏看不到任何反馈。 */
+.dict-status-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.dict-status-row .dict-count { margin: 0; flex: 1 1 auto; }
+.dict-status-row .dict-reset { margin-top: 0; }
 .dict-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .dict-card {
     border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface-2);
     overflow: hidden; transition: border-color .15s ease, background .15s ease;
+    /* 162 张卡片 = 3 千多个节点、3 万像素的滚动容器。让浏览器跳过屏幕外的
+       布局与绘制；contain-intrinsic-size 的 auto 会记住上次渲染尺寸，滚动不会来回跳。 */
+    content-visibility: auto; contain-intrinsic-size: auto 120px;
 }
 .dict-card[hidden] { display: none; }
 .dict-card:hover { border-color: var(--line-strong); }
@@ -737,7 +820,7 @@ body.modal-open { overflow: hidden; }
 /* 词典的层级：折叠的组目录 → 类型 → 主题按钮 → 卡片分区标题 */
 .dict-index, .sv-index { margin: 12px 0 2px; }
 .dict-index summary, .sv-index summary {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 6px 12px;
     border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface-2);
     color: var(--ink-2); font-size: calc(.8rem * var(--scale)); cursor: pointer; list-style: none;
 }
@@ -762,7 +845,7 @@ html.high-contrast .dict-nav a { border-width: 2px; }
 .dict-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .dict-kind-btn {
     display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
-    padding: 8px 12px; min-height: 40px; border-radius: 11px;
+    padding: 8px 12px; min-height: 44px; border-radius: 11px;
     border: 1.5px solid var(--line-strong); background: var(--surface);
     color: var(--ink-2); font-size: calc(.82rem * var(--scale));
 }
@@ -810,7 +893,7 @@ html.high-contrast .dict-nav a { border-width: 2px; }
     display: flex; flex-wrap: wrap; gap: 6px;
 }
 .dict-path-btn {
-    display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 44px;
     padding: 5px 11px 5px 6px; border-radius: 999px;
     border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink-2);
 }
@@ -865,16 +948,21 @@ html.high-contrast .dict-nav-group { border-width: 2px; }
 .dict-related { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
 /* 危机词条内的急救出口：与顶栏同一颗按钮，展开词条即见，返回时回到词典页。 */
 .dict-sos { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
-.dict-sos .help-btn { width: 100%; }
+/* 危机词条里的急救出口：这里没有 .btn 的尺寸，只有配色，所以得自己把按钮盒子撑起来 */
+.dict-sos .help-btn {
+    width: 100%; min-height: 44px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid #e2c49c; font: inherit; font-weight: 600;
+}
 .dict-related b {
     display: block; font-size: calc(.76rem * var(--scale));
     color: var(--ink-3); margin-bottom: 6px;
 }
 .dict-related-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .dict-link {
-    padding: 5px 10px; min-height: 32px; border-radius: 999px;
+    padding: 5px 10px; min-height: 44px; border-radius: 999px;
     border: 1px solid var(--line-strong); background: var(--surface);
     color: var(--accent); font-size: calc(.78rem * var(--scale));
+    display: inline-flex; align-items: center;
 }
 .dict-link:hover, .dict-link:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
 html.high-contrast .dict-link,
@@ -885,7 +973,7 @@ html.high-contrast .dict-kind-badge { border-width: 2px; }
     .dict-grid { grid-template-columns: 1fr; }
     .dict-start { padding: 13px; }
     .dict-group-title { padding: 9px 10px; }
-    .dict-path-btn { min-height: 38px; }
+    .dict-path-btn { min-height: 44px; }
     .dict-nav-group { flex-basis: 100%; }
     /* 主题/类型筛选在手机上横着滑，别让两组筛选把卡片推到两屏之后 */
     .dict-cats, .dict-kinds {
@@ -967,7 +1055,7 @@ html.high-contrast .dict-kind-badge { border-width: 2px; }
 .sv-section { margin-top: 28px; scroll-margin-top: 16px; }
 .sv-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
 .sv-nav a {
-    display: inline-flex; align-items: center; min-height: 32px;
+    display: inline-flex; align-items: center; min-height: 44px;
     padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line-strong);
     background: var(--surface-2); color: var(--ink-2); text-decoration: none;
     font-size: calc(.8rem * var(--scale));
@@ -1129,7 +1217,7 @@ html.high-contrast .sv-nav a { border-width: 2px; }
 .lead-more summary {
     cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
     font-size: calc(.84rem * var(--scale)); color: var(--ink-2);
-    border-bottom: 1px dashed var(--line-strong); padding-bottom: 2px; min-height: 32px;
+    border-bottom: 1px dashed var(--line-strong); padding-bottom: 2px; min-height: 44px;
 }
 .lead-more summary::-webkit-details-marker { display: none; }
 .lead-more summary::after { content: "＋"; color: var(--line-strong); }
@@ -1188,7 +1276,7 @@ html.high-contrast .sv-nav a { border-width: 2px; }
 }
 #disclaimer summary {
     cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
-    min-height: 32px;
+    min-height: 44px;
 }
 #disclaimer summary::-webkit-details-marker { display: none; }
 #disclaimer summary::after { content: "＋"; color: var(--line-strong); }
@@ -1209,7 +1297,7 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     .brand-mark::after { bottom: 13px; }
     .brand h1 { font-size: calc(.95rem * var(--scale)); letter-spacing: .04em; }
     .brand-sub { display: none; }
-    #topbar .band-chip { display: inline-block; font-size: calc(.72rem * var(--scale)); padding: 4px 9px; }
+    #topbar .band-chip { display: inline-flex; align-items: center; font-size: calc(.72rem * var(--scale)); padding: 4px 9px; }
     /* display 声明会盖掉 UA 的 [hidden]，这里必须显式补回 */
     #topbar .band-chip[hidden] { display: none; }
     /* 窄屏只留档名：tag 一长，品牌名就被挤掉半个字 */
@@ -1265,12 +1353,8 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     .modal { max-height: 88vh; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 }
 
-/* 极窄屏（≤370px）顶栏才分两行：第一行品牌，第二行急救 / 贝壳 / 设置。 */
-@media (max-width: 370px) {
-    #topbar { row-gap: 8px; }
-    .brand { flex: 1 1 100%; }
-    .topbar-right { width: 100%; justify-content: space-between; }
-}
+/* 极窄屏（≤370px）的顶栏压缩规则在文件末尾 —— 它要盖掉 .band-chip / .seg-isl 的基础样式，
+   必须排在它们后面，否则同权重下会被基础样式反压回去（1.2.1 踩过）。 */
 
 /* ---------- 年龄分级与关卡工具栏 ---------- */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
@@ -1279,12 +1363,17 @@ html.high-contrast .sv-nav a { border-width: 2px; }
     border: 1px solid #c7e2da; border-radius: 99px; padding: 4px 12px;
     /* 它现在是按钮（点一下换年龄段），要脱掉浏览器默认样式 */
     appearance: none; font-family: inherit; line-height: 1.5; cursor: pointer;
+    /* 1.2.1：真长到 44px，不再靠伪元素偷热区 —— 顶栏里伪元素撑出去的那 8px 会被下一行的
+       进度条盖住，命中测试照样只拿到 26px（实测过）。它只在顶栏出现，撑高这一行是唯一代价。 */
+    display: inline-flex; align-items: center; min-height: 44px;
     transition: border-color .15s ease, background .15s ease;
 }
+/* 档位名的短式只在极窄屏出现（见文件末尾 ≤370px 那段） */
+#topbar .band-chip .bn-short { display: none; }
 button.band-chip:hover { border-color: var(--accent); background: #d8ebe3; }
 .btn-read {
     background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2);
-    border-radius: 10px; padding: 7px 12px; font-size: calc(.82rem * var(--scale)); min-height: 38px;
+    border-radius: 10px; padding: 7px 12px; font-size: calc(.82rem * var(--scale)); min-height: 44px;
 }
 .btn-read:hover { border-color: var(--accent); color: var(--accent); }
 .notice {
@@ -1299,6 +1388,14 @@ button.band-chip:hover { border-color: var(--accent); background: #d8ebe3; }
     font-size: calc(.86rem * var(--scale));
 }
 .high-contrast .storage-warning { background: #fff; border-color: #7c5222; color: #3d260a; }
+/* 坏档提示：一次性的说明，带两个出口（去导入 / 知道了）。
+   文案顺序是「数据没删」在前、「能做什么」在后 —— 先给结论再给操作。 */
+.corrupt-warning {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    text-align: left; padding: 12px 18px;
+}
+.corrupt-warning .cw-text { flex: 1 1 260px; margin: 0; }
+.corrupt-warning .btn { flex: 0 0 auto; }
 .adult-tip {
     margin-top: 26px; padding: 14px 16px; border-radius: 12px; text-align: left;
     background: var(--warm-soft); border: 1px dashed #e5c79e;
@@ -1533,10 +1630,12 @@ html[data-band="a3"] .step { height: 40px; }
 /* 概念不是新页面，是一层把站点 / 工具卡 / 词典接起来的索引；
    这里的样式只负责让入口可点、机制块可读、回链不抢正文。 */
 .link-btn {
-    appearance: none; border: 0; background: none; padding: 0; margin: 0 0 0 4px;
+    appearance: none; border: 0; background: none; padding: 12px 4px; margin: 0 0 0 4px;
     color: var(--accent); font: inherit; font-size: inherit; line-height: inherit;
     text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
+/* 行内元素的上下的 padding 不参与行盒计算，所以这 12px 只是把热区撑到 44px 上下，
+   正文行距一点没动 —— 「想多想一步？」原来只有 22px 高，手指按下去经常打偏（F8）。 */
 .link-btn:hover { color: var(--warm); }
 .concept-line { display: block; margin-top: 8px; font-size: calc(.8rem * var(--scale)); color: var(--ink-3); line-height: 1.65; }
 .concept-start {
@@ -1545,8 +1644,8 @@ html[data-band="a3"] .step { height: 40px; }
 }
 .concept-start-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
 .concept-start-folded > summary {
-    display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none;
-    font-size: calc(1.04rem * var(--scale));
+    display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none;
+    font-size: calc(1.04rem * var(--scale)); min-height: 44px;
 }
 .concept-start-folded > summary::-webkit-details-marker { display: none; }
 .concept-start-folded > summary::before { content: "＋"; color: var(--accent); }
@@ -1677,7 +1776,7 @@ html[data-band="a3"] .step { height: 40px; }
     .progress-wrap { flex-wrap: nowrap; }
     .step-track { min-width: 0; flex: 1 1 auto; }
     #progress-text { width: auto; flex: none; }
-    #topbar .icon-btn, #topbar .shell-count { min-height: 38px; display: inline-flex; align-items: center; }
+    #topbar .icon-btn { min-height: 44px; display: inline-flex; align-items: center; }
 }
 
 /* ---------- 微动效：只给首屏的三条原则和枢纽入口做轻微错峰 ---------- */
@@ -1945,7 +2044,9 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 .level-kicker { flex-wrap: wrap; gap: 6px 10px; }
 .level-kicker .concept-line { display: inline; margin-top: 0; }
 /* 承接句折叠成一行 */
-.bridge-more > summary { cursor: pointer; font-size: calc(.84rem * var(--scale)); color: var(--accent); line-height: 1.6; }
+/* 上下各 11px 内边距把热区抬到 44px 以上，同时保留浏览器默认的展开三角 ——
+   换成 flex 会把三角吃掉，读者就不知道这里能点开。 */
+.bridge-more > summary { cursor: pointer; font-size: calc(.84rem * var(--scale)); color: var(--accent); line-height: 1.6; padding: 11px 0; }
 .bridge-more > summary b { font-weight: 500; }
 .bridge-more > span { display: block; margin-top: 4px; font-size: calc(.84rem * var(--scale)); color: var(--ink-2); line-height: 1.6; overflow-wrap: anywhere; }
 .level-depth .link-btn { margin-left: 2px; }
@@ -1975,11 +2076,12 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 }
 
 /* ---------- 顶栏分岛进度（docs/design-home-toolbar.html 方案 C）：每岛一段 + 终章一段 ----------
-   替代原来每站一格的 .step（21 格在 390px 上每格约 9px，点不准）。段的按钮盒子 ≥ 44px 宽、30px 高，
-   视觉上仍是一根细条；填充比例 = 这座岛走过的站数。 */
+   替代原来每站一格的 .step（21 格在 390px 上每格约 9px，点不准）。段的按钮盒子 ≥ 44px 宽、44px 高，
+   视觉上仍是一根细条（条本身 15px，靠 top:50% 居中）；填充比例 = 这座岛走过的站数。
+   1.2.1：盒子高度 30 → 44。视觉没变，但热区从 30px 补到 44px（F8）。 */
 .step-track { gap: 6px; }
 .seg-isl {
-    flex: 4 1 44px; min-width: 44px; height: 30px; padding: 0; border: 0; background: none;
+    flex: 4 1 44px; min-width: 44px; height: 44px; padding: 0; border: 0; background: none;
     position: relative; border-radius: 6px;
 }
 .seg-isl.is-finale { flex: 1 0 44px; }
@@ -2005,7 +2107,7 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 .seg-isl:disabled { opacity: .5; }
 .seg-isl:hover:not(:disabled)::before { border-color: var(--accent); }
 .seg-isl:focus-visible { outline-offset: -2px; }
-html[data-band="a3"] .seg-isl { height: 40px; }
+/* 3-6 岁档原本单独把段条抬到 40px（字更大）；1.2.1 起基线就是 44px，这条例外不再需要。 */
 :root[data-theme="dark"]:not(.high-contrast) .seg-isl::before { background: #34463e; border-color: #4a5e54; }
 :root[data-theme="dark"]:not(.high-contrast) .seg-isl.current::before { background: var(--surface); border-color: var(--accent); }
 /* 深色下 --accent 是浅绿，走完那段要反过来用深字 */
@@ -2016,9 +2118,46 @@ html[data-band="a3"] .seg-isl { height: 40px; }
     .seg-isl:disabled::before { border-style: dashed; }
 }
 
-/* 窄屏：6 段 × 44px + 进度文字一行放不下，文字换到段条下方，段条占满整行 */
+/* 窄屏：段条与进度文字必须同处一行。
+   1.2.0 把 #progress-text 顶到下一行（flex 1 1 100%），顶栏凭空多出 24px 一行，
+   320px 上顶栏 160px + 底栏 57px = 34% 视口（F7）。这里改成不换行，段条可压缩但不小于 40px，
+   文字在 ≤480px 换成短式（0/21），两样合起来才塞得进 280px。 */
 @media (max-width: 640px) {
-    .progress-wrap { flex-wrap: wrap; row-gap: 2px; }
-    .step-track { flex: 1 1 100%; gap: 4px; }
-    #progress-text { flex: 1 1 100%; }
+    .progress-wrap { flex-wrap: nowrap; row-gap: 0; }
+    .step-track { flex: 1 1 auto; min-width: 0; gap: 4px; }
+    #progress-text { flex: 0 0 auto; }
+}
+
+/* 进度文字两套写法：窄屏用短式（0/21），宽屏用整句。
+   短式带 aria-hidden —— 读屏只念一次整句，不会「已走过 0 / 21 站 0/21」念两遍。 */
+#progress-text .pt-short { display: none; }
+@media (max-width: 480px) {
+    #progress-text .pt-full { display: none; }
+    #progress-text .pt-short { display: inline; }
+}
+
+/* ---------- 极窄屏（≤370px）：顶栏压进两行 ----------
+   第一行身份 + 档位 + 贝壳，第二行段条 + 短式进度。
+   1.2.0 让 .topbar-right 独占一整行（width:100%），加上段条与进度文字各占一行，顶栏成了四行 160px；
+   320×640 上顶栏 + 底栏吃掉 34% 视口（F7）。
+   这一块必须放在文件最末：要盖掉 .band-chip / .seg-isl / .step-track 的基础样式，同权重只能靠顺序赢。 */
+@media (max-width: 370px) {
+    #topbar { padding: 8px 10px; gap: 4px 6px; }
+    .brand { flex: 1 1 auto; min-width: 0; gap: 7px; }
+    .brand h1 { font-size: calc(.88rem * var(--scale)); }
+    .brand-mark { width: 26px; height: 26px; }
+    .brand-mark::before { bottom: 5px; height: 7px; }
+    .brand-mark::after { bottom: 11px; }
+    .topbar-right { width: auto; flex: none; gap: 4px; }
+    /* 档位只留数字段：3-6 / 6-12 / 亲子 / 成人 */
+    #topbar .band-chip .bn-full { display: none; }
+    #topbar .band-chip .bn-short { display: inline; }
+    #topbar .band-chip { padding: 3px 8px; }
+    .shell-count { padding: 3px 8px; }
+    .progress-wrap { margin-top: 0; gap: 6px; }
+    .step-track { gap: 2px; }
+    /* 282px 的可用宽度里塞 6 段 + 「0/21」：每段压到 40px 出头，高度仍是 44px 热区。
+       终章那段在宽屏是 1:4 的窄段，窄屏必须一起摊平 —— 否则它会把剩下的空间全吃掉，
+       360px 上量出来 83px，比别的段宽一倍。 */
+    .seg-isl, .seg-isl.is-finale { flex: 1 1 0; min-width: 40px; }
 }

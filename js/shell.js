@@ -19,6 +19,29 @@ const VIEW_CONFIG = {
   work: { progress: false, esc: 'map', title: null, band: true }
 };
 function viewCfg(v) { return VIEW_CONFIG[v] || {}; }
+
+/* ---------------------------------------------------------------- 视图收尾
+   每次整屏渲染后统一做三件事：焦点落到主内容、标题跟着视图走、读屏播报一句。
+   只给「整屏换页」用；筛选、展开、弹窗这些局部更新不经过这里，避免反复播报。 */
+const VIEW_LABEL = {
+  gate: '选择年龄段', home: '首页', map: '岛屿地图', help: '先缓一缓',
+  work: '工作间', retreat: '静修间', dict: '心理学词典',
+  selfhelp: '自助工具箱', slowvars: '慢变量', level: '关卡'
+};
+function afterViewEnter(view, label) {
+  const text = label || VIEW_LABEL[view] || '';
+  document.title = (!text || view === 'home')
+    ? '心情闯关岛 · 一起认出心里的天气'
+    : `${text} · 心情闯关岛`;
+  const ann = document.getElementById('route-announcer');
+  if (ann && text) ann.textContent = `已到${text}`;
+  const main = document.getElementById('stage');
+  if (main) {
+    /* 首屏骨架是 index.html 里的静态占位，真内容一到就该撤掉忙碌标记。 */
+    if (main.getAttribute('aria-busy') === 'true') main.setAttribute('aria-busy', 'false');
+    try { main.focus({ preventScroll: true }); } catch (e) { /* noop */ }
+  }
+}
 /* 顶栏分岛进度的分组：按 LEVELS 的 island 字段归岛（终章 island 为 0，单独一段放最后）。
    岛名取 islands() 里的 name，取不到就写「岛 N」。 */
 function progressGroups() {
@@ -56,10 +79,16 @@ function updateTopbar() {
   const bandEl = document.getElementById('topbar-band');
   if (bandEl) {
     bandEl.hidden = (!vc.band || !state.band);
-    /* 档位只在这一处出现。窄屏只留档名（tag 太长会把品牌名挤掉），宽屏再带上 tag。 */
+    /* 档位只在这一处出现。三套写法都放进 DOM，由 CSS 按宽度取舍：
+       >640 档名 + tag，≤640 只留档名（tag 太长会把品牌名挤掉），≤370 再缩成数字段。
+       不这么做就得给同一个按钮维护三份文案，改档名时必然漏一处。 */
+    const nm = state.band ? band().name : '';
+    const nmShort = nm.replace(/\s*·.*$/, '').replace(/\s*岁$/, '');
     bandEl.innerHTML = state.band
-      ? `${esc(band().name)}<span class="band-tag"> · ${esc(band().tag)}</span>`
+      ? `<span class="bn-full">${esc(nm)}</span><span class="bn-short" aria-hidden="true">${esc(nmShort)}</span><span class="band-tag"> · ${esc(band().tag)}</span>`
       : '';
+    /* 按钮文字被 CSS 截短了，读屏不能跟着只念「6-12」—— 这里给完整档名。 */
+    if (state.band) bandEl.setAttribute('aria-label', `换年龄段，现在是 ${nm}`);
   }
   /* 顶栏入口在两轨用不同措辞：孩子看到「有点难受」，成年 / 亲子看到「很难受」。
      未选档时按成人口径，避免把「找一个大人」直接推给一个成年人。
@@ -92,12 +121,22 @@ function updateTopbar() {
   }).join('');
   const pt = document.getElementById('progress-text');
   const curLv = LEVELS[session.levelIndex];
-  /* 关卡页只说「第几站」：站名已经在正文大标题上，进来再报一遍是重复。 */
-  if (pt) pt.textContent = sideNow
-    ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
-    : (vc.title === 'current' && curLv)
-      ? (curLv.type === 'finale' ? `终章 · ${TOTAL} 站走完` : `岛 ${curLv.island} · 第 ${curLv.num} 站 · 共 ${TOTAL} 站`)
-      : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
+  /* 关卡页只说「第几站」：站名已经在正文大标题上，进来再报一遍是重复。
+     每句都给一份短式：≤480px 的顶栏只放得下「0/21」，整句会把段条挤到第二行（F7）。
+     短式带 aria-hidden，读屏只念整句一次。 */
+  if (pt) {
+    const full = sideNow
+      ? `支线 · 工作间 ${currentLevel().time || ''} · 不计入 ${TOTAL} 站`
+      : (vc.title === 'current' && curLv)
+        ? (curLv.type === 'finale' ? `终章 · ${TOTAL} 站走完` : `岛 ${curLv.island} · 第 ${curLv.num} 站 · 共 ${TOTAL} 站`)
+        : `已走过 ${clearedInTrack()} / ${TOTAL} 站`;
+    const short = sideNow
+      ? '支线'
+      : (vc.title === 'current' && curLv)
+        ? (curLv.type === 'finale' ? '终章' : `${curLv.num}/${TOTAL}`)
+        : `${clearedInTrack()}/${TOTAL}`;
+    pt.innerHTML = `<span class="pt-full">${esc(full)}</span><span class="pt-short" aria-hidden="true">${esc(short)}</span>`;
+  }
   updateTabbar();
   syncHash();
 }

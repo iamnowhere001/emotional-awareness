@@ -154,7 +154,7 @@
 ## 4. 改完必跑
 
 ```bash
-npm run verify      # = check + lint + doctor + test:e2e
+npm run verify      # = check + lint + size + doctor + test:e2e
 ```
 
 **每次提交前至少跑这一条**。逐项说明：
@@ -163,7 +163,10 @@ npm run verify      # = check + lint + doctor + test:e2e
 | --- | --- | --- |
 | `npm run check` | `node scripts/check-syntax.mjs` | 逐个 + 按 `scripts/js-files.mjs` 清单拼接解析 `js/*.js`，拦跨文件重复顶层声明 |
 | `npm run lint` | `node scripts/lint-content.mjs` | 内容自检，不引依赖、不启浏览器。用 vm 按加载顺序执行 `content/*.js`，校验两轨关卡结构与岛屿对应、每档每关 ≥2 组、终章位置与唯一性、词卡 / 本领与 `CODEX`、各题型内部一致性（`answer` 越界、`chain` 标签、`sort` 落筐、`compose` 恰 1 个 gentle、记忆牌去重、`ladder` 档位）、拼装槽位、工作间四幕、静修 / 冥想练习分组与字段、词典 / 自助工具箱 / 慢变量的数量与字段、`v` 关联、`daily.link` 出口、`budget` 交叉引用、急救动作与号码、概念层 16 条反链真实性、文案长度、评分 / 诊断 / 疗效类红线词 |
+| `npm run size` | `node scripts/check-size.mjs` | 首屏体积预算：index.html 引用的全部脚本 + 样式 + manifest，raw / gzip / brotli 各比一次上限。超预算要么瘦身，要么改 `scripts/check-size.mjs` 里的常量并在 CHANGELOG 说明理由 |
 | `npm run doctor` | `node scripts/check-consistency.mjs` | 跨文档与加载顺序一致性自检（版本六处、规模数字、加载顺序契约等）。**加载顺序与版本口径以它的输出为准**，有疑义先跑它 |
+| `npm run build` | `node scripts/build.mjs` | 产出 `dist/`：只压 JS / CSS（`scripts/minify.mjs`，只删注释与缩进），路径与清单不变。根目录仍是可直接双击的源码 |
+| `npm run test:e2e:dist` | `build` + `E2E_ROOT=dist regression.mjs` | 把**同一套**浏览器用例跑在 `dist/` 上。压缩器是否等价由这一步证明；改了 `minify.mjs` 必须跑它 |
 | `npm run test:e2e` | `node scripts/regression.mjs` | 无头 Chrome 浏览器回归（浏览器用例 + 源码检查，数量以 `npm run doctor` 输出为准；跑在真 390×900 iframe 里），约 1.5 秒。源码检查还会锁住「`index.html` 按清单顺序引入逻辑脚本、`sw.js` 预缓存清单一致、版本六处一致」等结构契约 |
 
 - `test:e2e` 需要本机有 Chrome / Chromium；找不到时设置 `CHROME_PATH=/path/to/chrome`。测试页是在内存里注入用例生成的临时 HTML，**不会改动任何源文件**。`npm run test:e2e -- --verbose` 可看逐项结果。

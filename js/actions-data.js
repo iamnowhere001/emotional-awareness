@@ -2,6 +2,24 @@
    由原 actions.js 拆分而来，向 actions-level.js 定义的主表追加动作。 */
 
 Object.assign(ACTIONS, {
+  /* 设置页换档先问一句：1.2.0 是「点一下立刻关弹窗 + 跳地图」，
+     手滑点到相邻档位时用户还没反应过来就已经换了整套站。
+     选档页（第一次进来）不走这里——那时没有可误触的既有选择。 */
+  'set-band-ask': (el) => {
+    const b = AGE_BANDS.find(x => x.id === el.dataset.b);
+    if (!b || b.id === state.band) return;
+    const cur = band();
+    const done = clearedInTrack();
+    openModal(`<div class="modal-title">换成「${esc(b.name)} · ${esc(b.tag)}」？</div>
+      <div class="modal-body">
+        <p>题目会换成另一套：${esc(b.desc)}　${esc(b.len)}。</p>
+        <p class="muted">「${esc(cur.name)}」走过的 ${done} 站、词卡和本领都留着，换回来还在。${b.id === 'adult' ? '成年档另有一间静修间。' : ''}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" data-action="open-settings">先不换</button>
+        <button class="btn btn-primary" data-action="set-band" data-b="${b.id}" data-next="home">换成这一档</button>
+      </div>`);
+  },
   'set-band': (el) => {
     const b = AGE_BANDS.find(x => x.id === el.dataset.b) || AGE_BANDS[1];
     const firstPick = !state.band;
@@ -19,9 +37,13 @@ Object.assign(ACTIONS, {
        选档本身是一次点击，iOS 的「先交互才能出声」限制已满足。 */
     if (firstPick && b.id === 'a3') state.settings.autoSpeak = true;
     save(); applySettings(); closeModal();
-    session.tip = b.id === 'adult'
-      ? '已切换到「成年 · 心智整理」，换成一套成年人的站，另有一间静修间。儿童 / 亲子档的进度也还留着。'
-      : `已切换到「${b.name} · ${b.tag}」，题目会换一批，进度和词卡都还在。`;
+    /* 首次选档不是「切换」：这时没有上一档、没有进度、也没有词卡。
+       第一句反馈必须说人话，别让用户一进门就听到一句不成立的话。 */
+    session.tip = firstPick
+      ? `已选好「${b.name} · ${b.tag}」。之后在「我的」里随时能改。`
+      : b.id === 'adult'
+        ? '已切换到「成年 · 心智整理」，换成一套成年人的站，另有一间静修间。儿童 / 亲子档的进度也还留着。'
+        : `已切换到「${b.name} · ${b.tag}」，题目会换一批，进度和词卡都还在。`;
     session.navDir = '';
     if (el.dataset.next === 'map') renderMap(); else renderHome();
   },

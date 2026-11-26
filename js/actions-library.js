@@ -119,7 +119,8 @@ Object.assign(ACTIONS, {
   },
   'open-skills': () => openSkills(),
   'open-bottle': () => openBottle(),
-  'bottle-choose': () => {
+  'bottle-choose': (el) => {
+    markPressed(el, true, 'selected');
     document.getElementById('bottle-feedback').innerHTML =
       `<div class="feedback good" style="margin-top:14px">${esc(overlay.dataset.why || '谢谢，慢慢来。')}</div>`;
     const opts = document.getElementById('bottle-opts');
@@ -139,7 +140,7 @@ Object.assign(ACTIONS, {
   'ground-pick': (el) => {
     const r = Number(el.dataset.row), i = Number(el.dataset.i);
     play.picks[r] = i;
-    document.querySelectorAll(`.ground-row[data-row="${r}"] .word-chip`).forEach((b, bi) => b.classList.toggle('selected', bi === i));
+    document.querySelectorAll(`.ground-row[data-row="${r}"] .word-chip`).forEach((b, bi) => markPressed(b, bi === i, 'selected'));
     if (play.picks.some(p => p === null)) return;
     const chosen = play.data.rows.map((row, ri) => `${row.label.split(' · ')[0]}：${row.choices[play.picks[ri]]}`);
     const box = document.getElementById('retreat-result');
@@ -152,7 +153,7 @@ Object.assign(ACTIONS, {
     const i = Number(el.dataset.orig), v = play.v;
     if (i === v.answer) {
       document.querySelectorAll('#stage .opt').forEach(b => { b.disabled = true; });
-      el.classList.add('selected');
+      markPressed(el, true, 'selected');
       const box = document.getElementById('retreat-result');
       if (box) box.innerHTML = `<div class="feedback good"><p>${esc(v.why)}</p>
         <p class="muted" style="margin-top:8px">这里没有分数，也不要求你马上觉得好一点。</p>

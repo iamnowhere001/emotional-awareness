@@ -23,7 +23,9 @@ function openModal(html) {
 }
 /* 弹窗内的 Tab 循环，避免焦点跑到背后页面 */
 function trapTab(e) {
-  const focusables = Array.from(overlay.querySelectorAll('button:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+  /* summary 也要算进来：设置弹窗拆成三块折叠后，summary 是原生可聚焦的，
+     漏掉它会让 Shift+Tab 从第一个按钮直接跳到最后一个，跳过折叠标题。 */
+  const focusables = Array.from(overlay.querySelectorAll('button:not(:disabled), summary, [tabindex]:not([tabindex="-1"])'))
     .filter(el2 => el2.offsetParent !== null || el2 === document.activeElement);
   if (!focusables.length) return;
   const first = focusables[0], last = focusables[focusables.length - 1];
@@ -266,32 +268,46 @@ function pickImportFile() {
 
 function openSettings() {
   const s = state.settings;
-  /* 切换开关会整块重建弹窗；先记下滚动位置与当前控件，重建后放回去，
-     避免每次点开关都把视线和焦点甩回顶部。 */
+  /* 切换开关会整块重建弹窗；先记下滚动位置、当前控件与展开的区块，重建后放回去，
+     避免每次点开关都把视线、焦点和折叠状态一起甩回顶部。 */
   const oldModal = overlay.querySelector('.modal');
   const keepScroll = oldModal ? oldModal.scrollTop : 0;
   const active = document.activeElement;
   const keepKey = (active && overlay.contains(active) && active.dataset && active.dataset.action)
     ? { action: active.dataset.action, k: active.dataset.k || '', b: active.dataset.b || '', v: active.dataset.v || '' }
     : null;
+  /* 1.2.0 是一个 1829px 的单列弹窗，导出 / 清空被埋在 1500px 以下。
+     1.2.1 拆成三块，默认只展开「显示」；展开状态跨重建保留。 */
+  const openBlocks = oldModal
+    ? [...oldModal.querySelectorAll('.settings-block[open]')].map(d => d.dataset.block)
+    : ['display'];
+  const block = (key, title, hint, body) => `<details class="settings-block" data-block="${key}"${openBlocks.includes(key) ? ' open' : ''}>
+      <summary><span class="sb-title">${title}</span><span class="sb-hint">${hint}</span></summary>
+      <div class="sb-body">${body}</div>
+    </details>`;
   openModal(`<div class="modal-title">显示、朗读与数据</div>
     <div class="modal-body">
-      <div class="setting-row"><strong>年龄段</strong><div class="seg">
-        ${AGE_BANDS.map(b => `<button class="${state.band === b.id ? 'on' : ''}" data-action="set-band" data-b="${b.id}" data-next="map">${esc(b.name)}</button>`).join('')}
-      </div><p class="muted" style="margin-top:8px">${esc(band().desc)}　${esc(band().len)}。前三档共用一套儿童 / 亲子的站，成年档是独立的一套，两边进度分开记、都保留。</p></div>
-      <div class="setting-row"><strong>字号</strong><div class="seg">
-        ${[[1, '标准'], [1.15, '大'], [1.3, '特大']].map(([v, n]) => `<button class="${s.scale === v ? 'on' : ''}" data-action="set-scale" data-v="${v}">${n}</button>`).join('')}
-      </div></div>
-      <div class="setting-row"><strong>朗读（用这台设备自带的语音，不联网）</strong><div class="seg">
-        <button class="${s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="1">开启朗读</button>
-        <button class="${!s.speak ? 'on' : ''}" data-action="toggle-flag" data-k="speak" data-v="0">关闭</button>
-        <button class="${s.autoSpeak ? 'on' : ''}" data-action="toggle-flag" data-k="autoSpeak" data-v="${s.autoSpeak ? 0 : 1}">进站自动读题目</button>
-      </div><p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时在题目页点「读给我听」仍然有效。</p></div>
-      <div class="setting-row"><strong>动效与对比</strong><div class="seg">
-        <button class="${!s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="0">保留轻微动效</button>
-        <button class="${s.motion ? 'on' : ''}" data-action="toggle-flag" data-k="motion" data-v="1">尽量减少动画</button>
-        <button class="${s.contrast ? 'on' : ''}" data-action="toggle-flag" data-k="contrast" data-v="${s.contrast ? 0 : 1}">高对比</button>
-      </div><p class="muted" style="margin-top:8px">系统设置了「减少动态效果」时，本游戏会自动遵守。</p></div>
+      ${block('display', '显示', '年龄段 · 字号 · 动效与对比（跟随系统「减少动态效果」）', `
+      <div class="setting-row"><strong>年龄段</strong>${seg('年龄段', AGE_BANDS.map(b => ({
+        text: esc(b.name), action: 'set-band-ask', on: state.band === b.id,
+        attrs: ` data-b="${b.id}"`
+      })))}<details class="lead-more band-more"><summary>这一档怎么出题</summary>
+        <p class="muted">${esc(band().desc)}　${esc(band().len)}。换档会先问一句，另一档的进度和词卡都留着。</p></details></div>
+      <div class="setting-row"><strong>字号</strong>${seg('字号', [[1, '标准'], [1.15, '大'], [1.3, '特大']].map(([v, n]) => ({
+        text: n, action: 'set-scale', on: s.scale === v, attrs: ` data-v="${v}"`
+      })))}</div>
+      <div class="setting-row"><strong>动效与对比</strong>${seg('动效与对比', [
+        { text: '保留轻微动效', action: 'toggle-flag', on: !s.motion, attrs: ' data-k="motion" data-v="0"' },
+        { text: '尽量减少动画', action: 'toggle-flag', on: !!s.motion, attrs: ' data-k="motion" data-v="1"' },
+        { text: '高对比', action: 'toggle-flag', on: !!s.contrast, attrs: ` data-k="contrast" data-v="${s.contrast ? 0 : 1}"` }
+      ])}</div>`)}
+      ${block('reading', '朗读', s.speak ? '已开启 · 设备自带语音' : '已关闭 · 设备自带语音', `
+      <div class="setting-row"><strong>朗读（用这台设备自带的语音，不联网）</strong>${seg('朗读', [
+        { text: '开启朗读', action: 'toggle-flag', on: !!s.speak, attrs: ' data-k="speak" data-v="1"' },
+        { text: '关闭', action: 'toggle-flag', on: !s.speak, attrs: ' data-k="speak" data-v="0"' },
+        { text: '进站自动读题目', action: 'toggle-flag', on: !!s.autoSpeak, attrs: ` data-k="autoSpeak" data-v="${s.autoSpeak ? 0 : 1}"` }
+      ])}<p class="muted" style="margin-top:8px">朗读用的是设备自带语音，不需要联网。iPhone / iPad 等浏览器要求先点一下页面才允许自动朗读；这时在题目页点「读给我听」仍然有效。</p></div>`)}
+      ${block('data', '数据、备份与安装', '存在哪 · 导出导入 · 重来 · 装到主屏', `
       <div class="setting-row"><strong>这里存了什么</strong>
         <p>只存「年龄段、走到哪一站、词卡、本领、贝壳、小岛摆设、显示设置」，全部留在这台设备的浏览器里，不上传、不联网。</p>
         <p><b>不会保存</b>：开场选的天气、任何输入的心情文字（本游戏也不提供文字输入框）。</p>
@@ -313,11 +329,13 @@ function openSettings() {
           ? '<p>装到主屏后可以像普通 App 一样打开，断网也能玩。</p><div class="seg"><button data-action="install-app">安装到主屏</button></div>'
           : '<p class="muted">用 iPhone / iPad 的 Safari 打开时，点底部「分享」→「添加到主屏」即可；其他浏览器若暂不显示安装按钮，用浏览器菜单里的「添加到主屏 / 安装应用」也可以。</p>'}
       </div>
+      <div class="setting-row setting-danger"><strong>清空本机进度</strong>
+        <p class="muted">清掉这台设备上的站点进度、词卡、本领、贝壳与小岛摆设，无法撤销。年龄段和显示设置会保留。</p>
+        <div class="seg"><button class="btn-danger" data-action="clear-progress">清空本机进度</button></div></div>`)}
     </div>
     <div class="modal-actions">
       ${importUndo ? '<button class="btn btn-secondary" data-action="import-undo">撤销上次导入</button>' : ''}
-      <button class="btn btn-primary" data-action="close-modal">完成</button>
-      <button class="btn btn-ghost" data-action="clear-progress">清空本机进度</button></div>`);
+      <button class="btn btn-primary" data-action="close-modal">完成</button></div>`);
   /* 重建后按 data-action / data-k / data-b 找同一个控件；
      值会翻转的开关（自动朗读、高对比）先找同值，找不到再退回同组第一个。 */
   const modal = overlay.querySelector('.modal');

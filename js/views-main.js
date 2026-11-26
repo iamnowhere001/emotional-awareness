@@ -31,6 +31,7 @@ function renderAgeGate() {
   </div>`;
   updateTopbar();
   resetViewScroll();
+  afterViewEnter('gate');
 }
 
 /* ---------------------------------------------------------------- 视图：首页 */
@@ -102,6 +103,7 @@ function renderHome() {
   </div>`;
   updateTopbar();
   resetViewScroll();
+  afterViewEnter('home');
 }
 
 /* ---------------------------------------------------------------- 视图：急救入口
@@ -176,6 +178,7 @@ function renderHelp() {
   </div>`;
   updateTopbar();
   resetViewScroll();
+  afterViewEnter('help', isKidTone() ? '现在有点难受' : '现在很难受');
 }
 
 /* ---------------------------------------------------------------- 视图：地图
@@ -336,6 +339,7 @@ function renderMap() {
     const n = document.querySelector('.node.just-done');
     if (n) n.classList.remove('just-done');
   }, 1800);
+  afterViewEnter('map');
 }
 
 /* ---------------------------------------------------------------- 工作间（成年档支线）
@@ -371,6 +375,7 @@ function renderWork() {
   </div>`;
   updateTopbar();
   resetViewScroll();
+  afterViewEnter('work');
 }
 
 /* ---------------------------------------------------------------- 静修间（成年档支线） */
@@ -442,4 +447,5 @@ function renderRetreatList() {
   </div>`;
   updateTopbar();
   resetViewScroll();
+  afterViewEnter('retreat', '静修间');
 }

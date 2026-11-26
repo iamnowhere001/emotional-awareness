@@ -875,6 +875,33 @@ window.addEventListener('load', function () {
     bandTo('a6'); renderMap();
   });
 
+  /* F5：搜不到时，反馈必须出现在搜索框下面。
+     1.2.0 把计数放在筛选器下方，0 结果时第一屏看不到任何回应，
+     而「第一次来？先读这 5 条」「按概念读」仍占满首屏，看起来像搜索坏了。 */
+  test('1.2.1 · 词典 0 结果：计数与清空在搜索框下，起步路径收起', () => {
+    bandTo('a6'); ACTIONS['open-dictionary']();
+    const input = document.getElementById('dict-search');
+    const count = document.getElementById('dict-count');
+    const paths = document.getElementById('dict-paths');
+    A(!!input && !!count && !!paths, '应有搜索框、计数行与起步路径容器');
+    A(document.querySelector('.dict-controls').contains(count), '计数应贴在搜索框所在的控件区里');
+    A(paths.hidden === false, '没有筛选时起步路径应展开');
+
+    dictQuery = 'zzzzzz'; input.value = dictQuery;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    A(count.textContent.includes('找到 0 条'), `0 结果应写「找到 0 条」，实际「${count.textContent}」`);
+    A(paths.hidden === true, '0 结果时应收起起步路径与「按概念读」');
+    A(document.querySelectorAll('#dict-grid .dict-card:not([hidden])').length === 0, '不该有可见卡片');
+    A(document.getElementById('dict-empty').hidden === false, '空状态提示应出现');
+    A(document.getElementById('dict-reset').hidden === false, '清空入口应可见');
+
+    /* 清空会整页重渲染，旧节点已经脱离文档，必须重新取一次。 */
+    document.getElementById('dict-reset').click();
+    A(document.getElementById('dict-paths').hidden === false, '清空后起步路径应回来');
+    A(document.getElementById('dict-count').textContent.includes('162'), '清空后回到全部条数');
+    renderMap();
+  });
+
   /* ---------- hash 路由 ---------- */
   test('hash 解析：合法视图 / 关卡 id / 非法地址', () => {
     A(parseHash('#/map').view === 'map');
@@ -919,6 +946,62 @@ window.addEventListener('load', function () {
     A(session.view === 'level' && play.v === vBefore, 'Esc 应回到同一站同一题');
     A(location.hash === '#/level/' + ADULT.levels[0].id);
     bandTo('a6'); renderHome();
+  });
+
+  /* F3：单页应用换屏时，视障用户与多标签用户都需要知道「到哪了」。
+     标题、播报、焦点三件事由 afterViewEnter 统一做，这里锁四条典型路径。
+     局部更新（筛选、展开、弹窗）不走它，所以不会反复播报——见下一条断言。 */
+  test('1.2.1 · 整屏换页同步标题、播报与焦点', () => {
+    bandTo('a6'); state.cleared = []; save(); renderHome();
+    const ann = document.getElementById('route-announcer');
+    A(!!ann, '应有路由播报节点');
+    A(ann.getAttribute('aria-live') === 'polite' && ann.getAttribute('role') === 'status', '播报节点应是礼貌的 status');
+    A(document.title === '心情闯关岛 · 一起认出心里的天气', `首页标题不带视图名，实际「${document.title}」`);
+
+    ACTIONS['open-dictionary']();
+    A(session.view === 'dict');
+    A(document.title === '心理学词典 · 心情闯关岛', `词典标题，实际「${document.title}」`);
+    A(ann.textContent === '已到心理学词典', `词典播报，实际「${ann.textContent}」`);
+    A(document.activeElement === stage, '换页后焦点应落到主内容');
+
+    /* 局部筛选不该再播一次：播报文本保持原样，避免读屏被反复打断。 */
+    const before = ann.textContent;
+    const catBtn = document.querySelector('#dict-cats .dict-cat');
+    if (catBtn) catBtn.click();
+    A(ann.textContent === before, '分类筛选属于局部更新，不应重新播报');
+    dictQuery = ''; dictCat = 'all'; dictKind = 'all';
+
+    renderMap();
+    A(document.title === '岛屿地图 · 心情闯关岛', `地图标题，实际「${document.title}」`);
+    A(ann.textContent === '已到岛屿地图');
+
+    const lv = KID.levels[0];
+    routeTo(parseHash('#/level/' + lv.id));
+    A(session.view === 'level');
+    A(document.title.includes(`第 ${lv.num} 站`) && document.title.endsWith('心情闯关岛'), `关卡标题，实际「${document.title}」`);
+    A(ann.textContent.includes(`第 ${lv.num} 站`), `关卡播报，实际「${ann.textContent}」`);
+
+    /* 急救页标题要说人话，不能是 help 这种内部 id。 */
+    routeTo(parseHash('#/help'));
+    A(session.view === 'help');
+    A(document.title.includes('难受'), `急救标题，实际「${document.title}」`);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    bandTo('a6'); state.cleared = []; save(); renderHome();
+    A(document.title === '心情闯关岛 · 一起认出心里的天气', '回首页应还原站点标题');
+  });
+
+  /* 首屏骨架：35 个脚本没下载完之前先给一块形状，别让人对着空白等。
+     真内容一到就整块替换，同时把 aria-busy 清掉，否则读屏会一直以为页面还在准备。 */
+  test('1.2.1 · 首屏骨架被第一次渲染替换，aria-busy 归位', () => {
+    bandTo('a6');
+    /* 手工把骨架塞回去，验证「渲染会清掉它」，而不是「本来就没有」。 */
+    stage.innerHTML = '<div class="stage-skeleton" aria-hidden="true"></div>';
+    stage.setAttribute('aria-busy', 'true');
+    renderMap();
+    A(!document.querySelector('.stage-skeleton'), '整屏渲染后不该残留骨架');
+    A(stage.getAttribute('aria-busy') === 'false', `aria-busy 应归位，实际 ${stage.getAttribute('aria-busy')}`);
+    A(stage.innerHTML.length > 100, '主内容应真的画出来了');
   });
 
   /* ---------- 拼装试点 / 工作间支线 ---------- */
@@ -1240,8 +1323,24 @@ window.addEventListener('load', function () {
     A(!('QUOTES' in LIB));
     bandTo('adult');
     const idx = LEVELS.findIndex(l => l.type === 'finale');
-    session.levelIndex = idx; renderLevel();
-    A(play.quotes.length === 3 && play.quotes.every(q => GLOSSARY_LINES.includes(q)));
+    const snap = {
+      cleared: state.cleared.slice(), awarded: state.awarded.slice(),
+      shells: state.shells, run: session.clearedThisRun, idx: session.levelIndex
+    };
+    try {
+      session.levelIndex = idx; renderLevel();
+      A(play.quotes.length === 3 && play.quotes.every(q => GLOSSARY_LINES.includes(q)));
+      /* 1.2.1：终章必须能被记成「走过」。之前按钮直接 go-map，21 站永远差最后一站。 */
+      const finish = document.querySelector('#stage [data-action="finale-finish"]');
+      A(!!finish, '终章应有「走完这一程」按钮');
+      finish.click();
+      A(state.cleared.includes(LEVELS[idx].id), '点完终章应写入 cleared');
+      A(session.view === 'map', '走完终章应回到地图');
+    } finally {
+      state.cleared = snap.cleared; state.awarded = snap.awarded; state.shells = snap.shells;
+      session.clearedThisRun = snap.run; session.levelIndex = snap.idx;
+      save(); renderMap();
+    }
   });
   test('5-4-3-2-1 统一为五步，急救版标注「急诊版」', () => {
     const tool = SH_TOOLS.find(t => t.t === '5-4-3-2-1 锚定');
@@ -1291,9 +1390,16 @@ window.addEventListener('load', function () {
     const a3 = AGE_BANDS.find(b => b.id === 'a3');
     ACTIONS['set-band']({ dataset: { b: 'a3', next: 'home' } });
     A(state.settings.autoSpeak === true, '首次选 3-6 岁应自动读题');
+    /* 提示是一次性的：renderHome 里 takeTip() 取走并清空 session.tip，
+       所以要断言的是屏幕上真的出现了那句反馈，而不是内存里的残留。 */
+    const notice1 = document.querySelector('#stage .notice');
+    A(!!notice1 && notice1.textContent.includes('已选好'), '首次选档应给出「已选好」的反馈');
+    A(!!notice1 && !notice1.textContent.includes('已切换'), '首次选档不该说「已切换」');
     state.settings.autoSpeak = false;
     ACTIONS['set-band']({ dataset: { b: 'a6', next: 'home' } });
     A(state.settings.autoSpeak === false, '非首次选档不应再打开自动朗读');
+    const notice2 = document.querySelector('#stage .notice');
+    A(!!notice2 && notice2.textContent.includes('已切换'), '非首次换档才说「已切换」');
     bandTo('a6'); renderHome();
   });
 
@@ -1699,6 +1805,11 @@ window.addEventListener('load', function () {
     openSettings();
     const modal = overlay.querySelector('.modal');
     A(!!modal, '设置弹窗应打开');
+    /* 1.2.1 起「朗读」默认折叠，先把这一块展开再点开关——
+       展开状态本身也要跨重建保留，否则点一下开关就跳回折叠，用户以为点错了。 */
+    const readBlock = modal.querySelector('.settings-block[data-block="reading"]');
+    A(!!readBlock, '设置里应有「朗读」块');
+    readBlock.open = true;
     modal.scrollTop = 300;
     const scrolled = modal.scrollTop;
     A(scrolled > 0, `设置弹窗应可滚动，实际 scrollTop=${scrolled}`);
@@ -1708,10 +1819,84 @@ window.addEventListener('load', function () {
     btn.click();
     const next = overlay.querySelector('.modal');
     A(next.scrollTop === scrolled, `重建后滚动位置应保留，实际 ${next.scrollTop}`);
+    A(!!next.querySelector('.settings-block[data-block="reading"]').open, '展开状态应跨重建保留');
     const back = next.querySelector('[data-action="toggle-flag"][data-k="speak"][data-v="0"]');
     A(document.activeElement === back, '焦点应回到同一个开关按钮');
     state.settings.speak = snapSpeak; save(); applySettings();
     closeModal();
+  });
+
+  /* F4：设置页的选中态原本只有 class="on" 一层底色，读屏听到的是一串一模一样的按钮。
+     现在每个可选项都带 aria-pressed，视觉上再补一个勾（伪元素，不进无障碍树）。 */
+  test('1.2.1 · 设置页的选中态有语义，不只靠底色', () => {
+    bandTo('a6');
+    const snapScale = state.settings.scale;
+    state.settings.scale = 1.15; save(); applySettings();
+    openSettings();
+    const btns = [...overlay.querySelectorAll('.seg button[aria-pressed]')];
+    A(btns.length >= 12, `设置页应有 12 个以上带 aria-pressed 的选项，实际 ${btns.length}`);
+    A(btns.every(b => ['true', 'false'].includes(b.getAttribute('aria-pressed'))), 'aria-pressed 只能是 true / false');
+
+    const scaleOn = btns.filter(b => b.dataset.action === 'set-scale' && b.getAttribute('aria-pressed') === 'true');
+    A(scaleOn.length === 1 && Number(scaleOn[0].dataset.v) === 1.15, `字号只应选中一个，实际 ${scaleOn.map(b => b.dataset.v)}`);
+    A(scaleOn[0].classList.contains('on'), '选中项应同时带视觉类名');
+
+    /* 勾是伪元素画的，查计算样式才能证明「不只靠底色」真的成立。 */
+    A(getComputedStyle(scaleOn[0], '::before').content.includes('✓'), '选中项应有一个勾，不只靠底色');
+
+    const bandOn = btns.filter(b => b.dataset.action === 'set-band-ask' && b.getAttribute('aria-pressed') === 'true');
+    A(bandOn.length === 1 && bandOn[0].dataset.b === 'a6', `年龄段只应选中当前档，实际 ${bandOn.map(b => b.dataset.b)}`);
+
+    /* 点一下字号：弹窗重建后 aria-pressed 必须跟着换，不能停在旧值上。 */
+    btns.find(b => b.dataset.action === 'set-scale' && b.dataset.v === '1.3').click();
+    const after = [...overlay.querySelectorAll('.seg button[data-action="set-scale"]')];
+    A(after.find(b => b.dataset.v === '1.3').getAttribute('aria-pressed') === 'true', '点了「特大」后应变为选中');
+    A(after.filter(b => b.getAttribute('aria-pressed') === 'true').length === 1, '字号仍是单选');
+    state.settings.scale = snapScale; save(); applySettings();
+    closeModal();
+  });
+
+  /* F4：题目里的选项同理——天气 / 配对 / 拼句 / 摆件 / 火气档位 / 落地句都走同一个 markPressed。 */
+  test('1.2.1 · 题目选项的选中态同步到 aria-pressed', () => {
+    bandTo('a6'); state.cleared = []; session.levelIndex = 0; play = {}; renderLevel();
+    A(play.type === 'weather', `首站应是天气关，实际 ${play.type}`);
+    const btns = [...document.querySelectorAll('#stage .weather-btn')];
+    A(btns.length > 1 && btns.every(b => b.getAttribute('aria-pressed') === 'false'), '天气选项初始都应未选中');
+    btns[1].click();
+    A(btns[1].getAttribute('aria-pressed') === 'true', '点过的天气应标为选中');
+    A(btns.filter(b => b.getAttribute('aria-pressed') === 'true').length === 1, '天气是单选，只能有一个选中');
+    A(btns[1].classList.contains('selected'), '视觉类名与 aria-pressed 应一致');
+    state.cleared = []; save(); renderMap();
+  });
+
+  /* F6：设置原本是一个 1829px 的单列，导出 / 清空被埋在 1500px 以下；
+     换档是「点一下立刻关弹窗跳地图」，手滑就得再切回来。 */
+  test('1.2.1 · 设置拆三块、换档先问一句', () => {
+    bandTo('a6'); state.cleared = []; save();
+    openSettings();
+    const blocks = [...overlay.querySelectorAll('.settings-block')];
+    A(blocks.length === 3, `设置应拆成 3 块，实际 ${blocks.length}`);
+    A(blocks.map(d => d.dataset.block).join(',') === 'display,reading,data', `三块顺序应为 显示 / 朗读 / 数据，实际 ${blocks.map(d => d.dataset.block)}`);
+    A(blocks[0].open && !blocks[1].open && !blocks[2].open, '默认只展开「显示」，另外两块收起');
+    A(blocks.every(d => d.querySelector('summary').textContent.trim().length > 2), '每块都要有可读标题');
+    A(!!blocks[2].querySelector('[data-action="clear-progress"]'), '清空进度应在数据块里');
+    A(!overlay.querySelector('.modal-actions [data-action="clear-progress"]'), '清空不该再留在底部按钮行');
+
+    /* 换档先问一句：只是点开确认时档位不动，取消后回到设置。 */
+    const before = state.band;
+    overlay.querySelector('.seg button[data-action="set-band-ask"][data-b="adult"]').click();
+    A(state.band === before, '只是点开确认时不该换档');
+    A(overlay.textContent.includes('换成'), '应出现确认文案');
+    const cancel = overlay.querySelector('[data-action="open-settings"]');
+    A(!!cancel, '确认框应能取消');
+    cancel.click();
+    A(state.band === before && !!overlay.querySelector('.settings-block'), '取消后回到设置，档位不变');
+
+    overlay.querySelector('.seg button[data-action="set-band-ask"][data-b="adult"]').click();
+    overlay.querySelector('[data-action="set-band"]').click();
+    A(state.band === 'adult', '确认后才换档');
+    A(session.view === 'home', `换档后应回到首页而不是停在原屏，实际 ${session.view}`);
+    bandTo('a6'); state.cleared = []; save(); renderHome();
   });
 
   test('B4 完成呼吸后不再残留「呼吸被打断」', () => {
@@ -1854,6 +2039,163 @@ window.addEventListener('load', function () {
       });
     });
     bandTo('a6'); renderMap();
+  });
+
+  /* 1.2.1 · F7 + F8：320px 上顶栏压进两行，凡是可点的都不小于 44px */
+  test('320px 顶栏压进两行，触控目标不小于 44px', () => {
+    const fe = window.frameElement;
+    A(!!fe, '回归页需要跑在 iframe 里才能改视口');
+    const oldW = fe.style.width;
+    fe.style.width = '320px';
+    void fe.getBoundingClientRect();
+    try {
+      A(window.innerWidth === 320, `视口未切到 320px：innerWidth=${window.innerWidth}`);
+      bandTo('a6');
+      renderMap();
+      const tb = document.getElementById('topbar').getBoundingClientRect();
+      const tab = document.getElementById('tabbar').getBoundingClientRect();
+      /* 1.2.0 实测 160 + 57 = 217px，320×640 上吃掉 34% 视口；目标是把顶栏压到 110 以内。 */
+      A(tb.height <= 110, `320px 顶栏 ${Math.round(tb.height)}px，应 ≤110`);
+      A(tb.height + tab.height <= 170, `顶栏+底栏 ${Math.round(tb.height + tab.height)}px，应 ≤170`);
+      A(tab.height <= 60, `320px 底栏 ${Math.round(tab.height)}px，应 ≤60`);
+
+      /* 只剩两行：品牌一行、进度一行。进度条必须在品牌下方，并且贴着顶栏底边 ——
+         只要它被挤到第三行，tb.height 会立刻超 110，所以这两条是同一件事的两种说法。 */
+      const brand = document.querySelector('#topbar .brand').getBoundingClientRect();
+      const pw = document.getElementById('progress-wrap').getBoundingClientRect();
+      A(pw.top >= brand.bottom, '进度条应排在品牌下方');
+      A(tb.bottom - pw.bottom <= 12, `进度条应贴顶栏底，实际差 ${Math.round(tb.bottom - pw.bottom)}px`);
+
+      /* 进度文字在窄屏换短式：整句「已走过 0 / 21 站」有 96px，会把段条顶回第二行 */
+      const full = document.querySelector('#progress-text .pt-full');
+      const short = document.querySelector('#progress-text .pt-short');
+      A(!!full && !!short, '进度文字应同时有整句与短式两份');
+      A(getComputedStyle(full).display === 'none', '320px 应隐藏整句进度文字');
+      A(getComputedStyle(short).display !== 'none', '320px 应显示短式进度文字');
+      A(short.textContent.trim() === '0/21', `短式进度应为 0/21，实际「${short.textContent.trim()}」`);
+
+      const atLeast = (el, minH, minW, label) => {
+        const b = el.getBoundingClientRect();
+        A(b.height >= minH && b.width >= minW,
+          `${label} ${Math.round(b.width)}×${Math.round(b.height)}，应 ≥${minW}×${minH}`);
+      };
+      atLeast(document.getElementById('topbar-band'), 44, 40, '顶栏档位 chip');
+
+      const segs = [...document.querySelectorAll('.seg-isl')];
+      A(segs.length === 6, `进度段应有 6 段，实际 ${segs.length}`);
+      segs.forEach((s, i) => atLeast(s, 44, 40, `第 ${i + 1} 段进度`));
+      /* 终章那段在宽屏是 1:4 的窄段，窄屏必须跟别的段一样宽，否则它会把富余空间全吃掉 */
+      const segW = segs.map(s => Math.round(s.getBoundingClientRect().width));
+      A(Math.max(...segW) - Math.min(...segW) <= 8, `六段应等宽，实际 ${segW.join('/')}`);
+
+      ACTIONS['open-level']({ dataset: { i: '0' } });
+      A(!document.getElementById('progress-wrap').hidden, '关卡页应显示进度条');
+      [...document.querySelectorAll('#stage .toolbar .btn-read')]
+        .forEach((b, i) => atLeast(b, 44, 44, `关卡工具栏第 ${i + 1} 个按钮`));
+      atLeast(document.querySelector('.level-depth .link-btn'), 44, 44, '「想多想一步？」');
+
+      ACTIONS['open-dictionary']();
+      [...document.querySelectorAll('.dict-cat')]
+        .forEach((c, i) => atLeast(c, 44, 44, `词典筛选第 ${i + 1} 个`));
+
+      /* 全站扫一遍：可点元素一律高 ≥44、宽 ≥40。
+         宽度放到 40 是因为 320px 上顶栏塞 6 段 + 计数，每段只能到 41px —— 这是物理上限，
+         再窄就该改结构而不是继续压数字了。 */
+      const sweep = () => {
+        const bad = [];
+        document.querySelectorAll('button, a[href], summary, input, select, [role="button"]')
+          .forEach((el) => {
+            const b = el.getBoundingClientRect();
+            if (b.width < 1 || b.height < 1) return;
+            if (b.height >= 44 && b.width >= 40) return;
+            const name = (el.textContent || el.id || el.className || '').toString().trim().replace(/\s+/g, ' ').slice(0, 12);
+            bad.push(`${name} ${Math.round(b.width)}×${Math.round(b.height)}`);
+          });
+        return bad;
+      };
+      [['词典', () => ACTIONS['open-dictionary']()],
+        ['自助', () => ACTIONS['open-selfhelp']()],
+        ['慢变量', () => ACTIONS['open-slowvars']()],
+        ['急救', () => ACTIONS['open-help']()]].forEach(([name, go]) => {
+        go();
+        const bad = sweep();
+        A(bad.length === 0, `${name}页有触控目标过小：${bad.join(' / ')}`);
+      });
+    } finally {
+      fe.style.width = oldW;
+      void fe.getBoundingClientRect();
+      bandTo('a6'); renderMap();
+    }
+  });
+
+  /* 1.2.1 · F17：数字键的可见提示只在「选项带数字徽标」的题型出现 */
+  test('数字键提示只出现在带数字徽标的题型上', () => {
+    bandTo('a6');
+    /* 第 1 站是天气（没有数字键），第 2 站是线索单选（有 1–4 徽标） */
+    ACTIONS['open-level']({ dataset: { i: '0' } });
+    const weather = document.getElementById('kbd-hint');
+    A(!!weather, '关卡页应有 #kbd-hint 占位');
+    A(weather.hidden === true, `天气题不该出数字键提示，实际「${weather.textContent}」`);
+
+    ACTIONS['open-level']({ dataset: { i: '1' } });
+    const clue = document.getElementById('kbd-hint');
+    A(clue.hidden === false, '线索单选题应显示数字键提示');
+    A(/按 1–4 选答案/.test(clue.textContent), `提示应给出实际按键范围，实际「${clue.textContent}」`);
+    A(/Esc/.test(clue.textContent), '提示应带上 Esc 出口');
+    /* 徽标数量与提示里的范围必须对得上，否则就是一句按了没反应的话 */
+    const keys = document.querySelectorAll('.play-area .opt-key').length;
+    A(keys === 4, `本题应有 4 个数字徽标，实际 ${keys}`);
+    A(clue.textContent.includes(`1–${keys}`), '提示范围应等于徽标数量');
+    bandTo('a6'); renderMap();
+  });
+  /* 1.2.1 · F10：坏档不再静默从空白开始 */
+  test('坏档：留底、提示、可关掉，且不重复提示', () => {
+    const keep = localStorage.getItem(STORAGE_KEY);
+    const keepCorrupt = localStorage.getItem(CORRUPT_KEY);
+    try {
+      localStorage.setItem(STORAGE_KEY, '{"version":5,"cleared":["1-1"');
+      corruptBackup = null;
+      recoveredFromCorrupt = false;
+      const got = load();
+      A(got.cleared.length === 0, `坏档应回落到空进度，实际 cleared=${got.cleared.length}`);
+      A(recoveredFromCorrupt === true, 'load() 应标记 recoveredFromCorrupt');
+
+      const bk = JSON.parse(localStorage.getItem(CORRUPT_KEY) || 'null');
+      A(!!bk, '坏档应另存到 CORRUPT_KEY');
+      A(bk.raw === '{"version":5,"cleared":["1-1"', `留底应保存原始字符串，实际 ${bk && bk.raw}`);
+      A(bk.key === STORAGE_KEY, `留底应记下坏的是哪个键，实际 ${bk && bk.key}`);
+      A(localStorage.getItem(STORAGE_KEY) === null, '留底后应删掉坏键，否则每次打开都要再报一次');
+
+      showCorruptWarning();
+      const box = document.getElementById('corrupt-warning');
+      A(!!box, '应插入坏档提示');
+      A(box.getAttribute('role') === 'status', '坏档提示应是 status，不是 alert');
+      const text = box.querySelector('.cw-text').textContent;
+      A(/读不出来/.test(text) && /没有删掉/.test(text), `提示应说清「读不出来」与「数据没删」：${text.slice(0, 30)}`);
+      const btns = [...box.querySelectorAll('button')].map(b => b.textContent);
+      A(btns.length === 2, `应有两个出口，实际 ${btns.join('/')}`);
+      A(btns.includes('去设置里导入'), '应给「去设置里导入」');
+      /* 提示条必须排在正文之前：它讲的是「这一趟为什么是空白」，放到正文后面就没人看 */
+      A(box.nextElementSibling && box.nextElementSibling.id === 'stage', '提示应紧挨在 #stage 之前');
+
+      box.querySelector('.cw-ok').click();
+      A(!document.getElementById('corrupt-warning'), '「知道了」应能关掉提示');
+
+      /* 再读一次：坏键已经删了，不该反复报 */
+      corruptBackup = null;
+      recoveredFromCorrupt = false;
+      load();
+      A(recoveredFromCorrupt === false, '留底之后不该再判一次坏档');
+    } finally {
+      localStorage.removeItem(CORRUPT_KEY);
+      if (keepCorrupt) localStorage.setItem(CORRUPT_KEY, keepCorrupt);
+      if (keep === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, keep);
+      corruptBackup = null;
+      recoveredFromCorrupt = false;
+      const left = document.getElementById('corrupt-warning');
+      if (left) left.remove();
+      bandTo('a6'); renderMap();
+    }
   });
 
   /* ---------- 档位合并 / 深度层 / 学习闭环 / 两个人一起选 ---------- */
@@ -2070,6 +2412,12 @@ window.addEventListener('load', function () {
     A(!!after && after.disabled, '通关后双人按钮应禁用');
     A(bar.querySelector('.tool-more').hidden === true, '更多里的项都收掉后，菜单整体收起');
     A(document.querySelector('#stage .level-depth [data-action="set-depth"]').hidden === true, '通关后深度开关也收起');
+    A(document.querySelector('#stage .level-depth .depth-prefix').textContent.includes('已完成'), '通关后深度行应整句改成已完成');
+    /* 1.2.1：答题区进入完成态，不能留下亮着但点不动的提交按钮。 */
+    A(!!document.querySelector('#stage .play-area.is-complete'), '通关后答题区应标完成态');
+    A(!!document.querySelector('#stage .play-done-note'), '通关后应有「已答完」说明');
+    A(!document.querySelector('#stage .play-area .actions:not([hidden])'), '通关后提交行应收起');
+    A([...document.querySelectorAll('#stage .play-area button')].every(b => b.disabled), '通关后答题区按钮都应禁用');
     A(!document.querySelector('.duo-panel'), '不该出现双人面板');
     ACTIONS['duo-open']();
     A(session.duo === null, '通关后直接调 duo-open 也不该开启面板');

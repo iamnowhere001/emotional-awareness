@@ -44,6 +44,10 @@ const lint = readFileSync(join(root, 'scripts/lint-content.mjs'), 'utf8');
 /* 用例数锁：只数行首的 test( 注册调用，口径与 scripts/check-consistency.mjs 一致。
    宽松的 \btest\( 会把断言里的 .test(...) 与注释算进去（实测 154 vs 153）。 */
 const browserTestsSrc = readFileSync(join(root, 'tests/browser-tests.js'), 'utf8');
+/* E2E_ROOT=dist 时把同一套用例跑在 scripts/build.mjs 的产物上：
+   minify 只删注释与缩进，等价性由这里证明，而不是靠「看起来没问题」。 */
+const appRoot = process.env.E2E_ROOT ? resolve(root, process.env.E2E_ROOT) : root;
+const appIndex = readFileSync(join(appRoot, 'index.html'), 'utf8');
 const registeredTests = (browserTestsSrc.match(/^[ \t]*test\s*\(/gm) || []).length;
 const contentFiles = [
   'bands', 'levels-kid', 'levels-kid-island4', 'levels-adult',
@@ -79,6 +83,23 @@ const contrast = (a, b) => {
 const ink3 = tokenOf('ink-3'), warm = tokenOf('warm');
 S('ink-3 / warm 在 bg / surface / surface-2 上 ≥ 4.5:1',
   ['bg', 'surface', 'surface-2'].every(n => contrast(ink3, tokenOf(n)) >= 4.5 && contrast(warm, tokenOf(n)) >= 4.5));
+/* 深色主题同样要过 AA。1.2.0 及以前只算浅色 :root 那组 token，
+   深色是另一套值、走 :root[data-theme="dark"]，等于完全没有护栏（F16）。
+   深色底更暗，正文色却是浅色，最容易在「调暗一点更护眼」时悄悄掉到 4.5 以下。 */
+const darkBlock = (() => {
+  const at = css.indexOf(':root[data-theme="dark"]:not(.high-contrast) {');
+  return at < 0 ? '' : css.slice(at, css.indexOf('}', at));
+})();
+const darkToken = (name) => {
+  const m = darkBlock.match(new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{6})'));
+  return m && m[1];
+};
+S('深色主题 ink-2 / ink-3 / warm 在 bg / surface / surface-2 上 ≥ 4.5:1', (() => {
+  const fg = ['ink-2', 'ink-3', 'warm'].map(darkToken);
+  const bg = ['bg', 'surface', 'surface-2'].map(darkToken);
+  if (fg.some(v => !v) || bg.some(v => !v)) return false;
+  return fg.every(f => bg.every(b => contrast(f, b) >= 4.5));
+})());
 S('index.html 进度占位不再写死 13 关', !/13 关/.test(html));
 S('#overlay 不再挂 aria-live，避免整个弹窗重复播报', !/<div id="overlay"[^>]*aria-live/.test(html));
 S('content/*.js 全部被 index.html 引入', contentFiles.every(n => html.includes(`content/${n}.js`)));
@@ -302,6 +323,19 @@ S('两个人的选择不判对错、不触发通关',
 S('新增样式类都在视图里有对应渲染',
   ['level-bridge', 'level-depth', 'practice-card', 'duo-panel', 'weather-hint', 'tool-more', 'bridge-more', 'undo-notice', 'home-next-card', 'home-work', 'seg-isl', 'seg-fill', 'tab', 'sheet-row']
     .every(c => css.includes('.' + c) && src.includes(c)));
+/* 1.2.1：选中态必须 class 与 aria-pressed 一起切（markPressed），分段控件统一由 seg() 渲染。
+   只切 class 的写法会让读屏用户听不出「哪个已经选中」，这类半截状态不该再出现。 */
+S('选项选中态统一走 markPressed / seg，不再只切 class',
+  /function markPressed/.test(src) && /function seg\(/.test(src) &&
+  !/classList\.(?:toggle\('(?:selected|active)'|add\('selected'\))/.test(src) &&
+  /\.seg button\.on::before/.test(css));
+/* 首屏骨架：脚本下载期间的占位。三处缺一不可——占位、样式、以及「渲染时清掉忙碌标记」。 */
+S('首屏骨架：占位 + 样式 + 渲染时清 aria-busy',
+  /class="stage-skeleton"/.test(html) && /\.stage-skeleton \{/.test(css) &&
+  /id="stage"[^>]*aria-busy="true"/.test(html) && /setAttribute\('aria-busy', 'false'\)/.test(src));
+/* 词典 162 张卡片一次渲染是三千多个节点：让浏览器跳过屏外的布局与绘制。 */
+S('词典卡片用 content-visibility 跳过屏外渲染',
+  /content-visibility: auto/.test(css) && /contain-intrinsic-size: auto 120px/.test(css));
 
 /* ---------- 1.0.0 收尾：健壮性改动必须留在代码里 ---------- */
 /* defer 是「首屏不被 26 个脚本串行阻塞」的前提，也是保序契约的一部分。 */
@@ -345,6 +379,14 @@ S('逻辑脚本均无超 700 行的结构债务',
 /* 发布门槛的条件 6 要求留痕：1.0.0 必须有对应的发布记录。 */
 S('1.0.0 发布记录已留痕', pkg.version !== '1.0.0' || existsSync(join(root, 'docs/release-1.0.0.md')));
 
+/* 1.2.1 的层叠顺序坑：≤370px 的顶栏压缩块要盖掉 .band-chip / .seg-isl 的基础样式，
+   两者同权重，只能靠「谁在后面」取胜。放到前面时档位 chip 被压成 18×8，肉眼几乎看不见。 */
+{
+  const at370 = css.lastIndexOf('@media (max-width: 370px)');
+  S('窄屏顶栏压缩块排在基础样式之后',
+    at370 > css.indexOf('.band-chip {') && at370 > css.indexOf('.seg-isl {'));
+}
+
 /* ---------- 浏览器 ---------- */
 const chrome = findChrome();
 if (!chrome) {
@@ -364,12 +406,12 @@ if (!chrome) {
    那时应用脚本尚未求值，测试会引用到未定义的 MI / ACTIONS / state）。 */
 const appHtml = (() => {
   const re = /(<script\s+defer\s+src="js\/boot\.js"><\/script>)/;
-  if (re.test(html)) return html.replace(re, '$1\n<script defer src="/tests/browser-tests.js"></script>');
+  if (re.test(appIndex)) return appIndex.replace(re, '$1\n<script defer src="/tests/browser-tests.js"></script>');
   /* 兼容未加 defer 的历史 index.html，避免此处成为脆弱的硬编码单点 */
-  if (html.includes('<script src="js/boot.js"></script>')) {
-    return html.replace('<script src="js/boot.js"></script>', '<script src="js/boot.js"></script>\n<script src="/tests/browser-tests.js"></script>');
+  if (appIndex.includes('<script src="js/boot.js"></script>')) {
+    return appIndex.replace('<script src="js/boot.js"></script>', '<script src="js/boot.js"></script>\n<script src="/tests/browser-tests.js"></script>');
   }
-  return html;
+  return appIndex;
 })();
 if (!appHtml.includes('browser-tests.js')) {
   console.error('✗ 测试脚本注入失败：index.html 里没找到 js/boot.js 的引用。');
@@ -385,7 +427,12 @@ const harness = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><
 <iframe id="app" src="/__app.html" title="app" style="display:block;width:390px;height:900px;border:0"></iframe>
 </body></html>`;
 
-const server = createStaticServer({ '/__app.html': appHtml, '/__harness.html': harness });
+const server = createStaticServer({
+  '/__app.html': appHtml,
+  '/__harness.html': harness,
+  /* 用例脚本从内存给：E2E_ROOT=dist 时磁盘根目录换成了 dist/，那里没有 tests/。 */
+  '/tests/browser-tests.js': browserTestsSrc
+}, appRoot);
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 const profile = join(tmpdir(), `mood-island-e2e-${process.pid}`);
@@ -400,6 +447,9 @@ const errFd = openSync(errPath, 'w');
    spawnSync 会阻塞事件循环，Chrome 的请求没人应答，页面永远加载不完。 */
 const proc = spawn(chrome, [
   '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
+  /* 整轮用例会做两百多次地址写入，Chrome 默认的「同一文档导航」节流
+     会在第 200 次后静默丢弃 pushState / replaceState，导致地址断言假失败。 */
+  '--disable-ipc-flooding-protection',
   `--user-data-dir=${profile}`,
   '--window-size=500,900',
   '--virtual-time-budget=5000',

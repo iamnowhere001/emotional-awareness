@@ -1,4 +1,4 @@
-/* 心情闯关岛 v1.2.0 · 纯前端、零依赖、不联网
+/* 心情闯关岛 v1.2.1 · 纯前端、零依赖、不联网
    逻辑按职责拆在 js/ 下（core → util → shell → views-* → ui → actions → boot），
    仍是经典脚本顺序加载，共用同一个全局词法作用域。这里是第一块：状态与存档。
    四档：3-6 / 6-12（基础 / 多想一步两层）/ 亲子全年龄 / 成年
@@ -24,7 +24,7 @@ const KID = MI.kid || { track: 'kid', islands: [], levels: [] };
 const ADULT = MI.adult || { track: 'adult', islands: [], levels: [] };
 const BANK = MI.bankKid || {};
 const BANK_ADULT = MI.bankAdult || {};
-/* 概念层：16 个概念（content/glossary.js）。站点、工具卡、词典、慢变量都通过 id 挂到这里，
+/* 概念层：20 个概念（content/glossary.js）。站点、工具卡、词典、慢变量都通过 id 挂到这里，
    机制与动作规格只写一份，两轨共用。 */
 const GLOSSARY = Array.isArray(MI.glossary) ? MI.glossary : [];
 const GLOSSARY_BY_ID = GLOSSARY.reduce((m, g) => { m[g.id] = g; return m; }, {});
@@ -133,7 +133,7 @@ const ADULT_CARD_LEVELS = new Map(ADULT.levels.filter(l => l.card).map(l => [l.c
 const ALL_LEVEL_IDS = new Set([...KID.levels, ...ADULT.levels].map(l => l.id));
 const ALL_SKILLS = new Set([...KID.levels, ...ADULT.levels].map(l => l.skill).filter(Boolean));
 /* 支线 id 单独一张白名单：sideCleared 只认这 4 个，主线的 cleared / awarded 不认。
-   支线进度因此不可能混进 17 站，也不会被主线解锁逻辑读到。 */
+   支线进度因此不可能混进 21 站，也不会被主线解锁逻辑读到。 */
 const WORK_IDS = new Set(WORK.map(l => l.id));
 /* 拼装：把「场景 × 想法 × 问法」展开成组合键白名单，迁移与选道都按这张表校验。
    组合键形如 s1:t2:a1；任何不在表里的键都不会进存档。 */
@@ -196,7 +196,15 @@ const remapIds = arr => arr.map(id => ID_REMAP[id] || id);
    id 沿用 a6，是为了让主线进度、词卡、贝壳、seen 与 sideCleared 一个字段都不用迁移。 */
 const BAND_REMAP = { 'a9': 'a6' };
 const remapBand = id => (typeof id === 'string' ? (BAND_REMAP[id] || id) : null);
+/* 坏档留底用的三个状态。必须排在 `let state = load()` 之前：load() 一执行就会读它们，
+   排在后面会落进 TDZ，core.js 直接中止（症状是后面所有脚本报 state is not defined）。 */
+let corruptBackup = null;
+let recoveredFromCorrupt = false;
+const CORRUPT_KEY = 'mood-island-v5-corrupt';
 let state = load();
+/* 坏档提示要在第一屏之前就挂上：等用户自己发现「进度没了」再解释就太晚了。
+   defer 脚本执行时 DOM 已解析完，#app / #stage 都在。 */
+if (recoveredFromCorrupt) showCorruptWarning();
 let play = {};
 let session = {
   /* levelIndex 是「当前正在看哪一关」的运行时游标，不写存档：
@@ -243,15 +251,40 @@ let lastClicked = null;
 
 /* 存档：带 schema 版本。旧键（v4 / v3 / v2）读到后自动迁移，之后只写新键。
    加字段时在 migrate() 里补一段，老用户进度不会因为版本变更被清空。 */
+/* 坏档留底（F10）：键在、但 JSON 解析不出来（被别的脚本写脏、写到一半断电、手工改坏）。
+   1.2.0 及以前 readRaw() 直接返回 null，load() 静默 clone(DEFAULT_STATE) ——
+   用户看到的是「怎么又让我选年龄」，进度像凭空消失，也不知道还能导入备份。
+   现在把原始字符串原样搬到 CORRUPT_KEY，既不覆盖也不丢，首屏再提示一次。
+   三个状态变量声明在文件上方 `let state = load()` 之前，原因见那里的注释。 */
+function rememberCorrupt(key, raw) {
+  /* 只留第一份：新键坏、旧键也坏时，最该保住的是新键里的那份 */
+  if (!corruptBackup) corruptBackup = { key, raw };
+}
+function backupCorrupt() {
+  if (!corruptBackup) return;
+  try {
+    localStorage.setItem(CORRUPT_KEY, JSON.stringify({
+      key: corruptBackup.key, at: new Date().toISOString(), raw: corruptBackup.raw
+    }));
+    /* 留底之后把坏键删掉。不删的话每次打开都会重新判一次坏档、再弹一次提示，
+       提示会变成每次开机都要关掉的噪音；数据仍在 CORRUPT_KEY 里，没有丢。 */
+    localStorage.removeItem(corruptBackup.key);
+  } catch (e) { /* 隐私模式下写不进去，只能放弃留底，但提示照出 */ }
+  corruptBackup = null;
+}
+
 function readRaw() {
   /* 新键损坏时继续往旧键找，避免一个坏 JSON 把全部进度判死刑 */
   for (const k of [STORAGE_KEY, ...LEGACY_KEYS]) {
+    let raw = null;
+    try { raw = localStorage.getItem(k); } catch (e) { continue; }
+    if (!raw) continue;
     try {
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
       const data = JSON.parse(raw);
+      /* 解析出来但不是对象（数组 / 数字 / null）同样是坏档，不能当进度用 */
       if (data && typeof data === 'object' && !Array.isArray(data)) return raw;
-    } catch (e) { /* 当前键损坏或不可读，试下一个 */ }
+      rememberCorrupt(k, raw);
+    } catch (e) { rememberCorrupt(k, raw); }
   }
   return null;
 }
@@ -259,9 +292,16 @@ function readRaw() {
 function load() {
   try {
     const raw = readRaw();
-    if (!raw) return clone(DEFAULT_STATE);
+    if (!raw) {
+      /* 一个键都没有 = 全新用户，什么都不用说；有键但全坏 = 坏档，要说 */
+      if (corruptBackup) { backupCorrupt(); recoveredFromCorrupt = true; }
+      return clone(DEFAULT_STATE);
+    }
     return migrate(JSON.parse(raw));
-  } catch (e) { return clone(DEFAULT_STATE); }
+  } catch (e) {
+    if (corruptBackup) { backupCorrupt(); recoveredFromCorrupt = true; }
+    return clone(DEFAULT_STATE);
+  }
 }
 
 /* v3 及更早的词卡是一个不分轨的数组（`cards: ['觉察', ...]`）。
@@ -360,6 +400,36 @@ function migrate(s) {
 }
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
+/* 坏档提示：与「不能保存」是两件事，分开说。
+   这条要说清三件事——为什么是空白、数据没被删、以及下一步能做什么（导入）。
+   用 role="status" 而不是 alert：它不是紧急中断，只是要让人看见。 */
+function showCorruptWarning() {
+  const app = document.getElementById('app');
+  if (!app || document.getElementById('corrupt-warning')) return;
+  const box = document.createElement('div');
+  box.id = 'corrupt-warning';
+  box.className = 'storage-warning corrupt-warning';
+  box.setAttribute('role', 'status');
+  const text = document.createElement('p');
+  text.className = 'cw-text';
+  text.textContent = '本机存档读不出来（文件损坏或被别的页面写坏了），这一趟只能从空白开始。原始内容已经另存了一份、没有删掉。如果你导出过进度，可以在设置里导回来。';
+  const go = document.createElement('button');
+  go.className = 'btn btn-secondary cw-go';
+  go.dataset.action = 'open-settings';
+  go.textContent = '去设置里导入';
+  const ok = document.createElement('button');
+  ok.className = 'btn btn-secondary cw-ok';
+  ok.textContent = '知道了';
+  ok.addEventListener('click', () => box.remove());
+  box.append(text, go, ok);
+  app.insertBefore(box, document.getElementById('stage'));
+  /* 刷新时浏览器会自己恢复上次的滚动位置，而且在 load 之后才做 —— scrollTo 拦不住
+     （实测 resetViewScroll 已归零，随后又被恢复成 163）。这条提示只说一次
+     （坏键留底后就删了），错过就再也没有了，所以直接关掉这一页的滚动恢复。 */
+  try { history.scrollRestoration = 'manual'; } catch (e) { /* 老浏览器没有这个属性 */ }
+  try { window.scrollTo(0, 0); } catch (e) { /* noop */ }
+}
+
 /* 隐私 / 无痕模式下 localStorage 可能不可写。写失败必须让用户看见，
    否则他会以为进度已经留下。提示只插一次，不打断当前这一关。 */
 let storageWritable = true;
@@ -385,7 +455,7 @@ function save() {
 /* 用户明确「清空本机进度」时，连 v4 / v3 / v2 旧键一起删。
    否则以后新键损坏，readRaw() 回退旧键会把已经清掉的进度又读回来。 */
 function removeAllSaves() {
-  for (const k of [STORAGE_KEY, ...LEGACY_KEYS]) {
+  for (const k of [STORAGE_KEY, ...LEGACY_KEYS, CORRUPT_KEY]) {
     try { localStorage.removeItem(k); } catch (e) { /* 隐私模式下不可写，忽略 */ }
   }
 }

@@ -11,7 +11,7 @@ function renderRetreatPractice(i, resumePlay) {
     body = `<div class="ground-rows">${r.rows.map((row, ri) =>
       `<div class="ground-row" data-row="${ri}"><div class="compose-label">${esc(row.label)}</div>
         <div class="compose-choices">${row.choices.map((c, ci) =>
-          `<button class="word-chip" data-action="ground-pick" data-row="${ri}" data-i="${ci}">${esc(c)}</button>`).join('')}</div></div>`).join('')}</div>
+          `<button class="word-chip" data-action="ground-pick" data-row="${ri}" data-i="${ci}" aria-pressed="false">${esc(c)}</button>`).join('')}</div></div>`).join('')}</div>
       <div id="retreat-result"></div>`;
   } else if (r.type === 'defuse') {
     if (!resumePlay) {

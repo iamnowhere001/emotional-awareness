@@ -14,5 +14,8 @@ node_modules/
 tests/.tmp/
 *.log
 
+# 构建产物（npm run build 生成，上线用；根目录才是可双击的源码）
+dist/
+
 # 本地截图暂存目录（回归产物，无跟踪文件），不入库
 .screenshots/

@@ -49,7 +49,21 @@
             </div>
         </header>
 
-        <main id="stage" tabindex="-1"></main>
+        <!-- 首屏骨架：35 个脚本下载完才会渲染第一屏，弱网下这里会停一两秒。
+             纯装饰，读屏不读（aria-hidden）；第一次整屏渲染会把它整块换掉，
+             同时把 aria-busy 清掉，免得读屏一直以为页面还在准备。 -->
+        <main id="stage" tabindex="-1" aria-busy="true">
+            <div class="stage-skeleton" aria-hidden="true">
+                <span class="sk-line sk-eyebrow"></span>
+                <span class="sk-line sk-title"></span>
+                <span class="sk-line sk-lead"></span>
+                <span class="sk-line sk-lead short"></span>
+                <div class="sk-cards">
+                    <span class="sk-card"></span><span class="sk-card"></span>
+                    <span class="sk-card"></span><span class="sk-card"></span>
+                </div>
+            </div>
+        </main>
 
         <div id="overlay"></div>
 
@@ -69,6 +83,10 @@
             <button class="tab" data-action="open-tools" data-tab="tools">工具</button>
             <button class="tab" data-action="open-mine" data-tab="mine">我的</button>
         </nav>
+
+        <!-- 视图切换播报：SPA 换屏时读屏用户需要知道「到哪了」。
+             放在 #stage 外，整屏重建不会把它一起换掉。 -->
+        <div id="route-announcer" class="visually-hidden" role="status" aria-live="polite"></div>
     </div>
 
     <!-- 内容：纯数据，顺序敏感；新增岛/题库再加一行即可。

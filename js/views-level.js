@@ -41,7 +41,7 @@ const RENDERERS = {
   weather(v) {
     return `<p class="lead">${esc(v.note)}</p>
       <div class="weather-grid" style="margin-top:18px">${v.items.map((it, i) =>
-        `<button class="weather-btn" data-action="weather-pick" data-i="${i}">
+        `<button class="weather-btn" data-action="weather-pick" data-i="${i}" aria-pressed="false">
           <span class="weather-glyph" aria-hidden="true">${it.g}</span>
           <span class="weather-name">${esc(it.n)}</span>
           <span class="weather-sub">${esc(it.s)}</span></button>`).join('')}</div>
@@ -75,7 +75,7 @@ const RENDERERS = {
     return `<p class="prompt">先点左边的一件事，再点右边那个最贴近的词。</p>
       <div class="pair-cols">
         <div class="pair-col"><div class="section-label">发生了什么</div>${v.pairs.map((p, i) =>
-          `<button class="pair-item" data-action="pair-left" data-i="${i}">${esc(p.scene)}</button>`).join('')}</div>
+          `<button class="pair-item" data-action="pair-left" data-i="${i}" aria-pressed="false">${esc(p.scene)}</button>`).join('')}</div>
         <div class="pair-col"><div class="section-label">心里那个词</div>${shuffled(v.words).map(w =>
           `<button class="pair-item" data-action="pair-right" data-w="${esc(w)}">${esc(w)}</button>`).join('')}</div>
       </div>`;
@@ -121,7 +121,7 @@ const RENDERERS = {
       <p class="prompt">先点一个人的名字，再点他更可能冒出的那句话。</p>
       <div class="pair-cols">
         <div class="pair-col"><div class="section-label">谁在看</div>${v.roles.map((r, i) =>
-          `<button class="pair-item" data-action="persp-left" data-i="${i}">${esc(r.name)}</button>`).join('')}</div>
+          `<button class="pair-item" data-action="persp-left" data-i="${i}" aria-pressed="false">${esc(r.name)}</button>`).join('')}</div>
         <div class="pair-col"><div class="section-label">他可能怎么想</div>${shuffled(v.roles.map((r, i) => ({ t: r.thought, i }))).map(o =>
           `<button class="pair-item" data-action="persp-right" data-i="${o.i}">${esc(o.t)}</button>`).join('')}</div>
       </div>`;
@@ -139,7 +139,7 @@ const RENDERERS = {
       <div class="compose-rows">${v.rows.map((r, ri) =>
         `<div class="compose-row" data-row="${ri}"><div class="compose-label">${esc(r.label)}</div>
           <div class="compose-choices">${shuffled(withIndex(r.choices)).map(({ v: c, i: ci }) =>
-            `<button class="word-chip" data-action="compose-pick" data-row="${ri}" data-i="${ci}">${esc(c.t)}</button>`).join('')}</div></div>`).join('')}</div>
+            `<button class="word-chip" data-action="compose-pick" data-row="${ri}" data-i="${ci}" aria-pressed="false">${esc(c.t)}</button>`).join('')}</div></div>`).join('')}</div>
       <div id="compose-preview"></div>
       <div class="actions"><button class="btn btn-primary" data-action="compose-submit" id="compose-submit" disabled>拼好了，看看这句话</button></div>`;
   },
@@ -153,7 +153,7 @@ const RENDERERS = {
     return `${scenarioBox('场景', v.scenario)}
       <p class="prompt">${esc(v.question)}</p>
       <div class="ladder">${v.rungs.map((r, i) =>
-        `<button class="rung" data-action="rung-pick" data-i="${i}">
+        `<button class="rung" data-action="rung-pick" data-i="${i}" aria-pressed="false">
           <span class="rung-lv" aria-hidden="true">${i + 1}</span>
           <span class="rung-main"><span class="rung-label">${esc(r.label)}</span><span class="rung-body">${esc(r.body)}</span></span>
         </button>`).join('')}</div>
@@ -169,7 +169,7 @@ const RENDERERS = {
     const quoteBlock = `<h3 style="margin-top:22px">${adult ? '2' : '3'} · 带走一句话</h3>
       <p class="muted" style="margin:6px 0 10px">挑一句今天最用得上的，截图留住就好，不用上传。</p>
       <div id="quote-picks" class="quote-picks">${play.quotes.map((q, i) =>
-        `<button class="opt" data-action="quote-pick" data-i="${i}" aria-keyshortcuts="${i + 1}"><span class="opt-key" aria-hidden="true">${i + 1}</span><span>${esc(q)}</span></button>`).join('')}</div>
+        `<button class="opt" data-action="quote-pick" data-i="${i}" aria-keyshortcuts="${i + 1}" aria-pressed="false"><span class="opt-key" aria-hidden="true">${i + 1}</span><span>${esc(q)}</span></button>`).join('')}</div>
       <button class="btn-read" data-action="quote-reroll">换一组句子</button>
       <div id="finale-quote"></div>`;
     const microBlock = `<h3 style="margin-top:22px">${adult ? '3' : '4'} · 生活里可以试试</h3>
@@ -189,8 +189,8 @@ const RENDERERS = {
             <div class="micro-card">「下次再遇到，我想先对自己说一句话：……」</div>
           </div>
           <p class="muted">这里没有输入框，也不会保存任何文字。说出来、或者只在心里过一遍，都可以。</p></div>
-        <div class="actions"><button class="btn btn-primary" data-action="go-map">回到地图</button>
-          <button class="btn btn-secondary" data-action="restart-ask">再走一轮（换一批题）</button></div>`;
+        <div class="actions"><button class="btn btn-primary" data-action="finale-finish">走完这一程，回地图</button>
+          <button class="btn btn-secondary" data-action="finale-restart">再走一轮（换一批题）</button></div>`;
     }
 
     const picks = state.decor || [];
@@ -203,7 +203,7 @@ const RENDERERS = {
         }).join('')}
       </div>
       <div class="decor-picker">${DECOR.map((d, i) =>
-        `<button class="chip ${picks.includes(i) ? 'active' : ''}" data-action="decor-toggle" data-i="${i}">${d.g} ${esc(d.n)}</button>`).join('')}</div>
+        `<button class="chip ${picks.includes(i) ? 'active' : ''}" data-action="decor-toggle" data-i="${i}" aria-pressed="${picks.includes(i)}">${d.g} ${esc(d.n)}</button>`).join('')}</div>
       ${skillBlock}
       ${quoteBlock}
       ${microBlock}
@@ -211,8 +211,8 @@ const RENDERERS = {
         <p id="talk-text">${esc(play.talk)}</p>
         <button class="btn-read" data-action="talk-reroll">换一张</button>
         <p class="muted">不用回答，也不用聊出结论。聊聊就行，或者跳过。</p></div>
-      <div class="actions"><button class="btn btn-primary" data-action="go-map">回到地图</button>
-        <button class="btn btn-secondary" data-action="restart-ask">再走一轮（换一批题）</button></div>`;
+      <div class="actions"><button class="btn btn-primary" data-action="finale-finish">走完这一程，回地图</button>
+        <button class="btn btn-secondary" data-action="finale-restart">再走一轮（换一批题）</button></div>`;
   }
 };
 
@@ -300,22 +300,36 @@ function renderLevel(resumePlay, lvOverride, sideIndex) {
       <h2>${esc(lv.name)}</h2><p class="level-goal">${esc(lv.goal)}</p>
       ${bridgeLine(lv, play.pocketShown)}
       ${depthOn
-        ? `<p class="level-depth">${depth === 1 ? '基础题' : '多想一步 · 线索更长，慢慢来'} · <button class="link-btn" data-action="set-depth" data-d="${depth === 1 ? 2 : 1}">${depth === 1 ? '想多想一步？' : '回到基础题'}</button></p>` : ''}
+        ? `<p class="level-depth"><span class="depth-prefix">${depth === 1 ? '基础题' : '多想一步 · 线索更长，慢慢来'}</span> · <button class="link-btn" data-action="set-depth" data-d="${depth === 1 ? 2 : 1}">${depth === 1 ? '想多想一步？' : '回到基础题'}</button></p>` : ''}
     </div>
     <div id="duo-slot"></div>
     <div class="play-area">${RENDERERS[lv.type](v)}</div>
+    <!-- 数字键的可见提示：徽标上写着 1/2/3，但没人会去猜「能不能按」。
+         文案由 afterRender 按实际徽标数量填，触屏设备由 CSS 藏掉（那里没有键盘）。 -->
+    <p class="kbd-hint" id="kbd-hint" hidden></p>
     <div id="feedback-slot" aria-live="polite"></div>
     <div class="actions" id="level-actions"></div>
     ${b.adult && lv.adult ? `<div class="adult-tip"><b>给大人：</b>${esc(lv.adult)}</div>` : ''}
   </div>`;
   afterRender(lv);
+  /* 数字键提示按实际渲染出来的徽标来写：只有「选项带 1/2/3」的题型才说，
+     天气、配对、滑杆这些没有数字徽标，说了就是一句按了没反应的假承诺。
+     触屏设备由 CSS 藏掉（那里没有键盘，这句只是噪音）。 */
+  const kbdHint = document.getElementById('kbd-hint');
+  if (kbdHint) {
+    const keys = stage.querySelectorAll('.play-area .opt-key, .play-area .rung-lv').length;
+    if (keys >= 2) {
+      kbdHint.hidden = false;
+      kbdHint.textContent = `也可以用键盘：按 1–${Math.min(keys, 9)} 选答案，Tab 切换，Esc 回地图。`;
+    }
+  }
   paintDuo();
   /* 完成态也可能从急救返回：把结果卡原样重画，保住「去下一站 / 回地图」两条路。
      卡片自己会滚到可见位置，这时就不再拉回页面顶部。 */
   const restoredResult = !!(play.done && play.result);
   if (restoredResult) paintResultCard(play.result);
   updateTopbar();
-  stage.focus({ preventScroll: true });
+  afterViewEnter('level', lv.type === 'finale' ? '终章' : `第 ${lv.num} 站 · ${lv.name}`);
   if (!restoredResult) {
     try { window.scrollTo({ top: 0, behavior: state.settings.motion ? 'auto' : 'smooth' }); } catch (e) { /* noop */ }
   }
@@ -453,6 +467,30 @@ function paintResultCard(payload) {
       <div class="result-actions">${buttons}</div>
     </div>`;
     try { slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* noop */ }
+  }
+  /* 答题区进入完成态：藏掉提交行、禁用其余可点项、顶部给一句明确说明。
+     否则「就这样出发」会亮着，但 play.done 已经挡住结算，点起来像坏掉。
+     只动 .play-area；结果卡自己的按钮不受影响。 */
+  const area = document.querySelector('#stage .play-area');
+  if (area) {
+    area.classList.add('is-complete');
+    area.querySelectorAll('.actions').forEach(row => { row.hidden = true; });
+    area.querySelectorAll('button, input, select, textarea').forEach(el => {
+      el.disabled = true;
+      if (el.tagName === 'BUTTON') el.setAttribute('aria-disabled', 'true');
+    });
+    if (!area.querySelector('.play-done-note')) {
+      const note = document.createElement('p');
+      note.className = 'play-done-note';
+      note.textContent = '这一题已经答完，下面是这一站带走的东西。';
+      area.insertBefore(note, area.firstChild);
+    }
+  }
+  /* 深度行整句改成「已完成」，不要留下「基础题 ·」这种没有宾语的悬空分隔符。 */
+  const depthLine = document.querySelector('#stage .level-depth');
+  if (depthLine) {
+    const pre = depthLine.querySelector('.depth-prefix');
+    if (pre) pre.textContent = '这一站 · 已完成';
   }
   /* 结果卡出现后，toolbar 里「这一题进行中」的按钮要收掉：否则点 duo-open / set-depth
      只会静默 return 或重抽掉结果卡，看起来像坏掉。下一步 / 回地图由结果卡自己给。

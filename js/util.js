@@ -125,12 +125,27 @@ function scenarioBox(label, text) {
 function optBtn(i, title, desc, action, orig) {
   const o = orig === undefined ? i : orig;
   const key = i < 9 ? ` aria-keyshortcuts="${i + 1}"` : '';
-  return `<button class="opt" data-action="${action}" data-i="${i}" data-orig="${o}"${key}><span class="opt-key" aria-hidden="true">${i + 1}</span><span><span>${esc(title)}</span>${desc ? `<span class="opt-desc">${esc(desc)}</span>` : ''}</span></button>`;
+  return `<button class="opt" data-action="${action}" data-i="${i}" data-orig="${o}"${key} aria-pressed="false"><span class="opt-key" aria-hidden="true">${i + 1}</span><span><span>${esc(title)}</span>${desc ? `<span class="opt-desc">${esc(desc)}</span>` : ''}</span></button>`;
 }
 function sliderLabels(v) {
   return v.replies.length === 3 ? ['一点点', '中等', '很大很大'] : ['很轻', '有一点', '中等', '挺明显', '很满'];
 }
-/* 夜间使用：只随系统深浅色切一层 CSS 变量，不新增存档字段、不发请求。
+
+/* 分段选择：一组选项，选中项由调用方用 on 标出来。
+   1.2.1 之前选中态只有 class="on" 一层底色，读屏听到的是一串一模一样的按钮，
+   色觉障碍用户也只能靠深浅猜。这里统一补 aria-pressed，视觉上的勾在 CSS 里。
+   items: [{ text, action, on, attrs }]；attrs 是拼好的 data-* 字符串。 */
+function seg(label, items) {
+  return `<div class="seg" role="group" aria-label="${esc(label)}">${items.map(o =>
+    `<button class="${o.on ? 'on' : ''}" data-action="${o.action}"${o.attrs || ''} aria-pressed="${o.on ? 'true' : 'false'}">${o.text}</button>`).join('')}</div>`;
+}
+/* 选项按钮的选中态：class 与 aria-pressed 必须一起切。
+   分两处改的话，迟早会出现「看着选中了、读屏没选中」这种半截状态。 */
+function markPressed(el, on, cls) {
+  if (!el) return;
+  el.classList.toggle(cls || 'selected', !!on);
+  el.setAttribute('aria-pressed', on ? 'true' : 'false');
+}/* 夜间使用：只随系统深浅色切一层 CSS 变量，不新增存档字段、不发请求。
    高对比模式由 CSS 自己优先，不让两套覆盖打架。 */
 function applyColorScheme() {
   if (!window.matchMedia) return;

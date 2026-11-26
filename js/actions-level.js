@@ -188,7 +188,7 @@ const ACTIONS = {
   /* 1-1 天气：只存在内存，不落盘 */
   'weather-pick': (el) => {
     play.picked = Number(el.dataset.i);
-    document.querySelectorAll('.weather-btn').forEach((b, i) => b.classList.toggle('selected', i === play.picked));
+    document.querySelectorAll('.weather-btn').forEach((b, i) => markPressed(b, i === play.picked, 'selected'));
     /* 首站不再把主按钮锁住：没选也能一次点走，选了就把按钮改成带着它出发。 */
     const go = document.getElementById('weather-go');
     if (go) go.textContent = `带着「${play.v.items[play.picked] ? play.v.items[play.picked].n : ''}」上岛`;
@@ -207,7 +207,7 @@ const ACTIONS = {
     const i = Number(el.dataset.orig);
     if (i === play.v.answer) {
       document.querySelectorAll('#stage .opt').forEach(b => { b.disabled = true; });
-      el.classList.add('selected');
+      markPressed(el, true, 'selected');
       completeLevelHtml(`${esc(play.v.why)}<span class="tip">你翻开了 ${play.flipped.size} / ${play.v.clues.length} 张线索。</span>`);
     } else {
       nudge(`「${play.v.options[i]}」也是一种可能。再把几张线索合起来看看？`);
@@ -226,7 +226,7 @@ const ACTIONS = {
   /* 1-4 近义词配对 */
   'pair-left': (el) => {
     play.left = Number(el.dataset.i);
-    document.querySelectorAll('[data-action="pair-left"]').forEach((b, i) => b.classList.toggle('active', i === play.left));
+    document.querySelectorAll('[data-action="pair-left"]').forEach((b, i) => markPressed(b, i === play.left, 'active'));
   },
   'pair-right': (el) => {
     if (play.left === null) { nudge('先点左边的一件事，再来选词。'); return; }
@@ -236,7 +236,7 @@ const ACTIONS = {
       play.paired.set(play.left, word);
       el.classList.add('paired'); el.disabled = true;
       const leftBtn = document.querySelectorAll('[data-action="pair-left"]')[play.left];
-      if (leftBtn) { leftBtn.classList.add('paired'); leftBtn.classList.remove('active'); leftBtn.disabled = true; }
+      if (leftBtn) { leftBtn.classList.add('paired'); markPressed(leftBtn, false, 'active'); leftBtn.disabled = true; }
       play.left = null;
       showFeedback('gentle', `配上了：「${esc(word)}」。<span class="tip">同一件事也可能同时有别的感觉，这里只取最贴近的那个词。</span>`);
       if (play.paired.size === play.v.pairs.length) completeLevel('几个词各归其位。能把感受分得这么细，本身就是一种照顾。');
@@ -295,7 +295,7 @@ const ACTIONS = {
     const i = Number(el.dataset.orig);
     if (i === play.v.answer) {
       document.querySelectorAll('#stage .opt').forEach(b => { b.disabled = true; });
-      el.classList.add('selected');
+      markPressed(el, true, 'selected');
       completeLevel(play.v.why);
     } else {
       nudge(`「${play.v.options[i].d}」这个方向，可能会让那句话更紧一点。换个镜头试试？`);
@@ -337,7 +337,7 @@ const ACTIONS = {
   /* 3-1 换位 */
   'persp-left': (el) => {
     play.role = Number(el.dataset.i);
-    document.querySelectorAll('[data-action="persp-left"]').forEach((b, i) => b.classList.toggle('active', i === play.role));
+    document.querySelectorAll('[data-action="persp-left"]').forEach((b, i) => markPressed(b, i === play.role, 'active'));
   },
   'persp-right': (el) => {
     if (play.role === null) { nudge('先点一个人的名字。'); return; }
@@ -346,7 +346,7 @@ const ACTIONS = {
       play.matched.set(play.role, i);
       el.classList.add('paired'); el.disabled = true;
       const left = document.querySelectorAll('[data-action="persp-left"]')[play.role];
-      if (left) { left.classList.add('paired'); left.classList.remove('active'); left.disabled = true; }
+      if (left) { left.classList.add('paired'); markPressed(left, false, 'active'); left.disabled = true; }
       play.role = null;
       showFeedback('gentle', '两副眼镜对上了。两个人的重点不一样，但都可以成立。');
       if (play.matched.size === play.v.roles.length) completeLevel('先弄清楚对方看见了什么，比急着判断谁对谁错更省力。');
@@ -373,7 +373,7 @@ const ACTIONS = {
   'compose-pick': (el) => {
     const r = Number(el.dataset.row), i = Number(el.dataset.i);
     play.picks[r] = i;
-    document.querySelectorAll(`.compose-row[data-row="${r}"] .word-chip`).forEach(b => b.classList.toggle('selected', Number(b.dataset.i) === i));
+    document.querySelectorAll(`.compose-row[data-row="${r}"] .word-chip`).forEach(b => markPressed(b, Number(b.dataset.i) === i, 'selected'));
     const submit = document.getElementById('compose-submit');
     if (submit) submit.disabled = play.picks.some(p => p === null);
     const preview = document.getElementById('compose-preview'); if (preview) preview.innerHTML = '';
@@ -422,11 +422,9 @@ const ACTIONS = {
     const r = (play.v.rungs || [])[i];
     if (!r) return;
     document.querySelectorAll('.rung').forEach((b, bi) => {
-      b.classList.toggle('selected', bi === i);
+      markPressed(b, bi === i, 'selected');
       b.disabled = true;
     });
-    el.classList.remove('selected');
-    el.classList.add('selected');
     const box = document.getElementById('rung-result');
     if (box) box.innerHTML = `<div class="feedback good">
       <p><b>${esc(r.label)}</b>这一档，通常可以先做一件事：</p>
@@ -449,11 +447,11 @@ const ACTIONS = {
       slot.querySelector('.decor-glyph').textContent = d ? d.g : '＋';
       slot.querySelector('.decor-name').textContent = d ? d.n : '空地';
     });
-    document.querySelectorAll('.decor-picker .chip').forEach((b, bi) => b.classList.toggle('active', state.decor.includes(bi)));
+    document.querySelectorAll('.decor-picker .chip').forEach(b => markPressed(b, state.decor.includes(Number(b.dataset.i)), 'active'));
   },
   'quote-pick': (el) => {
     const i = Number(el.dataset.i);
-    document.querySelectorAll('#quote-picks .opt').forEach((b, bi) => b.classList.toggle('selected', bi === i));
+    document.querySelectorAll('#quote-picks .opt').forEach((b, bi) => markPressed(b, bi === i, 'selected'));
     document.getElementById('finale-quote').innerHTML = `<div class="finale-quote">「${esc(play.quotes[i])}」</div>`;
   },
   'quote-reroll': () => {
@@ -469,5 +467,17 @@ const ACTIONS = {
   'talk-reroll': () => {
     play.talk = rand(TALK_CARDS);
     document.getElementById('talk-text').textContent = play.talk;
+  },
+  /* 终章不是「答完一题」，而是一屏收束：点「走完这一程」才把第 21 站记为走过。
+     1.2.0 之前这里直接 go-map，终章永远不进 cleared，21 站永远差最后一站。 */
+  'finale-finish': () => {
+    if (!play.done) completeLevel('这一程走到这里。不用总结，也不用给自己打分；想回来的时候，地图还在。');
+    session.navDir = 'back';
+    renderMap();
+  },
+  /* 「再走一轮」也先把这一程记完，再问要不要重来；取消重来时不至于又回到未完成。 */
+  'finale-restart': () => {
+    if (!play.done) completeLevel('这一程走到这里。不用总结，也不用给自己打分。');
+    ACTIONS['restart-ask']();
   }
 };

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心情闯关岛 1.2.0 · 产品完成度与用户体验审查</title>
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#fff; --line:#dfe5e2; --line-soft:#eef2f0;
+    --ink:#1b2420; --ink2:#3f4d47; --sub:#66756e;
+    --green:#2c6b58; --green-l:#e7f2ed; --green-d:#1f5142;
+    --amber:#a96a1f; --amber-l:#fbf1e2;
+    --red:#a83c33; --red-l:#fbeae7;
+    --blue:#31678c; --blue-l:#e9f1f7;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    line-height:1.75;font-size:15.5px;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:56px 28px 110px}
+  header{border-bottom:3px solid var(--green);padding-bottom:26px;margin-bottom:34px}
+  .kicker{font-size:12.5px;letter-spacing:.14em;color:var(--green);font-weight:700;text-transform:uppercase}
+  h1{font-size:33px;line-height:1.3;margin:12px 0 10px;letter-spacing:-.01em}
+  .meta{color:var(--sub);font-size:13px}
+  .meta b{color:var(--ink2);font-weight:600}
+
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--green);border-radius:10px;padding:24px 28px;margin:28px 0 14px;box-shadow:0 2px 10px rgba(20,40,35,.04)}
+  .verdict .lead{font-size:20px;font-weight:700;line-height:1.55;margin:0 0 10px}
+  .verdict p{margin:8px 0;color:var(--ink2)}
+  .verdict .small{font-size:13.5px;color:var(--sub)}
+
+  .top3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:18px 0 8px}
+  .top3 div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .top3 b{display:block;font-size:14px;margin-bottom:4px;color:var(--green-d)}
+  .top3 span{font-size:13.5px;color:var(--sub);line-height:1.6}
+
+  h2{font-size:24px;margin:56px 0 8px;padding-top:22px;border-top:1px solid var(--line);letter-spacing:-.01em}
+  h2:first-of-type{border-top:0;padding-top:0;margin-top:40px}
+  h2 .n{color:var(--green);font-weight:800;margin-right:8px}
+  h3{font-size:18px;margin:34px 0 12px;color:var(--green-d)}
+  h4{font-size:15px;margin:18px 0 6px}
+  p{margin:10px 0}
+  .sub{color:var(--sub);font-size:14px}
+
+  .scores{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:20px 0 10px}
+  .scores table{width:100%;border-collapse:collapse;font-size:14px}
+  .scores td{padding:11px 16px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  .scores tr:last-child td{border-bottom:0}
+  .scores .dim{width:150px;font-weight:700}
+  .scores .bar{width:250px}
+  .track{height:8px;background:#edf1ef;border-radius:5px;overflow:hidden}
+  .fill{height:100%;border-radius:5px}
+  .g{background:var(--green)} .a{background:#c98a34} .r{background:var(--red)}
+  .scores .val{width:64px;text-align:right;font-variant-numeric:tabular-nums;font-weight:800;font-size:15px}
+  .scores .note{color:var(--sub);font-size:13px;line-height:1.55}
+  .legend{font-size:12.5px;color:var(--sub);margin:8px 0 0}
+
+  .flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:22px 0 8px}
+  figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  figure img{display:block;width:100%;height:auto;border-bottom:1px solid var(--line-soft)}
+  figcaption{padding:12px 16px 14px;font-size:13px;color:var(--sub);line-height:1.65}
+  figcaption b{display:block;color:var(--ink);font-size:14px;margin-bottom:2px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+  .pair figure img{max-height:520px;object-fit:cover;object-position:top}
+
+  .finding{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 22px 20px;margin:14px 0}
+  .finding.p1{border-left:4px solid var(--red)}
+  .finding.p2{border-left:4px solid #c98a34}
+  .finding.p3{border-left:4px solid var(--blue)}
+  .finding .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .finding .top strong{font-size:16.5px;line-height:1.45}
+  .finding .where{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--sub);background:#f3f6f4;border:1px solid var(--line-soft);padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .finding p{margin:7px 0}
+  .finding .lbl{display:inline-block;font-size:12px;font-weight:700;color:var(--green-d);background:var(--green-l);padding:1px 8px;border-radius:4px;margin-right:6px}
+  .finding .impact{color:var(--ink2)}
+  .finding .fix{background:#f7faf8;border:1px dashed #d5e3dc;border-radius:7px;padding:10px 13px;margin-top:10px;font-size:14px}
+  .finding .ev{font-size:13px;color:var(--sub);border-left:3px solid var(--line);padding-left:12px;margin:10px 0;line-height:1.7}
+  .finding .ev b{color:var(--ink2);font-weight:600}
+
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+  .t-p1{background:var(--red-l);color:var(--red)}
+  .t-p2{background:var(--amber-l);color:var(--amber)}
+  .t-p3{background:var(--blue-l);color:var(--blue)}
+  .t-keep{background:var(--green-l);color:var(--green)}
+
+  code{background:#eef2f0;padding:1px 5px;border-radius:4px;font-size:12.5px;font-family:var(--mono);color:#2c3a34}
+  .kbd{font-family:var(--mono);font-size:12px;border:1px solid #cfd8d3;border-bottom-width:2px;border-radius:4px;padding:0 5px;background:#fff}
+
+  table.data{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:14px;margin:16px 0}
+  table.data th{background:#eef4f1;text-align:left;padding:11px 14px;font-weight:700;border-bottom:1px solid var(--line)}
+  table.data td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  table.data tr:last-child td{border-bottom:0}
+  table.data td.c{white-space:nowrap}
+
+  .keep{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:16px 0}
+  .keep div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 17px}
+  .keep b{display:block;font-size:14px;margin-bottom:3px}
+  .keep span{font-size:13.5px;color:var(--sub);line-height:1.65}
+
+  .callout{background:var(--amber-l);border:1px solid #eedcbe;border-radius:10px;padding:16px 20px;margin:20px 0;font-size:14px;color:#5f4318}
+  .callout b{color:#4a3410}
+
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--sub)}
+
+  @media (max-width:720px){
+    .wrap{padding:32px 18px 80px}
+    h1{font-size:27px}
+    .flow{grid-template-columns:1fr}
+    .pair{grid-template-columns:1fr}
+    .finding .where{margin-left:0}
+    .scores .bar{display:none}
+    .scores .note{font-size:12.5px}
+  }
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    .finding,figure,.scores,.verdict{break-inside:avoid}
+    h2{break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Product &amp; UX Review · v1.2.0</div>
+  <h1>心情闯关岛：产品完成度与用户体验审查</h1>
+  <div class="meta">
+    审查对象 <b>1.2.0</b>（commit <code>46796da</code>，导航收口版）　·　审查日期 <b>2026-11-26</b>　·　
+    范围 核心功能 / 关键流程 / 交互一致性 / 边界与错误 / 性能 / 可访问性　·　未改动任何应用代码
+  </div>
+</header>
+
+<section class="verdict">
+  <p class="lead">工程水位和边界意识明显高于同类个人项目；这一轮的问题不在「缺功能」，而在几处会直接影响第一印象的完成态、首次加载和状态表达。</p>
+  <p>功能面已经相当完整：4 个年龄档、2 条轨各 21 站、13 种题型 + 终章、162 条词典、31 张工具卡、静修间与工作间支线、导出导入、PWA 离线，且 164 项浏览器用例 + 45 项一致性检查全绿。安全出口、错误兜底、存档迁移这些「不容易被看见」的地方做得比大多数产品扎实。</p>
+  <p>真正的短板集中在三处：<b>通关后原题还留在屏幕上、主按钮变成点不动的「死按钮」</b>；<b>弱网首次打开要 14.6 秒</b>；<b>页面切换不播报、选中状态只靠颜色</b>。这三件事分别伤害「第一次玩完一关」「第一次打开」「第一次用读屏」，恰好都在第一印象上。</p>
+  <div class="top3">
+    <div><b>先修完成态</b><span>通关后把题目收起来或整体禁用，别让「就这样出发」看起来还能点。</span></div>
+    <div><b>再修首次加载</b><span>托管层开压缩 + 合并首屏脚本，14.6s 可以降到 5s 以内。</span></div>
+    <div><b>补状态表达</b><span>路由切换播报、选中项 aria-pressed，让读屏用户知道「到哪了」「选了什么」。</span></div>
+  </div>
+  <p class="small">评分说明：以「同类个人项目」为参照，不以商业儿童教育产品为基准；90 分代表「可以直接交付」，60 分代表「能用但会明显掉链子」。</p>
+</section>
+
+<h2><span class="n">01</span>结论与评分</h2>
+
+<div class="scores">
+  <table>
+    <tr>
+      <td class="dim">核心功能完整性</td>
+      <td class="bar"><div class="track"><div class="fill g" style="width:90%"></div></div></td>
+      <td class="val">90</td>
+      <td class="note">13 种题型全部可渲染、可完成；两条轨、四个档、五座岛的数据都齐；导出导入、PWA、急救、词典、工具箱、慢变量、静修、工作间都在。</td>
+    </tr>
+    <tr>
+      <td class="dim">关键流程顺畅性</td>
+      <td class="bar"><div class="track"><div class="fill a" style="width:74%"></div></div></td>
+      <td class="val">74</td>
+      <td class="note">选档 → 首页 → 地图 → 关卡 → 结果 → 下一站，主链路通；扣分在完成态残留、设置弹窗过长、词典搜索无空状态。</td>
+    </tr>
+    <tr>
+      <td class="dim">界面交互一致性</td>
+      <td class="bar"><div class="track"><div class="fill a" style="width:78%"></div></div></td>
+      <td class="val">78</td>
+      <td class="note">底栏 + 抽屉收口后层级清楚；仍有首页无高亮、弹窗四种关闭说法、筛选器横滑与换行混用。</td>
+    </tr>
+    <tr>
+      <td class="dim">边界与错误处理</td>
+      <td class="bar"><div class="track"><div class="fill g" style="width:86%"></div></div></td>
+      <td class="val">86</td>
+      <td class="note">全局错误页、坏 hash 降级、SW 失败提示、多标签冲突、导入校验与撤销都在；唯一明显缺口是坏存档静默重置。</td>
+    </tr>
+    <tr>
+      <td class="dim">性能表现</td>
+      <td class="bar"><div class="track"><div class="fill r" style="width:62%"></div></div></td>
+      <td class="val">62</td>
+      <td class="note">缓存后极快（词典渲染 35ms）；但首次 39 个请求 / 705KB、无压缩，400kbps 下 14.6s 才能选档。</td>
+    </tr>
+    <tr>
+      <td class="dim">可访问性</td>
+      <td class="bar"><div class="track"><div class="fill a" style="width:76%"></div></div></td>
+      <td class="val">76</td>
+      <td class="note">对比度 5.99–7.68、焦点环 3px、焦点陷阱、Esc、reduced-motion、forced-colors 都到位；缺路由播报与选中态语义。</td>
+    </tr>
+  </table>
+</div>
+<p class="legend">综合 78 / 100。分数不是目的——下面 17 条里，前 4 条修完，三项主观分都会明显上移。</p>
+
+<h2><span class="n">02</span>核心流程走查</h2>
+
+<p>按真实路径走了一遍：首次进入 → 选档 → 首页 → 地图 → 关卡 → 通关 → 工具 / 我的抽屉 → 设置 → 词典搜索。下面六张是 390×844 真视口截图，另附窄屏与深色两张对照；问题标注在对应小节里。</p>
+
+<div class="flow">
+  <figure>
+    <img src="review-1.2.0/gate.png" alt="首次进入的选档页">
+    <figcaption><b>① 首次进入 · 选档</b>四张卡各约 270px，整页 1646px；第一屏只能看到 1.5 个选项，后两张的「点这里进去」在折叠线以下。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/home.png" alt="儿童档首页">
+    <figcaption><b>② 首页</b>只留「现在该干什么」：一张下一站卡 + 一个主按钮。层级干净，首屏 1002px，主按钮在折叠线以上。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/map.png" alt="岛屿地图">
+    <figcaption><b>③ 地图</b>五岛航线 + 下一站卡；同一座岛内可自由进出。整页 3019px，首屏能看到岛 1，比 1.1.0 的 4357px 明显收短。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/result.png" alt="通关结果页">
+    <figcaption><b>④ 通关结果</b>结果卡出现在题目<em>下方</em>：上面的天气选项和「就这样出发」仍在，按钮还亮着，但再点已经不会结算。这是本轮最值得先修的一处。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/settings.png" alt="设置弹窗">
+    <figcaption><b>⑤ 设置</b>年龄段、字号、朗读、动效、存了什么、备份、重来、安装全在一个 88vh 的滚动区里；「备份与迁移」「清空」要多滚约 1086px 才看得到。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/dict-empty.png" alt="词典搜索无结果">
+    <figcaption><b>⑥ 词典搜索无结果</b>输入 <code>zzzz</code> 后，搜索框下没有任何提示；「筛出 0 / 162 条」在筛选器下方，起步路径与「按概念读」仍占着首屏。</figcaption>
+  </figure>
+</div>
+
+<div class="pair">
+  <figure>
+    <img src="review-1.2.0/map-320.png" alt="320px 宽的地图页">
+    <figcaption><b>320px 地图</b>顶栏因换行变成三行（159px），加上底栏 57px，占掉 34% 的视口。</figcaption>
+  </figure>
+  <figure>
+    <img src="review-1.2.0/dark.png" alt="深色模式首页">
+    <figcaption><b>深色模式</b>配色完整、对比正常，不是简单反色；但缺少自动化的对比度断言（F16）。</figcaption>
+  </figure>
+</div>
+
+<h2><span class="n">03</span>问题清单</h2>
+<p class="sub">P1 = 影响核心体验或可访问性，建议下一版必修；P2 = 明显影响效率或一致性；P3 = 打磨项。每条都给了可定位的证据与改法。</p>
+
+<h3>P1 · 四条，建议下一版必修</h3>
+
+<article class="finding p1">
+  <div class="top"><span class="tag t-p1">P1</span><strong>F1　通关后原题仍在，主按钮变成「死按钮」</strong><span class="where">views-level.js:468 · actions-level.js:189</span></div>
+  <p class="impact"><span class="lbl">影响</span>结果卡被追加在题目下方，上面的选项和「就这样出发」原样保留。用户点完一次后看到结果，再点一次按钮没有任何反应（<code>play.done</code> 挡住了结算），会怀疑「是不是没点上」。这是所有人玩到的第一关，也是第一印象。</p>
+  <div class="ev"><b>证据</b>实测 1-1：通关后 <code>document.querySelector('[data-action="weather-go"]:not([disabled])')</code> 仍为真；再点一次，<code>state.shells</code> 与 <code>state.cleared</code> 不变、结果卡仍为 1 张——说明重复结算被挡住了，但按钮没有给出任何「已完成」的反馈。根因：<code>paintResultCard()</code> 只清空了 <code>#level-actions</code>（views-level.js:468-469），而 weather 的按钮在 <code>.play-area</code> 里（views-level.js:48），不在那个容器内。</div>
+  <p class="fix"><span class="lbl">建议</span>在 <code>paintResultCard()</code> 里统一处理完成态：把 <code>#stage .play-area</code> 折叠成一行「这一题的作答已收起」，或给其中所有 <code>[data-action]</code> 加 <code>disabled + aria-disabled</code>；<code>weather-go</code> 文案改为「已完成 · 去下一站」。更彻底的做法是完成时用结果卡替换 <code>.play-area</code>，让「答题区」和「结果区」不同时存在。同时把 F15 的悬空分隔符一起收掉。</p>
+</article>
+
+<article class="finding p1">
+  <div class="top"><span class="tag t-p1">P1</span><strong>F2　弱网首次打开 14.6 秒，39 个请求 / 705KB</strong><span class="where">index.html · scripts/serve.mjs</span></div>
+  <p class="impact"><span class="lbl">影响</span>PWA 二次访问很快（Service Worker 缓存后几乎瞬时），但第一次打开要等十几秒。家长在手机流量下点开一个「小游戏」，很可能在选档页出现前就退出。</p>
+  <div class="ev"><b>证据</b>CDP 真视口 390×844、禁用缓存、400kbps / 150ms RTT：首字节 151ms，顶栏 3.85s 出现，<b>选档页可用 14.6s</b>；39 个资源、解码 705KB，其中 35 个 JS（573KB）+ 1 个 CSS（112KB）。本机 <code>serve.mjs</code> 不做压缩；同一批文件 gzip 后合计 <b>239KB（-65%）</b>。若托管方开启 gzip，理论值约 5s，仍是可感知的等待。</div>
+  <p class="fix"><span class="lbl">建议</span>分三步，成本从低到高：① 托管层开 Brotli/gzip（零代码，立省 65%）；② 构建期 minify CSS/JS（再省 10–15%）；③ 把 21 个 <code>content/*.js</code> 合并成 3–5 个包（按「首屏必需 / 词典 / 工具 / 题库」切），首屏只加载 bands + core + shell + views-main，其余在进入对应视图时再注入。③ 会牵动 README 的加载顺序契约与 doctor 的清单断言，建议单独开一个版本做。过渡期至少给 <code>#stage</code> 一个骨架屏，别让用户对着空白等。</p>
+</article>
+
+<article class="finding p1">
+  <div class="top"><span class="tag t-p1">P1</span><strong>F3　切屏不播报、焦点不移动、标题不变</strong><span class="where">views-main.js:37/219 · shell.js:routeTo</span></div>
+  <p class="impact"><span class="lbl">影响</span>读屏或键盘用户点底栏「上岛」后，页面内容已经换了，但焦点还停在那个 tab 上，没有播报，浏览器标签页标题也始终是同一句。用户只能靠重新探索确认「我到底到哪了」。</p>
+  <div class="ev"><b>证据</b><code>stage.focus()</code> 只出现在关卡（views-level.js:318）、词典（views-dictionary.js:143）、静修（views-retreat.js:50/104）三处；<code>renderHome</code>（views-main.js:37）、<code>renderMap</code>（:219）、<code>renderAgeGate</code>（:12）、自助工具箱、慢变量都没有。全仓没有对 <code>document.title</code> 的赋值。</div>
+  <p class="fix"><span class="lbl">建议</span>在 <code>routeTo()</code> 的统一出口做三件事：<code>stage.focus({preventScroll:true})</code>；一个 <code>aria-live="polite"</code> 的路由播报（「已到地图，5 座岛，已走过 3 / 21 站」）；按视图设置 <code>document.title</code>（关卡带站名，如「第 3 站 · 情绪温度计 · 心情闯关岛」）。注意别让播报和 <code>#feedback-slot</code> 的 live region 抢话。</p>
+</article>
+
+<article class="finding p1">
+  <div class="top"><span class="tag t-p1">P1</span><strong>F4　选中状态只靠颜色，没有语义</strong><span class="where">ui.js:279-294 · actions-level.js:189</span></div>
+  <p class="impact"><span class="lbl">影响</span>读屏用户听到的是一串普通按钮，不知道哪个是当前字号、朗读开关是开还是关；色觉障碍用户只能靠底色深浅猜。设置页最严重——它决定了整个应用的显示方式。</p>
+  <div class="ev"><b>证据</b>全仓只有急救页的「给感受一个词」设了 <code>aria-pressed</code>（actions-level.js:152）。设置里的年龄段 / 字号 / 朗读 / 动效 / 高对比全部是 <code>class="on"</code>（ui.js:279-294）；weather-pick、pair-left、persp-left、compose-pick、decor-toggle 同样只切 class。实测设置弹窗 12 个 <code>.seg button</code>，<code>aria-pressed</code> 全为 <code>null</code>。</div>
+  <p class="fix"><span class="lbl">建议</span>抽一个 <code>seg()</code> 渲染件统一处理：选中项 <code>aria-pressed="true"</code>，或整组改成 <code>role="radiogroup"</code> + <code>role="radio"</code> + <code>aria-checked</code>；视觉上加一个勾或左侧竖条，不要只靠底色。题目选项（天气 / 配对 / 拼句）用 <code>aria-pressed</code> 即可，代价很小。</p>
+</article>
+
+<h3>P2 · 九条，建议排在 P1 之后</h3>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F5　词典搜索没有空状态，计数离输入框太远</strong><span class="where">views-dictionary.js:111/291</span></div>
+  <p class="impact"><span class="lbl">影响</span>搜不到时，用户分不清「没有这个词」还是「搜索坏了」；首屏仍被「第一次来？先读这 5 条」「按概念读」占满，会误以为筛选没生效。</p>
+  <div class="ev"><b>证据</b>输入 <code>zzzz</code> 后 <code>#dict-count</code> 文本为「筛出 0 / 162 条 · 「zzzz」」，但它在筛选器下方（截图中不可见）；搜索框下没有任何 <code>role="status"</code> 提示，也没有「清空」入口。</div>
+  <p class="fix"><span class="lbl">建议</span>搜索框正下方加一行 live 提示：「没有找到「zzzz」。试试更短的关键词，或换个说法」+ 清空按钮；命中时显示「找到 7 条」并把计数上移；0 结果时隐藏起步路径与「按概念读」，让空状态成为首屏唯一内容。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F6　设置弹窗过长，换档会把人「踢」到地图</strong><span class="where">ui.js:267-320 · actions-data.js:30</span></div>
+  <p class="impact"><span class="lbl">影响</span>导出、清空、安装这些低频但重要的操作被埋在 1500px 以下；误触年龄段会立刻关闭弹窗并跳到地图，用户还没反应过来。</p>
+  <div class="ev"><b>证据</b>一个 <code>.modal</code> 里放了 7 组内容（年龄段 + 长说明、字号、朗读、动效、存了什么、备份与迁移、重来、安装）；390×844 下弹窗可视高 743px、内容高 <b>1829px</b>，要多滚约 1086px 才能看到「备份与迁移」。换档按钮写死 <code>data-next="map"</code>（ui.js:280），<code>set-band</code> 直接 <code>renderMap()</code>（actions-data.js:30-31）。</div>
+  <p class="fix"><span class="lbl">建议</span>拆成「显示」「朗读」「数据与备份」三个二级面板或 <code>&lt;details&gt;</code> 折叠；换档加一句确认（或留在设置页，顶部提示「已切换」）；「清空本机进度」单独放在数据区底部，保持危险色与二次确认。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F7　320px 下顶栏 + 底栏吃掉 34% 视口</strong><span class="where">style.css:65-82 · 1143</span></div>
+  <p class="impact"><span class="lbl">影响</span>小屏手机上，地图 / 关卡页只有 2/3 的屏幕留给内容；顶栏还因为换行变成三行，档位胶囊被挤到第二行，视觉上像两个标题栏。</p>
+  <div class="ev"><b>证据</b>实测 320×640：地图 / 关卡顶栏 <b>159px</b> + 底栏 <b>57px</b> = 216px（34%）；首页 96 + 57 = 153px（24%）。档位 chip 实测 <b>99×27</b>。原因：<code>#topbar</code> 的 <code>flex-wrap</code> 遇上 <code>.brand{min-width:200px}</code>，320 下品牌与档位换行，进度条再占一行。</div>
+  <p class="fix"><span class="lbl">建议</span>窄屏（≤360）隐藏 <code>.brand-sub</code> 与档位 tag、把 chip 缩成「6-12」；或干脆把换档入口收进「我的」，顶栏只留品牌 + 贝壳；进度段与「已走过 X / 21 站」并成一行。目标是把地图页顶栏压到 110px 以内。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F8　多处触控目标小于 44px</strong><span class="where">style.css · 实测</span></div>
+  <p class="impact"><span class="lbl">影响</span>这个应用明确服务 3-6 岁，但顶栏进度段、词典筛选、「想多想一步」都低于 44px；孩子手指粗、精度低，误触率会明显上升。</p>
+  <div class="ev"><b>证据</b>实测：顶栏进度段 <b>56×30</b>；词典筛选 chip 高 <b>39</b>；「想多想一步？」<b>27</b>；关卡工具栏 <b>42</b>；首页档位 chip <b>27</b>。底栏 tab 46px 达标。</div>
+  <p class="fix"><span class="lbl">建议</span>统一最小 44×44（至少 40×40）；进度段可以用伪元素扩大热区而不改视觉高度；「想多想一步」改成带 padding 的行内按钮；词典 chip 行高加到 44。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F9　首次选档后的第一句话就写错了</strong><span class="where">actions-data.js:22-24</span></div>
+  <p class="impact"><span class="lbl">影响</span>第一次选完档，首页提示「已切换到「3-6 岁 · 看图玩」，题目会换一批，进度和词卡都还在」——可这时根本没有「切换」过，也没有进度和词卡。第一句反馈就不准确，会削弱后面所有说明的可信度。</p>
+  <div class="ev"><b>证据</b><code>set-band</code> 里算了 <code>firstPick</code>，但 <code>session.tip</code> 只有成年 / 非成年两个分支，没有用 <code>firstPick</code> 区分。</div>
+  <p class="fix"><span class="lbl">建议</span><code>firstPick ? '已选好「3-6 岁 · 看图玩」。之后在「我的」里随时能改。' : 原文案</code>。一行改动，收益是首次体验的第一句人话。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F10　存档损坏时静默回到选档页</strong><span class="where">core.js:259-265</span></div>
+  <p class="impact"><span class="lbl">影响</span>JSON 坏掉、被别的脚本写脏、或旧键互相覆盖时，<code>load()</code> 直接返回默认状态，用户看到的是「怎么让我重新选年龄」，进度像凭空消失，也不知道还能导入备份。</p>
+  <div class="ev"><b>证据</b><code>readRaw()</code> 会依次尝试 v5 / v4 / v3 / v2，全坏时 <code>load()</code> 的 <code>catch</code> 直接 <code>clone(DEFAULT_STATE)</code>，没有任何提示或备份。</div>
+  <p class="fix"><span class="lbl">建议</span>在 <code>load()</code> 里记一个 <code>recoveredFromCorrupt</code> 标志，首屏顶部提示一次「本机存档读不出来，已从空白开始；如果你有导出的 JSON，可以在设置里导入」；把坏字符串另存到 <code>mood-island-v5-corrupt</code>，别直接覆盖。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F11　词典一次性渲染 162 条 / 3343 个节点 / 30977px</strong><span class="where">views-dictionary.js</span></div>
+  <p class="impact"><span class="lbl">影响</span>桌面 headless 渲染 35ms 看不出问题，但低端机上 3 千多个节点 + 3 万像素的滚动容器会拖慢首次进入和筛选；用户也很难在 162 条里建立位置感。</p>
+  <div class="ev"><b>证据</b>实测 <code>#stage</code> 内 3343 个元素、162 张 <code>.dict-card</code>、页面高 30977px；<code>open-dictionary</code> 同步渲染 35ms（不含样式与布局）。</div>
+  <p class="fix"><span class="lbl">建议</span>分组默认折叠（现有 4 组 / 11 主题正好是天然的折叠单位），展开时再渲染该组；或给 <code>.dict-card</code> 加 <code>content-visibility:auto; contain-intrinsic-size: 120px</code>；搜索命中时只渲染命中的组。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F12　选档页 1646px，第一屏只看到 1.5 个选项</strong><span class="where">views-main.js:12</span></div>
+  <p class="impact"><span class="lbl">影响</span>首次进入要先滚过两张长卡才能看见后两个年龄段；3-6 岁的孩子无法自己读完这些说明，实际决策者是家长，但家长也要花时间对比四张卡。</p>
+  <div class="ev"><b>证据</b>390×844 实测整页 1646px；四张卡各约 270px，含图标、档名、tag、三行说明、时长与「点这里进去」。</div>
+  <p class="fix"><span class="lbl">建议</span>卡片默认收成「图标 + 档名 + 一句 + 时长」，点「看看适合谁」展开详情；或窄屏 2×2 宫格（图标 + 档名 + 时长），把长说明移到选中后的确认页。目标是把四档压进一屏。</p>
+</article>
+
+<article class="finding p2">
+  <div class="top"><span class="tag t-p2">P2</span><strong>F13　导航与关闭方式的一致性小裂缝</strong><span class="where">shell.js:106 · ui.js:7</span></div>
+  <p class="impact"><span class="lbl">影响</span>首页底栏四个 tab 都不高亮，用户不知道自己「在哪」；弹窗关闭有 ×、收起、完成、知道了四种说法，同一件事四种叫法。</p>
+  <div class="ev"><b>证据</b><code>TAB_OF_VIEW</code> 只映射了 map / level / work / help / dict / selfhelp / slowvars / retreat，没有 home；<code>openModal</code> 固定输出 × 与「收起」，设置弹窗底部又叫「完成」，导入错误叫「知道了」。</div>
+  <p class="fix"><span class="lbl">建议</span><code>home: 'map'</code>（首页也算「上岛」）；统一关闭文案为「关闭」，主操作按钮单独命名（「完成」「去下一站」），去掉抽屉里重复的「收起」。</p>
+</article>
+
+<h3>P3 · 四条，打磨项</h3>
+
+<article class="finding p3">
+  <div class="top"><span class="tag t-p3">P3</span><strong>F14　源码注释仍停在旧规模</strong><span class="where">core.js:27 / :136</span></div>
+  <p class="impact"><span class="lbl">影响</span>维护者读到「16 个概念」「17 站」会以为内容缩水；doctor 的 45 项一致性检查没覆盖这个文件，所以一直没被拦住。</p>
+  <div class="ev"><b>证据</b>core.js:27「概念层：16 个概念」实际 20；core.js:136「支线进度因此不可能混进 17 站」实际 21。README / glossary / DEVELOPMENT 已在 1.1.0 修正，只剩这里。</div>
+  <p class="fix"><span class="lbl">建议</span>改成 20 / 21，并把 <code>js/core.js</code> 纳入 doctor 的数字全文扫描（现在只扫 README / index.html / DEVELOPMENT / 部分源码注释）。</p>
+</article>
+
+<article class="finding p3">
+  <div class="top"><span class="tag t-p3">P3</span><strong>F15　通关后深度行留下「基础题 ·」</strong><span class="where">views-level.js:460</span></div>
+  <p class="impact"><span class="lbl">影响</span>结果卡出现后，深度切换按钮被隐藏，但前面的「基础题 ·」文本还在，页面上留一个没有宾语的悬空分隔符。</p>
+  <div class="ev"><b>证据</b><code>paintResultCard()</code> 把 <code>.level-depth [data-action="set-depth"]</code> 设为 <code>hidden</code>，没有处理同一行的前缀文本；实测结果页文本含「基础题 · | 上岛前…」。</div>
+  <p class="fix"><span class="lbl">建议</span>完成时把整个 <code>.level-depth</code> 一起隐藏，或把前缀改成「这一站 · 已完成」。</p>
+</article>
+
+<article class="finding p3">
+  <div class="top"><span class="tag t-p3">P3</span><strong>F16　深色主题没有对比度断言</strong><span class="where">scripts/check-consistency.mjs</span></div>
+  <p class="impact"><span class="lbl">影响</span>浅色主题的 ink-3 / warm 有 ≥4.5:1 的自动检查，深色主题没有。以后调深色 token 时，可能悄悄掉到 AA 以下。</p>
+  <div class="ev"><b>证据</b>doctor 的对比度断言只取 <code>:root</code> 的浅色 token；深色走 <code>@media (prefers-color-scheme: dark)</code>，未被计算。实测深色正文与背景对比正常（目视 + 抽样），但缺少护栏。</div>
+  <p class="fix"><span class="lbl">建议</span>把深色 token 也抽成可解析的一组值，跑同样的 4.5:1 断言；顺手把 <code>.tab</code> 与 <code>.muted</code> 纳入。</p>
+</article>
+
+<article class="finding p3">
+  <div class="top"><span class="tag t-p3">P3</span><strong>F17　数字键快捷键没有可见提示</strong><span class="where">boot.js:114 · views-level.js:172</span></div>
+  <p class="impact"><span class="lbl">影响</span>选项有 1–4 的数字徽标，键盘也真的能按，但界面上没有一句「按数字键也能选」，视觉用户不会去试。</p>
+  <div class="ev"><b>证据</b><code>aria-keyshortcuts</code> 已写在终章与部分选项上，<code>boot.js</code> 的数字键处理也覆盖了 <code>.opt</code> / 梯子档位；但没有可见文案。</div>
+  <p class="fix"><span class="lbl">建议</span>在首次进入关卡时的提示条里加一句「也可以按数字键 1–4」；或在选项徽标上加 <code>title="按 1 选择"</code>。</p>
+</article>
+
+<h2><span class="n">04</span>做得好的地方</h2>
+<p>下面这些不是客套——它们决定了上面那些问题「值得修」而不是「不值得」。</p>
+
+<div class="keep">
+  <div><b>安全出口是真的常驻</b><span>「很难受」在底栏每一屏都能一次点到，措辞随档位变（孩子看到「有点难受」），急救页不写存档、不记录选择，危机词条还链回了急救入口。</span></div>
+  <div><b>错误兜底覆盖了「不体面」的路径</b><span>全局 error / unhandledrejection 有可读错误页和两个出口；坏 hash 降级成地图；SW 注册失败有 console.warn；多标签页冲突会提示而不是静默覆盖。</span></div>
+  <div><b>存档迁移是认真做过的</b><span>v2→v5 逐版迁移、按轨拆词卡、白名单校验、坏键回退、导入前对比 + 一次撤销。大多数个人项目到不了这个水位。</span></div>
+  <div><b>红线守得住</b><span>零联网、无文字输入框、不打分、不排名；我扫了 help / dictionary 的内容，没有 fetch / XHR / 外链，文案与代码一致。</span></div>
+  <div><b>键盘能完成所有题型</b><span>13 种题型全是点选式，没有拖拽依赖；Tab、Esc、数字键、3px 焦点环都在。对比度实测 5.99–7.68，reduced-motion 与 forced-colors 都写了。</span></div>
+  <div><b>响应式没有横向溢出</b><span>320 / 390 / 1280、字号 1.3 倍、深色模式都试过，<code>scrollWidth === innerWidth</code> 全部通过；深色配色完整，不是简单反色。</span></div>
+  <div><b>质量网够密</b><span>45 项 doctor + 164 项浏览器回归 + 79 项源码断言，<code>npm run verify</code> 全绿；README / CHANGELOG / ROADMAP 的数字口径基本一致（只剩 F14 两处注释）。</span></div>
+  <div><b>file:// 与离线都能用</b><span>双击 index.html 能完整玩（我实测选档页正常渲染）；http(s) 下 SW 预缓存、断网重载仍能进地图。这是很多 PWA 做不到的。</span></div>
+</div>
+
+<h2><span class="n">05</span>修复顺序建议</h2>
+
+<p>按「用户感知 ÷ 改动成本」排序。前三项加起来大约是半天到一天的工作量，但能把「第一次玩完一关」的体验拉回正常。</p>
+
+<table class="data">
+  <thead><tr><th style="width:52px">顺序</th><th>做什么</th><th style="width:110px">对应</th><th style="width:88px">改动面</th></tr></thead>
+  <tbody>
+    <tr><td class="c">1</td><td>统一通关完成态：收起或禁用答题区，去掉悬空分隔符</td><td class="c">F1 + F15</td><td class="c">小</td></tr>
+    <tr><td class="c">2</td><td>首次选档文案加 <code>firstPick</code> 分支</td><td class="c">F9</td><td class="c">极小</td></tr>
+    <tr><td class="c">3</td><td>路由统一 focus + 播报 + <code>document.title</code></td><td class="c">F3</td><td class="c">中</td></tr>
+    <tr><td class="c">4</td><td>抽 <code>seg()</code>，给所有选中态补 ARIA</td><td class="c">F4</td><td class="c">中</td></tr>
+    <tr><td class="c">5</td><td>托管层开压缩；构建期 minify（先不动加载顺序）</td><td class="c">F2 ①②</td><td class="c">小</td></tr>
+    <tr><td class="c">6</td><td>设置拆三块；换档加确认；数据区独立</td><td class="c">F6</td><td class="c">中</td></tr>
+    <tr><td class="c">7</td><td>词典空状态 + 分组折叠 + 计数上移</td><td class="c">F5 + F11</td><td class="c">中</td></tr>
+    <tr><td class="c">8</td><td>窄屏顶栏压缩 + 触控目标 ≥44</td><td class="c">F7 + F8</td><td class="c">中</td></tr>
+    <tr><td class="c">9</td><td>坏档提示 + 备份键</td><td class="c">F10</td><td class="c">小</td></tr>
+    <tr><td class="c">10</td><td>P3 四条一起收</td><td class="c">F14–F17</td><td class="c">小</td></tr>
+    <tr><td class="c">11</td><td>合并首屏脚本 / 按需加载（单独版本做，牵动顺序契约）</td><td class="c">F2 ③</td><td class="c">大</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <b>一个判断：</b>不建议把「合并脚本」和「修完成态」放进同一个版本。前者会牵动 README 的加载顺序契约、doctor 的 35 条脚本断言、sw.js 的预缓存清单，是一次结构性改动；后者只需要改渲染层。混在一起，回归失败时很难判断是哪边引起的。
+</div>
+
+<h2><span class="n">06</span>方法与局限</h2>
+
+<ul>
+  <li><b>代码通读：</b>js/ 下 14 个逻辑文件、index.html、sw.js、style.css 关键段、scripts/ 的检查脚本；未逐条读 162 条词典正文与 155 组题库文案。</li>
+  <li><b>运行时取证：</b>headless Chrome 157 + CDP，真视口 390×844（DPR 2）/ 320×640 / 1280×900，截图 20+ 张；交互探针覆盖弹窗焦点陷阱、Esc、Tab 循环、浏览器后退、未解锁深链、损坏存档、导入错误、0 结果搜索、重复结算、字号 1.3 倍、深色模式、离线重载。</li>
+  <li><b>性能测量：</b>本机 <code>serve.mjs</code>（无压缩）+ CDP 限速 400kbps / 150ms RTT。这个数字代表「最坏的静态托管」，不代表开了 gzip 的 CDN；两者都写进了 F2。</li>
+  <li><b>可访问性：</b>DOM / ARIA 检查、对比度计算、纯键盘走查。未在 VoiceOver / TalkBack 真机上听读屏，也未做色觉模拟；结论以代码与 DOM 为准。</li>
+  <li><b>不在本轮范围：</b>内容适龄性与事实准确性（1.1.0 报告已覆盖）、真人可用性测试、真实低端机帧率。应用代码一行未改，本报告与截图是唯一新增物。</li>
+</ul>
+
+<footer>
+  心情闯关岛 1.2.0 · 产品完成度与用户体验审查 · 2026-11-26 · 截图位于 <code>docs/review-1.2.0/</code>
+</footer>
+
+</div>
+</body>
+</html>

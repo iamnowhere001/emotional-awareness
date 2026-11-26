@@ -176,6 +176,12 @@ docNum('README 概念层条数 = 实测', readmeMd, /概念层 (\d+) 条/g, meas
 docNum('README 词卡释义条数 = 实测', readmeMd, /词卡释义 (\d+) 条/g, measured.codex);
 docNum('glossary.js 头注释概念数', glossarySrc, /概念层 · (\d+) 个概念/g, measured.glossary);
 docNum('DEVELOPMENT 概念数', devMd, /固定 \*\*(\d+) 个概念\*\*/g, measured.glossary);
+/* 源码注释也会漂：1.1.0 把内容扩到 20 概念 / 21 站，core.js 的注释一直停在 16 / 17，
+   因为 doctor 只扫文档、不扫 js/。这里用最宽的口径扫 core.js ——
+   只要出现「N 个概念」或「N 站」，N 就必须等于实测（F14）。 */
+const coreSrc = read('js/core.js');
+docNum('core.js 注释概念数 = 实测', coreSrc, /(\d+) 个概念/g, measured.glossary);
+docNum('core.js 注释站点数 = 实测', coreSrc, /(\d+) 站/g, measured.levels);
 /* 状态描述（同类漂移，非数字） */
 check('README 不再声称儿童档文案「未改」',
   !/儿童档个别术语偏超龄、丧失意象待改写 \| 已在 0\.13\.0 审核中记录，未改/.test(readmeMd));
