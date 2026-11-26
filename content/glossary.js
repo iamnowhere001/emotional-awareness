@@ -46,7 +46,7 @@ MI.glossary = [
     id: 'breath', kid: '慢呼吸', adult: '呼吸空间',
     line: '把注意力放回呼吸，看着它来去就好；想调整节奏时再慢慢呼气。',
     mechanism: '把呼气放慢一点，可能让身体从警觉状态松一些；证据多见于短时放松，个体差异大，不舒服就恢复自然呼吸。只观察不调整，是另一种做法，不等于慢呼吸。',
-    dose: { time: '约 1～3 分钟（按站里的引导走）', steps: 3, stop: '头晕或憋气就恢复自然呼吸' },
+    dose: { time: '约 1-3 分钟（按站里的引导走）', steps: 3, stop: '头晕或憋气就恢复自然呼吸' },
     dict: null, tools: ['呼气长一点', '渐进肌肉放松'], slowvars: ['attention', 'health'],
     stations: ['2-1', 'A2-1']
   },

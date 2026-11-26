@@ -25,7 +25,7 @@ function selfHelpView() {
     missingLead: '检查 index.html 是否在 dictionary.js 之后、js/core.js 之前引入 content/selfhelp.js。打开浏览器控制台可以看到具体是哪个文件 404。',
     eyebrow: '自助工具箱 · 心力与认知',
     title: '先恢复一点力气，再换一个看法',
-    lead: `${SH_STATES.length} 种“现在最像”的状态、${SH_TOOLS.length} 张工具卡、${SH_DISTORTIONS.length} 条认知扭曲速查。全部是选择式或阅读式，不填心情文字，也不记录你选了什么。`,
+    lead: `${SH_STATES.length} 种「现在最像」的状态、${SH_TOOLS.length} 张工具卡、${SH_DISTORTIONS.length} 条认知扭曲速查。全部是选择式或阅读式，不填心情文字，也不记录你选了什么。`,
     safety: SH_SAFETY,
     prelude: `<section class="sh-section">
       <h3 class="sh-section-title">现在最像哪一种？</h3>

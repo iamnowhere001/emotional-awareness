@@ -68,7 +68,7 @@ const RENDERERS = {
         <input type="range" id="thermo" min="1" max="${n}" step="1" value="${value}" aria-label="感受强度，1 到 ${n}">
         <div class="thermo-labels"><span>1 · ${labels[0]}</span><span>${mid} · ${labels[mid - 1]}</span><span>${n} · ${labels[n - 1]}</span></div>
       </div>
-      <p class="muted" style="margin-top:12px">这一关没有正确档位。选完会告诉你，这个刻度下的感受通常长什么样。</p>
+      <p class="muted" style="margin-top:12px">这一站没有正确档位。选完会告诉你，这个刻度下的感受通常长什么样。</p>
       <div class="actions"><button class="btn btn-primary" data-action="slider-submit">就用这一格</button></div>`;
   },
   match(v) {
